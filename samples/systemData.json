@@ -1,0 +1,337 @@
+{
+    "spec": {
+        "L4": {
+            "type": "L4",
+            "multiplicity": 1,
+            "memSize": 24,
+            "memBW": 300,
+            "relativeSpeed": 15,
+            "power" : {
+                "idle": 25,
+                "full": 75,
+                "midPower": 65,
+                "midUtil": 0.6
+            },
+            "cost": 6.46
+        },
+        "L40S": {
+            "type": "L40S",
+            "multiplicity": 1,
+            "memSize": 48,
+            "memBW": 864,
+            "relativeSpeed": 43,
+            "power" : {
+                "idle": 100,
+                "full": 300,
+                "midPower": 250,
+                "midUtil": 0.6
+            },
+            "cost": 31.54
+        },
+        "A100": {
+            "type": "A100",
+            "multiplicity": 1,
+            "memSize": 80,
+            "memBW": 2000,
+            "relativeSpeed": 100,
+            "power" : {
+                "idle": 150,
+                "full": 400,
+                "midPower": 320,
+                "midUtil": 0.6
+            },
+            "cost": 39.67
+        },
+        "H100": {
+            "type": "H100",
+            "multiplicity": 1,
+            "memSize": 80,
+            "memBW": 3350,
+            "relativeSpeed": 168,
+            "power" : {
+                "idle": 200,
+                "full": 700,
+                "midPower": 600,
+                "midUtil": 0.6
+            },
+            "cost": 75.49
+        },
+        "AIU2": {
+            "type": "AIU2",
+            "multiplicity": 1,
+            "memSize": 128,
+            "memBW": 204,
+            "relativeSpeed": 10,
+            "power" : {
+                "idle": 25,
+                "full": 75,
+                "midPower": 65,
+                "midUtil": 0.6
+            },
+            "cost": 3.75
+        },
+        "G2": {
+            "type": "G2",
+            "multiplicity": 1,
+            "memSize": 96,
+            "memBW": 2400,
+            "relativeSpeed": 120,
+            "power" : {
+                "idle": 180,
+                "full": 600,
+                "midPower": 500,
+                "midUtil": 0.6
+            },
+            "cost": 22.98
+        },
+        "MI210": {
+            "type": "MI210",
+            "multiplicity": 1,
+            "memSize": 64,
+            "memBW": 1638,
+            "relativeSpeed": 82,
+            "power" : {
+                "idle": 100,
+                "full": 300,
+                "midPower": 250,
+                "midUtil": 0.6
+            },
+            "cost": 25.83
+        },
+        "MI250": {
+            "type": "MI250",
+            "multiplicity": 1,
+            "memSize": 128,
+            "memBW": 3200,
+            "relativeSpeed": 160,
+            "power" : {
+                "idle": 165,
+                "full": 500,
+                "midPower": 400,
+                "midUtil": 0.6
+            },
+            "cost": 46.38
+        },
+        "MI300X": {
+            "type": "MI300X",
+            "multiplicity": 1,
+            "memSize": 192,
+            "memBW": 5300,
+            "relativeSpeed": 265,
+            "power" : {
+                "idle": 220,
+                "full": 750,
+                "midPower": 650,
+                "midUtil": 0.6
+            },
+            "cost": 63.15
+        },
+        "2xA100": {
+            "type": "A100",
+            "multiplicity": 2,
+            "memSize": 160,
+            "memBW": 4000,
+            "relativeSpeed": 141,
+            "power" : {
+                "idle": 300,
+                "full": 800,
+                "midPower": 640,
+                "midUtil": 0.6
+            },
+            "cost": 79.34
+        },
+        "2xH100": {
+            "type": "H100",
+            "multiplicity": 2,
+            "memSize": 160,
+            "memBW": 6700,
+            "relativeSpeed": 238,
+            "power" : {
+                "idle": 400,
+                "full": 1400,
+                "midPower": 1200,
+                "midUtil": 0.6
+            },
+            "cost": 150.98
+        },
+        "2xAIU2": {
+            "type": "AIU2",
+            "multiplicity": 2,
+            "memSize": 256,
+            "memBW": 408,
+            "relativeSpeed": 14,
+            "power" : {
+                "idle": 50,
+                "full": 150,
+                "midPower": 130,
+                "midUtil": 0.6
+            },
+            "cost": 7.50
+        },
+        "2xG2": {
+            "type": "G2",
+            "multiplicity": 2,
+            "memSize": 192,
+            "memBW": 4800,
+            "relativeSpeed": 170,
+            "power" : {
+                "idle": 360,
+                "full": 1200,
+                "midPower": 1000,
+                "midUtil": 0.6
+            },
+            "cost": 45.96
+        },
+        "2xMI210": {
+            "type": "MI210",
+            "multiplicity": 2,
+            "memSize": 128,
+            "memBW": 3276,
+            "relativeSpeed": 116,
+            "power" : {
+                "idle": 200,
+                "full": 600,
+                "midPower": 500,
+                "midUtil": 0.6
+            },
+            "cost": 51.66
+        },
+        "2xMI250": {
+            "type": "MI250",
+            "multiplicity": 2,
+            "memSize": 256,
+            "memBW": 6400,
+            "relativeSpeed": 226,
+            "power" : {
+                "idle": 330,
+                "full": 1000,
+                "midPower": 800,
+                "midUtil": 0.6
+            },
+            "cost": 92.76
+        },
+        "2xMI300X": {
+            "type": "MI300X",
+            "multiplicity": 2,
+            "memSize": 384,
+            "memBW": 10600,
+            "relativeSpeed": 375,
+            "power" : {
+                "idle": 440,
+                "full": 1500,
+                "midPower": 1300,
+                "midUtil": 0.6
+            },
+            "cost": 126.30
+        },
+        "4xA100": {
+            "type": "A100",
+            "multiplicity": 4,
+            "memSize": 320,
+            "memBW": 8000,
+            "relativeSpeed": 200,
+            "power" : {
+                "idle": 600,
+                "full": 1600,
+                "midPower": 1280,
+                "midUtil": 0.6
+            },
+            "cost": 158.68
+        },
+        "4xAIU2": {
+            "type": "AIU2",
+            "multiplicity": 4,
+            "memSize": 512,
+            "memBW": 816,
+            "relativeSpeed": 20,
+            "power" : {
+                "idle": 100,
+                "full": 300,
+                "midPower": 260,
+                "midUtil": 0.6
+            },
+            "cost": 15.00
+        },
+        "4xG2": {
+            "type": "G2",
+            "multiplicity": 4,
+            "memSize": 384,
+            "memBW": 9600,
+            "relativeSpeed": 240,
+            "power" : {
+                "idle": 720,
+                "full": 2400,
+                "midPower": 2000,
+                "midUtil": 0.6
+            },
+            "cost": 91.92
+        },
+        "4xMI210": {
+            "type": "MI210",
+            "multiplicity": 4,
+            "memSize": 256,
+            "memBW": 6552,
+            "relativeSpeed": 164,
+            "power" : {
+                "idle": 400,
+                "full": 1200,
+                "midPower": 1000,
+                "midUtil": 0.6
+            },
+            "cost": 103.32
+        },
+        "4xMI250": {
+            "type": "MI250",
+            "multiplicity": 4,
+            "memSize": 512,
+            "memBW": 12800,
+            "relativeSpeed": 320,
+            "power" : {
+                "idle": 660,
+                "full": 2000,
+                "midPower": 1600,
+                "midUtil": 0.6
+            },
+            "cost": 185.52
+        }
+    },
+
+    "count": [
+        {
+            "type": "L4",
+            "count": 24
+        },
+        {
+            "type": "L40S",
+            "count": 16
+        },
+        {
+            "type": "A100",
+            "count": 24
+        },
+        {
+            "type": "H100",
+            "count": 16
+        },
+        {
+            "type": "AIU2",
+            "count": 48
+        },
+        {
+            "type": "G2",
+            "count": 8
+        },
+        {
+            "type": "MI210",
+            "count": 16
+        },
+        {
+            "type": "MI250",
+            "count": 16
+        },
+        {
+            "type": "MI300X",
+            "count": 16
+        }
+    ]
+}

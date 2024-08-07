@@ -9,9 +9,10 @@ import (
 
 func main() {
 	prefix := "../../samples/"
-	fn_acc := prefix + "systemData.json"
-	fn_mod := prefix + "modelData.json"
-	fn_srv := prefix + "serviceClassData.json"
+	fn_acc := prefix + "system-data.json"
+	fn_mod := prefix + "model-data.json"
+	fn_srv := prefix + "serviceclass-data.json"
+	fn_opt := prefix + "optimizer-data.json"
 
 	system := core.NewSystem()
 
@@ -33,12 +34,14 @@ func main() {
 	}
 	system.SetServiceClasses(bytes_srv)
 
+	bytes_opt, err_opt := os.ReadFile(fn_opt)
+	if err_opt != nil {
+		fmt.Println(err_acc)
+	}
+	system.SetOptimizer(bytes_opt)
+
 	system.Calculate()
+	system.Optimize()
 
-	solver := core.NewSolver()
-	//solver.SolveUnlimited(system)
-	solver.Solve(system)
-
-	system.AllocateByType()
 	fmt.Printf("%v", system)
 }

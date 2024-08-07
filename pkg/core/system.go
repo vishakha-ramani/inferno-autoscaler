@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"github.ibm.com/tantawi/inferno/pkg/config"
 )
 
 type System struct {
@@ -12,6 +14,7 @@ type System struct {
 	capacity       map[string]int
 	serviceClasses map[string]*ServiceClass
 
+	optimizer        *Optimizer
 	allocationByType map[string]*AllocationByType
 }
 
@@ -33,7 +36,7 @@ func NewSystem() *System {
 }
 
 func (s *System) SetAccelerators(byteValue []byte) error {
-	var d AcceleratorData
+	var d config.AcceleratorData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
@@ -47,7 +50,7 @@ func (s *System) SetAccelerators(byteValue []byte) error {
 }
 
 func (s *System) SetModels(byteValue []byte) error {
-	var d ModelData
+	var d config.ModelData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
@@ -58,13 +61,22 @@ func (s *System) SetModels(byteValue []byte) error {
 }
 
 func (s *System) SetServiceClasses(byteValue []byte) error {
-	var d ServiceClassData
+	var d config.ServiceClassData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
 	for _, v := range d.Spec {
 		s.serviceClasses[v.Name] = NewServiceClassFromSpec(&v)
 	}
+	return nil
+}
+
+func (s *System) SetOptimizer(byteValue []byte) error {
+	var d config.OptimizerData
+	if err := json.Unmarshal(byteValue, &d); err != nil {
+		return err
+	}
+	s.optimizer = NewOptimizerFromSpec(&d.Spec)
 	return nil
 }
 
@@ -83,6 +95,10 @@ func (s *System) Calculate() {
 	for _, c := range s.serviceClasses {
 		c.Calculate(s.models, s.accelerators)
 	}
+}
+
+func (s *System) Optimize() {
+	s.optimizer.Optimize(s)
 }
 
 func (s *System) AllocateByType() {

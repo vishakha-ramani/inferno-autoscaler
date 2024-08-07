@@ -9,10 +9,13 @@ import (
 )
 
 type Solver struct {
+	unlimited bool
 }
 
-func NewSolver() *Solver {
-	return &Solver{}
+func NewSolver(unlimited bool) *Solver {
+	return &Solver{
+		unlimited: unlimited,
+	}
 }
 
 type entry struct {
@@ -21,6 +24,15 @@ type entry struct {
 	curIndex    int           // current index in allocation list
 	allocations []*Allocation // ordered list of allocations
 	delta       float32
+}
+
+func (s *Solver) Solve(system *System) {
+	if s.unlimited {
+		s.SolveUnlimited(system)
+	} else {
+		s.SolveLimited(system)
+	}
+
 }
 
 func (s *Solver) SolveUnlimited(system *System) {
@@ -39,7 +51,7 @@ func (s *Solver) SolveUnlimited(system *System) {
 	}
 }
 
-func (s *Solver) Solve(system *System) {
+func (s *Solver) SolveLimited(system *System) {
 
 	available := make(map[string]int)
 	for k := range system.capacity {

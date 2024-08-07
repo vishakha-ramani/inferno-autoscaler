@@ -5,7 +5,6 @@
             "multiplicity": 1,
             "memSize": 24,
             "memBW": 300,
-            "relativeSpeed": 15,
             "power" : {
                 "idle": 25,
                 "full": 75,
@@ -19,7 +18,6 @@
             "multiplicity": 1,
             "memSize": 48,
             "memBW": 864,
-            "relativeSpeed": 43,
             "power" : {
                 "idle": 100,
                 "full": 300,
@@ -33,7 +31,6 @@
             "multiplicity": 1,
             "memSize": 80,
             "memBW": 2000,
-            "relativeSpeed": 100,
             "power" : {
                 "idle": 150,
                 "full": 400,
@@ -47,7 +44,6 @@
             "multiplicity": 1,
             "memSize": 80,
             "memBW": 3350,
-            "relativeSpeed": 168,
             "power" : {
                 "idle": 200,
                 "full": 700,
@@ -61,7 +57,6 @@
             "multiplicity": 1,
             "memSize": 128,
             "memBW": 204,
-            "relativeSpeed": 10,
             "power" : {
                 "idle": 25,
                 "full": 75,
@@ -75,7 +70,6 @@
             "multiplicity": 1,
             "memSize": 96,
             "memBW": 2400,
-            "relativeSpeed": 120,
             "power" : {
                 "idle": 180,
                 "full": 600,
@@ -89,7 +83,6 @@
             "multiplicity": 1,
             "memSize": 64,
             "memBW": 1638,
-            "relativeSpeed": 82,
             "power" : {
                 "idle": 100,
                 "full": 300,
@@ -103,7 +96,6 @@
             "multiplicity": 1,
             "memSize": 128,
             "memBW": 3200,
-            "relativeSpeed": 160,
             "power" : {
                 "idle": 165,
                 "full": 500,
@@ -117,7 +109,6 @@
             "multiplicity": 1,
             "memSize": 192,
             "memBW": 5300,
-            "relativeSpeed": 265,
             "power" : {
                 "idle": 220,
                 "full": 750,
@@ -131,7 +122,6 @@
             "multiplicity": 2,
             "memSize": 160,
             "memBW": 4000,
-            "relativeSpeed": 141,
             "power" : {
                 "idle": 300,
                 "full": 800,
@@ -145,7 +135,6 @@
             "multiplicity": 2,
             "memSize": 160,
             "memBW": 6700,
-            "relativeSpeed": 238,
             "power" : {
                 "idle": 400,
                 "full": 1400,
@@ -159,7 +148,6 @@
             "multiplicity": 2,
             "memSize": 256,
             "memBW": 408,
-            "relativeSpeed": 14,
             "power" : {
                 "idle": 50,
                 "full": 150,
@@ -173,7 +161,6 @@
             "multiplicity": 2,
             "memSize": 192,
             "memBW": 4800,
-            "relativeSpeed": 170,
             "power" : {
                 "idle": 360,
                 "full": 1200,
@@ -187,7 +174,6 @@
             "multiplicity": 2,
             "memSize": 128,
             "memBW": 3276,
-            "relativeSpeed": 116,
             "power" : {
                 "idle": 200,
                 "full": 600,
@@ -201,7 +187,6 @@
             "multiplicity": 2,
             "memSize": 256,
             "memBW": 6400,
-            "relativeSpeed": 226,
             "power" : {
                 "idle": 330,
                 "full": 1000,
@@ -215,7 +200,6 @@
             "multiplicity": 2,
             "memSize": 384,
             "memBW": 10600,
-            "relativeSpeed": 375,
             "power" : {
                 "idle": 440,
                 "full": 1500,
@@ -229,7 +213,6 @@
             "multiplicity": 4,
             "memSize": 320,
             "memBW": 8000,
-            "relativeSpeed": 200,
             "power" : {
                 "idle": 600,
                 "full": 1600,
@@ -243,7 +226,6 @@
             "multiplicity": 4,
             "memSize": 512,
             "memBW": 816,
-            "relativeSpeed": 20,
             "power" : {
                 "idle": 100,
                 "full": 300,
@@ -257,7 +239,6 @@
             "multiplicity": 4,
             "memSize": 384,
             "memBW": 9600,
-            "relativeSpeed": 240,
             "power" : {
                 "idle": 720,
                 "full": 2400,
@@ -271,7 +252,6 @@
             "multiplicity": 4,
             "memSize": 256,
             "memBW": 6552,
-            "relativeSpeed": 164,
             "power" : {
                 "idle": 400,
                 "full": 1200,
@@ -285,7 +265,6 @@
             "multiplicity": 4,
             "memSize": 512,
             "memBW": 12800,
-            "relativeSpeed": 320,
             "power" : {
                 "idle": 660,
                 "full": 2000,

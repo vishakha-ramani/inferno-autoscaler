@@ -7,22 +7,24 @@ import (
 	"github.ibm.com/tantawi/inferno/pkg/config"
 )
 
+// An inference model
 type Model struct {
-	Spec *config.ModelSpec
+	spec *config.ModelSpec
 
-	perfData map[string]*config.ModelPerfData
+	// model performance data for specified accelerators
+	perfData map[string]*config.ModelAcceleratorSpec
 
 	// number of accelerator units needed to fit a model on a given accelerator
 	numUnits map[string]int
 }
 
 func NewModelFromSpec(spec *config.ModelSpec) *Model {
-	perfData := make(map[string]*config.ModelPerfData)
-	for _, pf := range spec.AccSpec {
+	perfData := make(map[string]*config.ModelAcceleratorSpec)
+	for _, pf := range spec.PerfData {
 		perfData[pf.Name] = &pf
 	}
 	return &Model{
-		Spec:     spec,
+		spec:     spec,
 		perfData: perfData,
 		numUnits: make(map[string]int),
 	}
@@ -30,12 +32,18 @@ func NewModelFromSpec(spec *config.ModelSpec) *Model {
 
 // Calculate basic parameters
 func (m *Model) Calculate(accelerators map[string]*Accelerator) {
-	for k, v := range accelerators {
-		m.numUnits[k] = int(math.Ceil(float64(m.Spec.MemSize) / float64(v.Spec.MemSize)))
+	for gName := range m.perfData {
+		if g, exists := accelerators[gName]; exists {
+			m.numUnits[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.spec.MemSize)))
+		}
 	}
+}
+
+func (m *Model) GetName() string {
+	return m.spec.Name
 }
 
 func (m *Model) String() string {
 	return fmt.Sprintf("Model: name=%s; memSize=%d; numUnits= %v",
-		m.Spec.Name, m.Spec.MemSize, m.numUnits)
+		m.spec.Name, m.spec.MemSize, m.numUnits)
 }

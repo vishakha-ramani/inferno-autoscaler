@@ -8,6 +8,7 @@ import (
 	"slices"
 )
 
+// Solver of allocation assignment problem
 type Solver struct {
 	unlimited bool
 }
@@ -32,21 +33,24 @@ func (s *Solver) Solve(system *System) {
 	} else {
 		s.SolveLimited(system)
 	}
-
 }
 
 func (s *Solver) SolveUnlimited(system *System) {
-	for _, v := range system.serviceClasses {
-		for mName, modelMap := range v.AllAllocations {
-			minCost := float32(0)
+	for _, v := range system.ServiceClasses {
+		for mName, modelMap := range v.allAllocations {
+			minVal := float32(math.MaxFloat32)
 			var minAlloc *Allocation
 			for _, alloc := range modelMap {
-				if minCost == 0 || alloc.Cost < minCost {
-					minCost = alloc.Cost
+				if alloc.value < minVal {
+					minVal = alloc.value
 					minAlloc = alloc
 				}
 			}
-			v.allocation[mName] = minAlloc
+			if minAlloc != nil {
+				v.allocation[mName] = minAlloc
+			} else {
+				delete(v.allocation, mName)
+			}
 		}
 	}
 }
@@ -59,9 +63,9 @@ func (s *Solver) SolveLimited(system *System) {
 	}
 
 	var entries []*entry = make([]*entry, 0)
-	for _, v := range system.serviceClasses {
-		sName := v.Spec.Name
-		for mName, modelMap := range v.AllAllocations {
+	for _, v := range system.ServiceClasses {
+		sName := v.spec.Name
+		for mName, modelMap := range v.allAllocations {
 			e := &entry{
 				sName:       sName,
 				mName:       mName,
@@ -75,10 +79,10 @@ func (s *Solver) SolveLimited(system *System) {
 				i++
 			}
 			slices.SortFunc(e.allocations, func(a, b *Allocation) int {
-				return cmp.Compare(a.Cost, b.Cost)
+				return cmp.Compare(a.value, b.value)
 			})
 			if len(e.allocations) > 1 {
-				e.delta = e.allocations[1].Cost - e.allocations[0].Cost
+				e.delta = e.allocations[1].value - e.allocations[0].value
 			} else {
 				e.delta = math.MaxFloat32
 			}
@@ -88,7 +92,7 @@ func (s *Solver) SolveLimited(system *System) {
 
 	orderFunc := func(a, b *entry) int {
 		if a.delta == b.delta {
-			return cmp.Compare(b.allocations[b.curIndex].Cost, a.allocations[a.curIndex].Cost)
+			return cmp.Compare(b.allocations[b.curIndex].value, a.allocations[a.curIndex].value)
 		}
 		return cmp.Compare(b.delta, a.delta)
 	}
@@ -103,20 +107,20 @@ func (s *Solver) SolveLimited(system *System) {
 			continue
 		}
 		alloc := top.allocations[top.curIndex]
-		gName := alloc.Accelerator
-		replicas := alloc.NumReplicas
-		acc := system.accelerators[gName]
+		gName := alloc.accelerator
+		replicas := alloc.numReplicas
+		acc := system.Accelerators[gName]
 		tName := acc.GetType()
-		count := replicas * acc.Spec.Multiplicity
+		count := replicas * acc.spec.Multiplicity
 
 		if available[tName] >= count {
 			available[tName] -= count
-			c := system.serviceClasses[top.sName]
+			c := system.ServiceClasses[top.sName]
 			c.allocation[top.mName] = alloc
 		} else {
 			top.curIndex++
 			if top.curIndex+1 < len(top.allocations) {
-				top.delta = top.allocations[top.curIndex+1].Cost - top.allocations[top.curIndex].Cost
+				top.delta = top.allocations[top.curIndex+1].value - top.allocations[top.curIndex].value
 			} else if top.curIndex == len(top.allocations) {
 				continue
 			} else {

@@ -105,19 +105,19 @@ func main() {
 	}
 	for i, n := range mNames {
 		m := config.ModelSpec{
-			Name:    n,
-			MemSize: memSize[i],
-			AccSpec: make([]config.ModelPerfData, numAcc),
+			Name:     n,
+			MemSize:  memSize[i],
+			PerfData: make([]config.ModelAcceleratorSpec, numAcc),
 		}
 		for j, a := range aNames {
-			pd := config.ModelPerfData{
+			pd := config.ModelAcceleratorSpec{
 				Name:         a,
 				Alpha:        alpha[j][i],
 				Beta:         beta[j][i],
 				MaxBatchSize: maxBatchSize[j][i],
 				AtTokens:     atTokens,
 			}
-			m.AccSpec[j] = pd
+			m.PerfData[j] = pd
 		}
 		models.Spec[i] = m
 	}

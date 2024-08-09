@@ -8,40 +8,42 @@ import (
 	"github.ibm.com/tantawi/inferno/pkg/config"
 )
 
+// System comprising all accelerators, model, and service classes
 type System struct {
-	accelerators   map[string]*Accelerator
-	models         map[string]*Model
-	capacity       map[string]int
-	serviceClasses map[string]*ServiceClass
+	Accelerators   map[string]*Accelerator
+	Models         map[string]*Model
+	ServiceClasses map[string]*ServiceClass
 
-	optimizer        *Optimizer
+	Optimizer *Optimizer
+
+	capacity         map[string]int
 	allocationByType map[string]*AllocationByType
 }
 
 type AllocationByType struct {
-	name  string
-	count int
-	cost  float32
+	name  string  // name of accelerator type
+	count int     // total number of this type
+	cost  float32 // total cost of this type
 }
 
 func NewSystem() *System {
 	return &System{
-		accelerators:   make(map[string]*Accelerator),
-		models:         make(map[string]*Model),
-		capacity:       make(map[string]int),
-		serviceClasses: make(map[string]*ServiceClass),
+		Accelerators:   make(map[string]*Accelerator),
+		Models:         make(map[string]*Model),
+		ServiceClasses: make(map[string]*ServiceClass),
 
+		capacity:         make(map[string]int),
 		allocationByType: map[string]*AllocationByType{},
 	}
 }
 
-func (s *System) SetAccelerators(byteValue []byte) error {
+func (s *System) SetAcceleratorsFromSpec(byteValue []byte) error {
 	var d config.AcceleratorData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
 	for k, v := range d.Spec {
-		s.accelerators[k] = NewAcceleratorFromSpec(k, &v)
+		s.Accelerators[k] = NewAcceleratorFromSpec(k, &v)
 	}
 	for _, v := range d.Count {
 		s.capacity[v.Type] = v.Count
@@ -49,63 +51,71 @@ func (s *System) SetAccelerators(byteValue []byte) error {
 	return nil
 }
 
-func (s *System) SetModels(byteValue []byte) error {
+func (s *System) SetModelsFromSpec(byteValue []byte) error {
 	var d config.ModelData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
 	for _, v := range d.Spec {
-		s.models[v.Name] = NewModelFromSpec(&v)
+		s.Models[v.Name] = NewModelFromSpec(&v)
 	}
 	return nil
 }
 
-func (s *System) SetServiceClasses(byteValue []byte) error {
+func (s *System) SetServiceClassesFromSpec(byteValue []byte) error {
 	var d config.ServiceClassData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
 	for _, v := range d.Spec {
-		s.serviceClasses[v.Name] = NewServiceClassFromSpec(&v)
+		s.ServiceClasses[v.Name] = NewServiceClassFromSpec(&v)
 	}
 	return nil
 }
 
-func (s *System) SetOptimizer(byteValue []byte) error {
+func (s *System) SetOptimizerFromSpec(byteValue []byte) error {
 	var d config.OptimizerData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
-	s.optimizer = NewOptimizerFromSpec(&d.Spec)
+	s.Optimizer = NewOptimizerFromSpec(&d.Spec)
 	return nil
 }
 
 func (s *System) GetAccelerator(name string) *Accelerator {
-	return s.accelerators[name]
+	return s.Accelerators[name]
 }
 
 // Calculate basic parameters
 func (s *System) Calculate() {
-	for _, g := range s.accelerators {
+	for _, g := range s.Accelerators {
 		g.Calculate()
 	}
-	for _, m := range s.models {
-		m.Calculate(s.accelerators)
+	for _, m := range s.Models {
+		m.Calculate(s.Accelerators)
 	}
-	for _, c := range s.serviceClasses {
-		c.Calculate(s.models, s.accelerators)
+	for _, c := range s.ServiceClasses {
+		c.Calculate(s.Models, s.Accelerators)
 	}
 }
 
 func (s *System) Optimize() {
-	s.optimizer.Optimize(s)
+	s.Optimizer.Optimize(s)
 }
 
+// Accumulate allocation data by accelerator type
 func (s *System) AllocateByType() {
-	for _, c := range s.serviceClasses {
+	s.allocationByType = map[string]*AllocationByType{}
+	for _, c := range s.ServiceClasses {
 		for _, srvModelAlloc := range c.allocation {
-			accName := srvModelAlloc.Accelerator
-			acc := s.accelerators[accName]
+			if srvModelAlloc == nil {
+				continue
+			}
+			accName := srvModelAlloc.accelerator
+			acc := s.Accelerators[accName]
+			if acc == nil {
+				continue
+			}
 			nameType := acc.GetType()
 			var alloc *AllocationByType
 			var exists bool
@@ -116,8 +126,8 @@ func (s *System) AllocateByType() {
 					cost:  0,
 				}
 			}
-			alloc.count += srvModelAlloc.NumReplicas * acc.Spec.Multiplicity
-			alloc.cost += srvModelAlloc.Cost
+			alloc.count += srvModelAlloc.numReplicas * acc.spec.Multiplicity
+			alloc.cost += srvModelAlloc.cost
 			s.allocationByType[nameType] = alloc
 		}
 	}
@@ -131,10 +141,10 @@ func (a *AllocationByType) String() string {
 
 func (s *System) String() string {
 	var b bytes.Buffer
-	b.WriteString("Accelerators: \n")
-	for _, g := range s.accelerators {
-		fmt.Fprintln(&b, g)
-	}
+	// b.WriteString("Accelerators: \n")
+	// for _, g := range s.Accelerators {
+	// 	fmt.Fprintln(&b, g)
+	// }
 	// b.WriteString("Models: \n")
 	// for _, m := range s.models {
 	// 	fmt.Fprintln(&b, m)
@@ -145,17 +155,19 @@ func (s *System) String() string {
 	// }
 	b.WriteString("Solution: \n")
 	totalCost := float32(0)
-	for _, c := range s.serviceClasses {
-		for i, v := range c.Spec.ModelLoad {
+	for _, c := range s.ServiceClasses {
+		for i, v := range c.spec.Load {
 			mName := v.Name
 			alloc, exists := c.allocation[mName]
 			if !exists {
-				fmt.Fprintf(&b, "c=%s; m=%s; no feasible allocation! \n", c.Spec.Name, mName)
+				fmt.Fprintf(&b, "c=%s; m=%s; no feasible allocation! \n", c.spec.Name, mName)
 				continue
 			}
-			totalCost += alloc.Cost
-			fmt.Fprintf(&b, "c=%s; m=%s; choices=%d, a=%v; ", c.Spec.Name, mName, len(c.AllAllocations[mName]), alloc)
-			fmt.Fprintf(&b, "slo-itl=%v, slo-ttw=%v \n", c.Spec.ModelLoad[i].SLO_ITL, c.Spec.ModelLoad[i].SLO_TTW)
+			totalCost += alloc.cost
+			rate := c.modelLoad[mName].ArrivalRate
+			tokens := c.modelLoad[mName].AvgLength
+			fmt.Fprintf(&b, "c=%s; m=%s; rate=%v; tk=%d; sol=%d, alloc=%v; ", c.spec.Name, mName, rate, tokens, len(c.allAllocations[mName]), alloc)
+			fmt.Fprintf(&b, "slo-itl=%v, slo-ttw=%v \n", c.spec.Load[i].SLO_ITL, c.spec.Load[i].SLO_TTW)
 		}
 	}
 

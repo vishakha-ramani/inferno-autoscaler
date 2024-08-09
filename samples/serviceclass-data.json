@@ -5,81 +5,81 @@
             "load": [
                 {
                     "name": "llama_7b",
-                    "slo-itl": 20,
+                    "slo-itl": 40,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_13b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama3_8b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_70b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mistral_7b",
-                    "slo-itl": 20,
+                    "slo-itl": 40,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_13b",
-                    "slo-itl": 20,
+                    "slo-itl": 40,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_20b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_34b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mixtral_8_7b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 500,
-                    "arrivalRate": 10,
+                    "arrivalRate": 120,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -91,81 +91,81 @@
             "load": [
                 {
                     "name": "llama_7b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_13b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama3_8b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_70b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mistral_7b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_13b",
-                    "slo-itl": 40,
+                    "slo-itl": 80,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_20b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_34b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mixtral_8_7b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 1000,
-                    "arrivalRate": 20,
+                    "arrivalRate": 240,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -177,81 +177,81 @@
             "load": [
                 {
                     "name": "llama_7b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_13b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama3_8b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "llama_70b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mistral_7b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 400,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_13b",
-                    "slo-itl": 80,
+                    "slo-itl": 160,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 400,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_20b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 400,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "granite_34b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 400,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
                 },
                 {
                     "name": "mixtral_8_7b",
-                    "slo-itl": 160,
+                    "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 40,
+                    "arrivalRate": 400,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5

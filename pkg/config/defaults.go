@@ -11,5 +11,5 @@ var SLOMargin = -float32(math.Log(1 - SLOPercentile))
 // small disturbance around a value
 var Delta = float32(0.001)
 
-// maximum number of requests in system as multiples of maximum batch size
+// maximum number of requests in queueing system as multiples of maximum batch size
 var MaxQueueToBatchRatio = 10

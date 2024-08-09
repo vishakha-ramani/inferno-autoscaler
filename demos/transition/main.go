@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"os"
 
 	core "github.ibm.com/tantawi/inferno/pkg/core"
@@ -42,6 +44,31 @@ func main() {
 
 	system.Calculate()
 	system.Optimize()
+	fmt.Printf("%v", system)
 
+	for _, c := range system.ServiceClasses {
+		for _, m := range system.Models {
+			modelName := m.GetName()
+			ml := c.GetModelLoad(modelName)
+			if ml == nil {
+				// fmt.Printf("c=%s, m=%s, ml=nil \n", c.GetName(), modelName)
+				continue
+			}
+			ml.ArrivalRate *= 2 * rand.Float32()
+			if ml.ArrivalRate <= 0.0 {
+				ml.ArrivalRate = 1.0
+			}
+			factor := 2 * rand.Float64()
+			ml.AvgLength = int(math.Ceil(float64(ml.AvgLength) * factor))
+			if ml.AvgLength <= 0 {
+				ml.AvgLength = 1
+			}
+			// fmt.Printf("c=%s, m=%s, rate=%v, tokens=%d \n",
+			// 	c.GetName(), modelName, ml.ArrivalRate, ml.AvgLength)
+		}
+	}
+
+	system.Calculate()
+	system.Optimize()
 	fmt.Printf("%v", system)
 }

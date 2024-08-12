@@ -9,7 +9,7 @@ import (
 	"github.ibm.com/tantawi/queue-analysis/pkg/utils"
 )
 
-// An allocation of a model on an accelerators
+// An allocation of a model on an accelerator
 type Allocation struct {
 	accelerator string  // name of accelerator
 	numReplicas int     // number of server replicas
@@ -25,9 +25,9 @@ type Allocation struct {
 var queueModel *queue.MM1ModelStateDependent
 
 // Create an allocation for a model on an accelerator; nil if not feasible
-func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadSpec) *Allocation {
+func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadData) *Allocation {
 	gName := g.name
-	var ma *config.ModelAcceleratorSpec
+	var ma *config.ModelAcceleratorPerfData
 	var exists bool
 	if ma, exists = m.perfData[gName]; !exists {
 		return nil
@@ -126,9 +126,9 @@ func EvalServTime(x float32) (float32, error) {
 
 // Create an allocation for a model on an accelerator; nil if not feasible
 // (using G/G/m model approximation)
-func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadSpec) *Allocation {
+func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadData) *Allocation {
 	gName := g.name
-	var d *config.ModelAcceleratorSpec
+	var d *config.ModelAcceleratorPerfData
 	var exists bool
 	if d, exists = m.perfData[gName]; !exists {
 		return nil
@@ -166,7 +166,7 @@ func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadSpec) *Al
 	return alloc
 }
 
-func (a *Allocation) Scale(model *Model, accelerators map[string]*Accelerator, ml *config.LoadSpec) (alloc *Allocation, inc int) {
+func (a *Allocation) Scale(model *Model, accelerators map[string]*Accelerator, ml *config.LoadData) (alloc *Allocation, inc int) {
 	g := accelerators[a.accelerator]
 	if g == nil {
 		return nil, 0
@@ -176,7 +176,7 @@ func (a *Allocation) Scale(model *Model, accelerators map[string]*Accelerator, m
 	return alloc, inc
 }
 
-func (a *Allocation) ReAllocate(model *Model, accelerators map[string]*Accelerator, ml *config.LoadSpec) (*Allocation, string) {
+func (a *Allocation) ReAllocate(model *Model, accelerators map[string]*Accelerator, ml *config.LoadData) (*Allocation, string) {
 	minVal := float32(0)
 	var minAlloc *Allocation
 	for _, g := range accelerators {

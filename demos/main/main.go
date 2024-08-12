@@ -9,7 +9,7 @@ import (
 
 func main() {
 	prefix := "../../samples/"
-	fn_acc := prefix + "system-data.json"
+	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_srv := prefix + "serviceclass-data.json"
 	fn_opt := prefix + "optimizer-data.json"

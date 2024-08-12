@@ -107,10 +107,10 @@ func main() {
 		m := config.ModelSpec{
 			Name:     n,
 			MemSize:  memSize[i],
-			PerfData: make([]config.ModelAcceleratorSpec, numAcc),
+			PerfData: make([]config.ModelAcceleratorPerfData, numAcc),
 		}
 		for j, a := range aNames {
-			pd := config.ModelAcceleratorSpec{
+			pd := config.ModelAcceleratorPerfData{
 				Name:         a,
 				Alpha:        alpha[j][i],
 				Beta:         beta[j][i],

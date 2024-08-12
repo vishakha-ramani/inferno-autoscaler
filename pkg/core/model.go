@@ -12,14 +12,14 @@ type Model struct {
 	spec *config.ModelSpec
 
 	// model performance data for specified accelerators
-	perfData map[string]*config.ModelAcceleratorSpec
+	perfData map[string]*config.ModelAcceleratorPerfData
 
 	// number of accelerator units needed to fit a model on a given accelerator
 	numUnits map[string]int
 }
 
 func NewModelFromSpec(spec *config.ModelSpec) *Model {
-	perfData := make(map[string]*config.ModelAcceleratorSpec)
+	perfData := make(map[string]*config.ModelAcceleratorPerfData)
 	for _, pf := range spec.PerfData {
 		perfData[pf.Name] = &pf
 	}

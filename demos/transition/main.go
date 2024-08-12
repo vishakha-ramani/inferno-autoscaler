@@ -11,7 +11,7 @@ import (
 
 func main() {
 	prefix := "../../samples/"
-	fn_acc := prefix + "system-data.json"
+	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_srv := prefix + "serviceclass-data.json"
 	fn_opt := prefix + "optimizer-data.json"
@@ -46,14 +46,8 @@ func main() {
 	system.Optimize()
 	fmt.Printf("%v", system)
 
-	for _, c := range system.ServiceClasses {
-		for _, m := range system.Models {
-			modelName := m.GetName()
-			ml := c.GetModelLoad(modelName)
-			if ml == nil {
-				// fmt.Printf("c=%s, m=%s, ml=nil \n", c.GetName(), modelName)
-				continue
-			}
+	for _, c := range system.GetServiceClasses() {
+		for _, ml := range c.GetModelLoads() {
 			ml.ArrivalRate *= 2 * rand.Float32()
 			if ml.ArrivalRate <= 0.0 {
 				ml.ArrivalRate = 1.0
@@ -63,8 +57,8 @@ func main() {
 			if ml.AvgLength <= 0 {
 				ml.AvgLength = 1
 			}
-			// fmt.Printf("c=%s, m=%s, rate=%v, tokens=%d \n",
-			// 	c.GetName(), modelName, ml.ArrivalRate, ml.AvgLength)
+			// fmt.Printf("c=%s, rate=%v, tokens=%d \n",
+			// 	c.GetName(), ml.ArrivalRate, ml.AvgLength)
 		}
 	}
 

@@ -11,7 +11,7 @@ type ServiceClass struct {
 	spec *config.ServiceClassSpec
 
 	// model load data for all models
-	modelLoad map[string]*config.LoadSpec
+	modelLoad map[string]*config.LoadData
 
 	// for all models, for all accelerators
 	allAllocations map[string]map[string]*Allocation
@@ -21,7 +21,7 @@ type ServiceClass struct {
 }
 
 func NewServiceClassFromSpec(spec *config.ServiceClassSpec) *ServiceClass {
-	modelLoad := make(map[string]*config.LoadSpec)
+	modelLoad := make(map[string]*config.LoadData)
 	for _, ml := range spec.Load {
 		modelLoad[ml.Name] = &ml
 	}
@@ -63,8 +63,37 @@ func (c *ServiceClass) GetModelAllocation(modelName string) *Allocation {
 }
 
 // The load data for a model; could be nil
-func (c *ServiceClass) GetModelLoad(modelName string) *config.LoadSpec {
+func (c *ServiceClass) GetModelLoad(modelName string) *config.LoadData {
 	return c.modelLoad[modelName]
+}
+
+// The load data for all models
+func (c *ServiceClass) GetModelLoads() map[string]*config.LoadData {
+	return c.modelLoad
+}
+
+// Get allocation of a model for this service class; nil if does not exist
+func (c *ServiceClass) GetAllocation(modelName string) *Allocation {
+	return c.allocation[modelName]
+}
+
+// Set an allocation of a model for this service class
+func (c *ServiceClass) SetAllocation(modelName string, alloc *Allocation) {
+	c.allocation[modelName] = alloc
+}
+
+// Remove allocation of a model for this service class
+func (c *ServiceClass) RemoveAllocation(modelName string) {
+	delete(c.allocation, modelName)
+}
+
+// Get allocations for all models of this service class
+func (c *ServiceClass) GetAllocations() map[string]*Allocation {
+	return c.allocation
+}
+
+func (c *ServiceClass) ResetAllocation() {
+	c.allocation = make(map[string]*Allocation)
 }
 
 func (c *ServiceClass) String() string {

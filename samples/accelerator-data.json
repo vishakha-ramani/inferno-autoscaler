@@ -278,39 +278,39 @@
     "count": [
         {
             "type": "L4",
-            "count": 24
+            "count": 128
         },
         {
             "type": "L40S",
-            "count": 16
+            "count": 64
         },
         {
             "type": "A100",
-            "count": 24
+            "count": 128
         },
         {
             "type": "H100",
-            "count": 16
+            "count": 64
         },
         {
             "type": "AIU2",
-            "count": 48
+            "count": 256
         },
         {
             "type": "G2",
-            "count": 8
+            "count": 128
         },
         {
             "type": "MI210",
-            "count": 16
+            "count": 128
         },
         {
             "type": "MI250",
-            "count": 16
+            "count": 128
         },
         {
             "type": "MI300X",
-            "count": 16
+            "count": 128
         }
     ]
 }

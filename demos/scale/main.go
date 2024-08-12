@@ -9,7 +9,7 @@ import (
 
 func main() {
 	prefix := "../../samples/"
-	fn_acc := prefix + "system-data.json"
+	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_srv := prefix + "serviceclass-data.json"
 	fn_opt := prefix + "optimizer-data.json"
@@ -46,12 +46,12 @@ func main() {
 	className := "Premium"
 	modelName := "llama3_8b"
 
-	servClass := system.ServiceClasses[className]
+	servClass := system.GetServiceClass(className)
 	if servClass == nil {
 		fmt.Printf("No service class data for class %s\n", className)
 		return
 	}
-	model := system.Models[modelName]
+	model := system.GetModel(modelName)
 	if model == nil {
 		fmt.Printf("No model data for model %s\n", modelName)
 		return
@@ -72,13 +72,13 @@ func main() {
 	ml.AvgLength = int(float32(ml.AvgLength) * 1.5)
 
 	// scale allocation
-	allocAfter, inc := allocBefore.Scale(model, system.Accelerators, ml)
+	allocAfter, inc := allocBefore.Scale(model, system.GetAccelerators(), ml)
 	fmt.Println("AllocAfter: ", allocAfter)
 	fmt.Println("Inc: ", inc)
 
 	// reallocate
 	var gName string
-	allocAfter, gName = allocBefore.ReAllocate(model, system.Accelerators, ml)
+	allocAfter, gName = allocBefore.ReAllocate(model, system.GetAccelerators(), ml)
 	fmt.Println("AllocAfter: ", allocAfter)
 	fmt.Println("gName: ", gName)
 }

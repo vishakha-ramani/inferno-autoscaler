@@ -27,6 +27,7 @@ type entry struct {
 	delta       float32
 }
 
+// Find optimal allocations for all service classes
 func (s *Solver) Solve(system *System) {
 	if s.unlimited {
 		s.SolveUnlimited(system)
@@ -35,8 +36,9 @@ func (s *Solver) Solve(system *System) {
 	}
 }
 
+// Find optimal allocations assuming unlimited accelerator capacity
 func (s *Solver) SolveUnlimited(system *System) {
-	for _, v := range system.ServiceClasses {
+	for _, v := range system.GetServiceClasses() {
 		for mName, modelMap := range v.allAllocations {
 			minVal := float32(math.MaxFloat32)
 			var minAlloc *Allocation
@@ -47,14 +49,15 @@ func (s *Solver) SolveUnlimited(system *System) {
 				}
 			}
 			if minAlloc != nil {
-				v.allocation[mName] = minAlloc
+				v.SetAllocation(mName, minAlloc)
 			} else {
-				delete(v.allocation, mName)
+				v.RemoveAllocation(mName)
 			}
 		}
 	}
 }
 
+// Find optimal allocations assuming limited accelerator capacity
 func (s *Solver) SolveLimited(system *System) {
 
 	available := make(map[string]int)
@@ -63,7 +66,7 @@ func (s *Solver) SolveLimited(system *System) {
 	}
 
 	var entries []*entry = make([]*entry, 0)
-	for _, v := range system.ServiceClasses {
+	for _, v := range system.GetServiceClasses() {
 		sName := v.spec.Name
 		for mName, modelMap := range v.allAllocations {
 			e := &entry{
@@ -109,14 +112,14 @@ func (s *Solver) SolveLimited(system *System) {
 		alloc := top.allocations[top.curIndex]
 		gName := alloc.accelerator
 		replicas := alloc.numReplicas
-		acc := system.Accelerators[gName]
+		acc := system.GetAccelerator(gName)
 		tName := acc.GetType()
 		count := replicas * acc.spec.Multiplicity
 
 		if available[tName] >= count {
 			available[tName] -= count
-			c := system.ServiceClasses[top.sName]
-			c.allocation[top.mName] = alloc
+			c := system.GetServiceClass(top.sName)
+			c.SetAllocation(top.mName, alloc)
 		} else {
 			top.curIndex++
 			if top.curIndex+1 < len(top.allocations) {

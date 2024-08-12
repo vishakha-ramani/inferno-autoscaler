@@ -211,5 +211,8 @@ func (s *System) String() string {
 		fmt.Fprintf(&b, "%v \n", a)
 	}
 	fmt.Fprintf(&b, "totalCost=%v \n", totalCost)
+	if s.optimizer != nil {
+		b.WriteString(s.optimizer.String())
+	}
 	return b.String()
 }

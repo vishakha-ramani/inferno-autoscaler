@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 
@@ -210,7 +211,65 @@ func (a *Allocation) TransitionPenalty(b *Allocation) float32 {
 	return 0.1*(a.cost+b.cost) + (b.cost - a.cost)
 }
 
+func (a *Allocation) Clone() *Allocation {
+	return &Allocation{
+		accelerator: a.accelerator,
+		numReplicas: a.numReplicas,
+		batchSize:   a.batchSize,
+		cost:        a.cost,
+		value:       a.value,
+		servTime:    a.servTime,
+		waitTime:    a.waitTime,
+		rho:         a.rho,
+	}
+}
+
 func (a *Allocation) String() string {
 	return fmt.Sprintf("{acc=%s; num=%d; maxBatch=%d; cost=%v, val=%v, servTime=%v, waitTime=%v, rho=%v}",
 		a.accelerator, a.numReplicas, a.batchSize, a.cost, a.value, a.servTime, a.waitTime, a.rho)
+}
+
+// Orchestration difference between two allocations
+type AllocationDiff struct {
+	oldAccelerator string
+	newAccelerator string
+	oldNumReplicas int
+	newNumReplicas int
+	costDiff       float32
+}
+
+func CreateAllocationDiff(a *Allocation, b *Allocation) *AllocationDiff {
+	if a == nil && b == nil {
+		return nil
+	}
+	oldAccelerator := "none"
+	newAccelerator := "none"
+	oldNumReplicas := 0
+	newNumReplicas := 0
+	oldCost := float32(0)
+	newCost := float32(0)
+	if a != nil {
+		oldAccelerator = a.accelerator
+		oldNumReplicas = a.numReplicas
+		oldCost = a.cost
+	}
+	if b != nil {
+		newAccelerator = b.accelerator
+		newNumReplicas = b.numReplicas
+		newCost = b.cost
+	}
+	return &AllocationDiff{
+		oldAccelerator: oldAccelerator,
+		newAccelerator: newAccelerator,
+		oldNumReplicas: oldNumReplicas,
+		newNumReplicas: newNumReplicas,
+		costDiff:       newCost - oldCost,
+	}
+}
+
+func (d *AllocationDiff) String() string {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "{ %s->%s, %d->%d, %v }",
+		d.oldAccelerator, d.newAccelerator, d.oldNumReplicas, d.newNumReplicas, d.costDiff)
+	return b.String()
 }

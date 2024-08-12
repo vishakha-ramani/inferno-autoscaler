@@ -29,3 +29,27 @@ For each pair of (class of service, model):
 - gpuProfile: the GPU type allocated
 - numReplicas: the number of replicas
 - batchSize: the batch size, given continuous batching
+
+## Example 1: Unlimited accelerators
+
+![unlimited](docs/cases/unlimited/assignment.png)
+
+![unlimited](docs/cases/unlimited/cost.png)
+
+![unlimited](docs/cases/unlimited/figs.png)
+
+## Example 2: Limited accelerators
+
+![limited](docs/cases/limited/assignment.png)
+
+![limited](docs/cases/limited/cost.png)
+
+![limited](docs/cases/limited/figs.png)
+
+## Example 3: Load change - Unlimited accelerators
+
+![change](docs/cases/change/assignment.png)
+
+![change](docs/cases/change/cost.png)
+
+![change](docs/cases/change/figs.png)

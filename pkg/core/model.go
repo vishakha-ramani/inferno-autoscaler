@@ -44,6 +44,6 @@ func (m *Model) GetName() string {
 }
 
 func (m *Model) String() string {
-	return fmt.Sprintf("Model: name=%s; memSize=%d; numUnits= %v",
-		m.spec.Name, m.spec.MemSize, m.numUnits)
+	return fmt.Sprintf("Model: name=%s; memSize=%d",
+		m.spec.Name, m.spec.MemSize)
 }

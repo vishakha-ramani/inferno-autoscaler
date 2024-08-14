@@ -13,3 +13,6 @@ var Delta = float32(0.001)
 
 // maximum number of requests in queueing system as multiples of maximum batch size
 var MaxQueueToBatchRatio = 10
+
+// accelerator transition penalty factor
+var AccelPenaltyFactor = float32(0.1)

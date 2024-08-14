@@ -208,7 +208,7 @@ func (a *Allocation) TransitionPenalty(b *Allocation) float32 {
 			return b.cost - a.cost
 		}
 	}
-	return 0.1*(a.cost+b.cost) + (b.cost - a.cost)
+	return config.AccelPenaltyFactor*(a.cost+b.cost) + (b.cost - a.cost)
 }
 
 func (a *Allocation) Clone() *Allocation {
@@ -269,7 +269,7 @@ func CreateAllocationDiff(a *Allocation, b *Allocation) *AllocationDiff {
 
 func (d *AllocationDiff) String() string {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "{ %s->%s, %d->%d, %v }",
+	fmt.Fprintf(&b, "{ %s -> %s, %d -> %d, %v }",
 		d.oldAccelerator, d.newAccelerator, d.oldNumReplicas, d.newNumReplicas, d.costDiff)
 	return b.String()
 }

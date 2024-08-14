@@ -215,7 +215,7 @@
                     "name": "mistral_7b",
                     "slo-itl": 160,
                     "slo-ttw": 2000,
-                    "arrivalRate": 400,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -224,7 +224,7 @@
                     "name": "granite_13b",
                     "slo-itl": 160,
                     "slo-ttw": 2000,
-                    "arrivalRate": 400,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -233,7 +233,7 @@
                     "name": "granite_20b",
                     "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 400,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -242,7 +242,7 @@
                     "name": "granite_34b",
                     "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 400,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5
@@ -251,7 +251,7 @@
                     "name": "mixtral_8_7b",
                     "slo-itl": 320,
                     "slo-ttw": 2000,
-                    "arrivalRate": 400,
+                    "arrivalRate": 480,
                     "avgLength": 1024,
                     "arrivalCOV": 1.5,
                     "serviceCOV": 1.5

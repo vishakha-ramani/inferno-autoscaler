@@ -178,22 +178,22 @@ func (a *AllocationByType) String() string {
 func (s *System) String() string {
 	var b bytes.Buffer
 	// b.WriteString("Accelerators: \n")
-	// for _, g := range s.Accelerators {
+	// for _, g := range s.GetAccelerators() {
 	// 	fmt.Fprintln(&b, g)
 	// }
+	// fmt.Fprintf(&b, "capacity=%v \n", s.capacity)
 	// b.WriteString("Models: \n")
-	// for _, m := range s.models {
+	// for _, m := range s.GetModels() {
 	// 	fmt.Fprintln(&b, m)
 	// }
 	// b.WriteString("ServiceClasses: \n")
-	// for _, c := range s.serviceClasses {
+	// for _, c := range s.GetServiceClasses() {
 	// 	fmt.Fprintln(&b, c)
 	// }
 	b.WriteString("Solution: \n")
 	totalCost := float32(0)
-	for srvClassName, c := range s.serviceClasses {
-		for _, modelLoadData := range c.spec.Load {
-			modelName := modelLoadData.Name
+	for srvClassName, c := range s.GetServiceClasses() {
+		for modelName, modelLoadData := range c.GetModelLoads() {
 			alloc := c.GetAllocation(modelName)
 			if alloc == nil {
 				fmt.Fprintf(&b, "c=%s; m=%s; no feasible allocation! \n", srvClassName, modelName)

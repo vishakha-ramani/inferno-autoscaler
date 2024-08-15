@@ -2,25 +2,23 @@
 
 The inference system optimizer assigns GPU types to inference model servers and decides on the number of replicas for each model for a given request traffic load and classes of service, as well as the batch size. ([slides](docs/slides/inferno-dynamic.pdf))
 
-![description](docs/figs/problem-scope.png)
+![problem-scope](docs/figs/Slide5.png)
 
-![description](docs/figs/timing-definitions.png)
+![timing-definitions](docs/figs/Slide30.png)
 
-![description](docs/figs/request-batching.png)
+![request-batching](docs/figs/Slide6.png)
 
-![description](docs/figs/token-time-fitting.png)
+![token-time-fitting](docs/figs/Slide7.png)
 
-![description](docs/figs/modeling-batching.png)
+![modeling-batching](docs/figs/Slide9.png)
 
-![description](docs/figs/qn-model.png)
+![qn-model](docs/figs/Slide8.png)
 
-![description](docs/figs/system-occupancy.png)
+![system-occupancy](docs/figs/Slide32.png)
 
-![description](docs/figs/impact-batch.png)
+![impact-batch](docs/figs/Slide33.png)
 
-![description](docs/figs/target-waiting.png)
-
-![description](docs/figs/target-service.png)
+![target-service](docs/figs/Slide34.png)
 
 Decision variables
 
@@ -30,26 +28,38 @@ For each pair of (class of service, model):
 - numReplicas: the number of replicas
 - batchSize: the batch size, given continuous batching
 
+## Specifications: Accelerators and models
+
+![accelerators](docs/figs/Slide13.png)
+
+![models](docs/figs/Slide14.png)
+
 ## Example 1: Unlimited accelerators
 
-![unlimited](docs/cases/unlimited/assignment.png)
+![unlimited-assign](docs/figs/Slide16.png)
 
-![unlimited](docs/cases/unlimited/cost.png)
+![unlimited-perf](docs/figs/Slide17.png)
 
-![unlimited](docs/cases/unlimited/figs.png)
+## Example 2: Load change - Unlimited accelerators
 
-## Example 2: Limited accelerators
+![unlimited-change-assign](docs/figs/Slide19.png)
 
-![limited](docs/cases/limited/assignment.png)
+![unlimited-change](docs/figs/Slide20.png)
 
-![limited](docs/cases/limited/cost.png)
+![unlimited-change-perf](docs/figs/Slide21.png)
 
-![limited](docs/cases/limited/figs.png)
+## Example 3: Limited accelerators
 
-## Example 3: Load change - Unlimited accelerators
+![limited-count](docs/figs/Slide22.png)
 
-![change](docs/cases/change/assignment.png)
+![limited-assign](docs/figs/Slide23.png)
 
-![change](docs/cases/change/cost.png)
+![limited-perf](docs/figs/Slide24.png)
 
-![change](docs/cases/change/figs.png)
+## Example 4: Load change - Limited accelerators
+
+![limited-change-assign](docs/figs/Slide26.png)
+
+![limited-change](docs/figs/Slide27.png)
+
+![limited-change-perf](docs/figs/Slide28.png)

@@ -7,7 +7,9 @@ type OptimizerData struct {
 
 // Specifications for optimizer data
 type OptimizerSpec struct {
-	Unlimited bool `json:"unlimited"` // unlimited number of accelerator types (for capacity planning and/or cloud)
+	Unlimited     bool `json:"unlimited"`     // unlimited number of accelerator types (for capacity planning and/or cloud)
+	Heterogeneous bool `json:"heterogeneous"` // heterogeneous accelerators assigned to same inference server
+	MILPSolver    bool `json:"milpSolver"`    // use MILP solver to optimize
 }
 
 // Data related to an Accelerator
@@ -81,4 +83,20 @@ type LoadData struct {
 	AvgLength   int     `json:"avgLength"`   // number of tokens
 	ArrivalCOV  float32 `json:"arrivalCOV"`  // coefficient of variation of inter-request arrival time
 	ServiceCOV  float32 `json:"serviceCOV"`  // coefficient of variation of request service time
+}
+
+type AllocationSolution struct {
+	Spec map[string]AllocationData `json:"spec"` // map of server names to allocation data
+}
+
+// Data about a server (a combination of a service class and a model) allocation
+type AllocationData struct {
+	ServiceClass string  `json:"serviceClass"` // service class name
+	Model        string  `json:"model"`        // model name
+	Accelerator  string  `json:"accelerator"`  // accelerator name
+	NumReplicas  int     `json:"numReplicas"`  // number of replicas
+	MaxBatch     int     `json:"maxBatch"`     // max batch size
+	Cost         float32 `json:"cost"`         // cost of allocation
+	ITLAverage   float32 `json:"itlAverage"`   // average ITL
+	WaitAverage  float32 `json:"waitAverage"`  // average wait time
 }

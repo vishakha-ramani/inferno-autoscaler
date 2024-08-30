@@ -14,8 +14,8 @@ type Model struct {
 	// model performance data for specified accelerators
 	perfData map[string]*config.ModelAcceleratorPerfData
 
-	// number of accelerator units needed to fit a model on a given accelerator
-	numUnits map[string]int
+	// number of accelerator instances needed to fit a model on a given accelerator
+	numInstances map[string]int
 }
 
 func NewModelFromSpec(spec *config.ModelSpec) *Model {
@@ -24,9 +24,9 @@ func NewModelFromSpec(spec *config.ModelSpec) *Model {
 		perfData[pf.Name] = &pf
 	}
 	return &Model{
-		spec:     spec,
-		perfData: perfData,
-		numUnits: make(map[string]int),
+		spec:         spec,
+		perfData:     perfData,
+		numInstances: make(map[string]int),
 	}
 }
 
@@ -34,7 +34,7 @@ func NewModelFromSpec(spec *config.ModelSpec) *Model {
 func (m *Model) Calculate(accelerators map[string]*Accelerator) {
 	for gName := range m.perfData {
 		if g, exists := accelerators[gName]; exists {
-			m.numUnits[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.spec.MemSize)))
+			m.numInstances[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.spec.MemSize)))
 		}
 	}
 }

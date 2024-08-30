@@ -20,6 +20,8 @@ type Allocation struct {
 	servTime    float32 // expected average token service time
 	waitTime    float32 // expected average request queueing time
 	rho         float32 // expected busy server defined as (1 - probability of at least one request running)
+
+	maxArrvRatePerReplica float32 // maximum arrival rate per replica
 }
 
 // queueing model used in performance analysis
@@ -87,7 +89,10 @@ func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadData) *Allocation
 	// calculate number of replicas
 	totalLambda := ml.ArrivalRate / 60 / 1000
 	numReplicas := int(math.Ceil(float64(totalLambda) / float64(lambdaStar)))
-	cost := g.spec.Cost * float32(m.numUnits[gName]*numReplicas*g.spec.Multiplicity)
+
+	// calculate cost
+	totalNumInstances := m.numInstances[gName] * numReplicas
+	cost := g.spec.Cost * float32(totalNumInstances)
 
 	// queueModel.Solve(lambdaStar, 1)
 	// fmt.Printf("model=%s; accelerator=%s; lambdaMin=%v; lambdaMax=%v; servTimeLimit= %v; waitTimeLimit=%v; lambdaStarService=%v; lambdaStarWait=%v; lambdaStar=%v \n",
@@ -104,7 +109,7 @@ func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadData) *Allocation
 	// fmt.Printf("numReplicas=%d; batchSize=%d; lambda=%v, tokenTime=%v; wait=%v; \n", numReplicas, N, lambda, servTime, wait)
 
 	alloc := &Allocation{accelerator: gName, numReplicas: numReplicas, batchSize: N,
-		cost: cost, servTime: servTime, waitTime: wait, rho: rho}
+		cost: cost, servTime: servTime, waitTime: wait, rho: rho, maxArrvRatePerReplica: lambdaStar}
 	alloc.SetValue(alloc.cost)
 	return alloc
 }
@@ -155,7 +160,7 @@ func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadData) *Al
 	rhoStar := xStar / (1 + xStar)
 	lambdaStar := rhoStar / (float32(K) * servTime)
 	numReplicas := int(math.Ceil(float64(ml.ArrivalRate) / (float64(lambdaStar) * 60 * 1000)))
-	cost := g.spec.Cost * float32(m.numUnits[gName]*numReplicas*g.spec.Multiplicity)
+	cost := g.spec.Cost * float32(m.numInstances[gName]*numReplicas*g.spec.Multiplicity)
 
 	rho := ml.ArrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
 	x := rho / (1 - rho)
@@ -221,6 +226,8 @@ func (a *Allocation) Clone() *Allocation {
 		servTime:    a.servTime,
 		waitTime:    a.waitTime,
 		rho:         a.rho,
+
+		maxArrvRatePerReplica: a.maxArrvRatePerReplica,
 	}
 }
 

@@ -24,6 +24,7 @@ type System struct {
 type AllocationByType struct {
 	name  string  // name of accelerator type
 	count int     // total number of this type
+	limit int     // maximum number of this type
 	cost  float32 // total cost of this type
 }
 
@@ -143,13 +144,14 @@ func (s *System) Optimize() {
 func (s *System) AllocateByType() {
 	s.allocationByType = map[string]*AllocationByType{}
 	for _, c := range s.serviceClasses {
-		for _, srvModelAlloc := range c.GetAllocations() {
+		for modelName, srvModelAlloc := range c.GetAllocations() {
 			if srvModelAlloc == nil {
 				continue
 			}
 			accName := srvModelAlloc.accelerator
 			acc := s.accelerators[accName]
-			if acc == nil {
+			model := s.GetModel(modelName)
+			if acc == nil || model == nil {
 				continue
 			}
 			nameType := acc.GetType()
@@ -159,19 +161,51 @@ func (s *System) AllocateByType() {
 				alloc = &AllocationByType{
 					name:  nameType,
 					count: 0,
+					limit: s.capacity[nameType],
 					cost:  0,
 				}
 			}
-			alloc.count += srvModelAlloc.numReplicas * acc.spec.Multiplicity
+			alloc.count += srvModelAlloc.numReplicas * model.numInstances[accName] * acc.spec.Multiplicity
 			alloc.cost += srvModelAlloc.cost
 			s.allocationByType[nameType] = alloc
 		}
 	}
 }
 
+// generate json allocation solution for all servers in the system
+func (s *System) GetSolution() ([]byte, error) {
+	allocationSolution := config.AllocationSolution{
+		Spec: make(map[string]config.AllocationData),
+	}
+	for srvName, srv := range s.serviceClasses {
+		for modelName, srvModelAlloc := range srv.GetAllocations() {
+			if srvModelAlloc == nil {
+				continue
+			}
+			allocData := config.AllocationData{
+				ServiceClass: srvName,
+				Model:        modelName,
+				Accelerator:  srvModelAlloc.accelerator,
+				NumReplicas:  srvModelAlloc.numReplicas,
+				MaxBatch:     srvModelAlloc.batchSize,
+				Cost:         srvModelAlloc.cost,
+				ITLAverage:   srvModelAlloc.servTime,
+				WaitAverage:  srvModelAlloc.waitTime,
+			}
+			allocationSolution.Spec[srvName+"/"+modelName] = allocData
+		}
+	}
+	// generate json
+	if byteValue, err := json.Marshal(allocationSolution); err != nil {
+		return nil, err
+	} else {
+		return byteValue, nil
+	}
+}
+
 func (a *AllocationByType) String() string {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "name=%s, count=%d, cost=%v", a.name, a.count, a.cost)
+	fmt.Fprintf(&b, "name=%s, count=%d, limit=%d, cost=%v", a.name, a.count, a.limit, a.cost)
 	return b.String()
 }
 

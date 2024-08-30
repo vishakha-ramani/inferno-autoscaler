@@ -10,7 +10,11 @@ import (
 )
 
 func main() {
-	prefix := "../../samples/"
+	size := "large"
+	if len(os.Args) > 1 {
+		size = os.Args[1]
+	}
+	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_srv := prefix + "serviceclass-data.json"

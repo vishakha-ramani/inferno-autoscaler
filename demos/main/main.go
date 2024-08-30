@@ -8,11 +8,16 @@ import (
 )
 
 func main() {
-	prefix := "../../samples/"
+	size := "large"
+	if len(os.Args) > 1 {
+		size = os.Args[1]
+	}
+	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_srv := prefix + "serviceclass-data.json"
 	fn_opt := prefix + "optimizer-data.json"
+	fn_sol := prefix + "solution-data.json"
 
 	system := core.NewSystem()
 
@@ -42,6 +47,13 @@ func main() {
 
 	system.Calculate()
 	system.Optimize()
+
+	bytes_sol, err_sol := system.GetSolution()
+	if err_sol != nil {
+		fmt.Println(err_sol)
+	} else {
+		os.WriteFile(fn_sol, bytes_sol, 0644)
+	}
 
 	fmt.Printf("%v", system)
 }

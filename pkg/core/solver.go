@@ -10,7 +10,9 @@ import (
 
 // Solver of allocation assignment problem
 type Solver struct {
-	unlimited bool
+	unlimited     bool
+	heterogeneous bool
+	milpsolver    bool
 
 	// current allocation for all service classes and models
 	currentAllocation map[string]map[string]*Allocation
@@ -19,9 +21,11 @@ type Solver struct {
 	diffAllocation map[string]map[string]*AllocationDiff
 }
 
-func NewSolver(unlimited bool) *Solver {
+func NewSolver(unlimited bool, heterogeneous bool, milpsolver bool) *Solver {
 	return &Solver{
 		unlimited:         unlimited,
+		heterogeneous:     heterogeneous,
+		milpsolver:        milpsolver,
 		currentAllocation: make(map[string]map[string]*Allocation),
 		diffAllocation:    make(map[string]map[string]*AllocationDiff),
 	}
@@ -49,13 +53,19 @@ func (s *Solver) Solve(system *System) {
 			s.currentAllocation[srvClassName][modelName] = alloc.Clone()
 		}
 	}
+
 	// find solution
-	if s.unlimited {
+	if s.milpsolver {
+		s.SolveMILP(system)
+	} else if s.unlimited {
 		s.SolveUnlimited(system)
 	} else {
 		s.SolveLimited(system)
 	}
 	// calculate difference
+
+	// TODO: cleanup after trying MIP solver
+
 	s.diffAllocation = make(map[string]map[string]*AllocationDiff)
 	for srvClassName, sc := range system.serviceClasses {
 		s.diffAllocation[srvClassName] = make(map[string]*AllocationDiff)
@@ -67,6 +77,7 @@ func (s *Solver) Solve(system *System) {
 			}
 		}
 	}
+
 }
 
 // Find optimal allocations assuming unlimited accelerator capacity
@@ -148,7 +159,8 @@ func (s *Solver) SolveLimited(system *System) {
 		replicas := alloc.numReplicas
 		acc := system.GetAccelerator(gName)
 		tName := acc.GetType()
-		count := replicas * acc.spec.Multiplicity
+		model := system.GetModel(top.mName)
+		count := replicas * model.numInstances[gName] * acc.spec.Multiplicity
 
 		if available[tName] >= count {
 			available[tName] -= count
@@ -167,6 +179,11 @@ func (s *Solver) SolveLimited(system *System) {
 			entries = slices.Insert(entries, i, top)
 		}
 	}
+}
+
+func (s *Solver) SolveMILP(system *System) {
+	mip := NewMILPSolver(system)
+	mip.Solve()
 }
 
 func (s *Solver) GetAllocationDiff() map[string]map[string]*AllocationDiff {

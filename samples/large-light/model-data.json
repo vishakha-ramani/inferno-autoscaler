@@ -71,84 +71,84 @@
           "name": "2xAIU2",
           "alpha": 147,
           "beta": 2.93,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
           "alpha": 17.74,
           "beta": 0.35,
-          "maxBatchSize": 51,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 14.6,
           "beta": 0.29,
-          "maxBatchSize": 64,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 12.11,
           "beta": 0.24,
-          "maxBatchSize": 76,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 9.11,
           "beta": 0.18,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 8.65,
           "beta": 0.17,
-          "maxBatchSize": 64,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 5.49,
           "beta": 0.11,
-          "maxBatchSize": 153,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 102.9,
           "beta": 2.05,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
           "alpha": 12.55,
           "beta": 0.25,
-          "maxBatchSize": 102,
+          "maxBatchSize": 125,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 10.29,
           "beta": 0.21,
-          "maxBatchSize": 128,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 8.58,
           "beta": 0.17,
-          "maxBatchSize": 153,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 6.43,
           "beta": 0.13,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         }
       ]
@@ -186,13 +186,6 @@
           "atTokens": 512
         },
         {
-          "name": "A100",
-          "alpha": 29.78,
-          "beta": 0.5,
-          "maxBatchSize": 24,
-          "atTokens": 512
-        },
-        {
           "name": "G2",
           "alpha": 24.82,
           "beta": 0.42,
@@ -207,13 +200,6 @@
           "atTokens": 512
         },
         {
-          "name": "H100",
-          "alpha": 17.73,
-          "beta": 0.3,
-          "maxBatchSize": 24,
-          "atTokens": 512
-        },
-        {
           "name": "MI300X",
           "alpha": 11.24,
           "beta": 0.19,
@@ -224,84 +210,84 @@
           "name": "2xAIU2",
           "alpha": 212.71,
           "beta": 3.57,
-          "maxBatchSize": 76,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
           "alpha": 25.67,
           "beta": 0.43,
-          "maxBatchSize": 38,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "2xA100",
-          "alpha": 21.12,
-          "beta": 0.35,
-          "maxBatchSize": 48,
+          "alpha": 29.78,
+          "beta": 0.5,
+          "maxBatchSize": 24,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 17.52,
           "beta": 0.29,
-          "maxBatchSize": 57,
+          "maxBatchSize": 28,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 13.18,
           "beta": 0.22,
-          "maxBatchSize": 76,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "2xH100",
-          "alpha": 12.51,
-          "beta": 0.21,
-          "maxBatchSize": 48,
+          "alpha": 17.73,
+          "beta": 0.3,
+          "maxBatchSize": 24,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 7.94,
           "beta": 0.13,
-          "maxBatchSize": 115,
+          "maxBatchSize": 57,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 148.9,
           "beta": 2.5,
-          "maxBatchSize": 153,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
           "alpha": 18.16,
           "beta": 0.3,
-          "maxBatchSize": 76,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "4xA100",
-          "alpha": 14.89,
-          "beta": 0.25,
-          "maxBatchSize": 96,
+          "alpha": 21.12,
+          "beta": 0.35,
+          "maxBatchSize": 24,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 12.41,
           "beta": 0.21,
-          "maxBatchSize": 115,
+          "maxBatchSize": 28,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 9.31,
           "beta": 0.16,
-          "maxBatchSize": 153,
+          "maxBatchSize": 38,
           "atTokens": 512
         }
       ]
@@ -332,27 +318,6 @@
           "atTokens": 512
         },
         {
-          "name": "MI210",
-          "alpha": 59.48,
-          "beta": 1,
-          "maxBatchSize": 9,
-          "atTokens": 512
-        },
-        {
-          "name": "A100",
-          "alpha": 48.77,
-          "beta": 0.82,
-          "maxBatchSize": 12,
-          "atTokens": 512
-        },
-        {
-          "name": "G2",
-          "alpha": 40.64,
-          "beta": 0.68,
-          "maxBatchSize": 14,
-          "atTokens": 512
-        },
-        {
           "name": "MI250",
           "alpha": 30.48,
           "beta": 0.51,
@@ -361,8 +326,8 @@
         },
         {
           "name": "H100",
-          "alpha": 29.03,
-          "beta": 0.49,
+          "alpha": 20.49,
+          "beta": 0.34,
           "maxBatchSize": 12,
           "atTokens": 512
         },
@@ -377,84 +342,84 @@
           "name": "2xAIU2",
           "alpha": 348.36,
           "beta": 5.86,
-          "maxBatchSize": 38,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
-          "alpha": 42.04,
-          "beta": 0.71,
-          "maxBatchSize": 19,
+          "alpha": 59.48,
+          "beta": 1,
+          "maxBatchSize": 9,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 34.59,
           "beta": 0.58,
-          "maxBatchSize": 24,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 28.69,
           "beta": 0.48,
-          "maxBatchSize": 28,
+          "maxBatchSize": 14,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 21.58,
           "beta": 0.36,
-          "maxBatchSize": 38,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 20.49,
           "beta": 0.34,
-          "maxBatchSize": 24,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 13.01,
           "beta": 0.22,
-          "maxBatchSize": 57,
+          "maxBatchSize": 28,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 243.85,
           "beta": 4.1,
-          "maxBatchSize": 76,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
-          "alpha": 29.74,
-          "beta": 0.5,
-          "maxBatchSize": 38,
+          "alpha": 42.04,
+          "beta": 0.71,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 24.39,
           "beta": 0.41,
-          "maxBatchSize": 48,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 20.32,
           "beta": 0.34,
-          "maxBatchSize": 57,
+          "maxBatchSize": 14,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 15.24,
           "beta": 0.26,
-          "maxBatchSize": 76,
+          "maxBatchSize": 19,
           "atTokens": 512
         }
       ]
@@ -530,84 +495,84 @@
           "name": "2xAIU2",
           "alpha": 83.5,
           "beta": 4.5,
-          "maxBatchSize": 204,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
           "alpha": 10.08,
           "beta": 0.54,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 8.29,
           "beta": 0.45,
-          "maxBatchSize": 128,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 6.88,
           "beta": 0.37,
-          "maxBatchSize": 153,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 5.17,
           "beta": 0.28,
-          "maxBatchSize": 204,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 4.91,
           "beta": 0.26,
-          "maxBatchSize": 128,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 3.12,
           "beta": 0.17,
-          "maxBatchSize": 307,
+          "maxBatchSize": 153,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 58.45,
           "beta": 3.15,
-          "maxBatchSize": 409,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
           "alpha": 7.13,
           "beta": 0.38,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 5.85,
           "beta": 0.32,
-          "maxBatchSize": 256,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 4.87,
           "beta": 0.26,
-          "maxBatchSize": 307,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 3.65,
           "beta": 0.2,
-          "maxBatchSize": 409,
+          "maxBatchSize": 102,
           "atTokens": 512
         }
       ]
@@ -683,84 +648,84 @@
           "name": "2xAIU2",
           "alpha": 143.79,
           "beta": 6.21,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
           "alpha": 17.35,
           "beta": 0.75,
-          "maxBatchSize": 51,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 14.28,
           "beta": 0.62,
-          "maxBatchSize": 64,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 11.84,
           "beta": 0.51,
-          "maxBatchSize": 76,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 8.91,
           "beta": 0.38,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 8.46,
           "beta": 0.37,
-          "maxBatchSize": 64,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 5.37,
           "beta": 0.23,
-          "maxBatchSize": 153,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 100.65,
           "beta": 4.35,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
           "alpha": 12.27,
           "beta": 0.53,
-          "maxBatchSize": 102,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 10.07,
           "beta": 0.44,
-          "maxBatchSize": 128,
+          "maxBatchSize": 32,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 8.39,
           "beta": 0.36,
-          "maxBatchSize": 153,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 6.29,
           "beta": 0.27,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         }
       ]
@@ -788,13 +753,6 @@
           "alpha": 30.07,
           "beta": 1.37,
           "maxBatchSize": 9,
-          "atTokens": 512
-        },
-        {
-          "name": "MI210",
-          "alpha": 15.77,
-          "beta": 0.72,
-          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
@@ -836,84 +794,84 @@
           "name": "2xAIU2",
           "alpha": 92.36,
           "beta": 4.21,
-          "maxBatchSize": 51,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
-          "alpha": 11.15,
-          "beta": 0.51,
-          "maxBatchSize": 25,
+          "alpha": 15.77,
+          "beta": 0.72,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 9.17,
           "beta": 0.42,
-          "maxBatchSize": 32,
+          "maxBatchSize": 16,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 7.61,
           "beta": 0.35,
-          "maxBatchSize": 38,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 5.72,
           "beta": 0.26,
-          "maxBatchSize": 51,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 5.43,
           "beta": 0.25,
-          "maxBatchSize": 32,
+          "maxBatchSize": 16,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 3.45,
           "beta": 0.16,
-          "maxBatchSize": 76,
+          "maxBatchSize": 38,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 64.65,
           "beta": 2.95,
-          "maxBatchSize": 102,
+          "maxBatchSize": 25,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
-          "alpha": 7.88,
-          "beta": 0.36,
-          "maxBatchSize": 51,
+          "alpha": 11.15,
+          "beta": 0.51,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 6.47,
           "beta": 0.3,
-          "maxBatchSize": 64,
+          "maxBatchSize":16,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 5.39,
           "beta": 0.25,
-          "maxBatchSize": 76,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 4.04,
           "beta": 0.18,
-          "maxBatchSize": 102,
+          "maxBatchSize": 25,
           "atTokens": 512
         }
       ]
@@ -922,13 +880,6 @@
       "name": "llama_70b",
       "memSize": 210,
       "perfData": [
-        {
-          "name": "AIU2",
-          "alpha": 274.1,
-          "beta": 70.7,
-          "maxBatchSize": 8,
-          "atTokens": 512
-        },
         {
           "name": "L4",
           "alpha": 182.73,
@@ -944,31 +895,10 @@
           "atTokens": 512
         },
         {
-          "name": "MI210",
-          "alpha": 33.43,
-          "beta": 8.62,
-          "maxBatchSize": 4,
-          "atTokens": 512
-        },
-        {
-          "name": "A100",
-          "alpha": 27.41,
-          "beta": 7.07,
-          "maxBatchSize": 5,
-          "atTokens": 512
-        },
-        {
           "name": "G2",
           "alpha": 22.84,
           "beta": 5.89,
           "maxBatchSize": 6,
-          "atTokens": 512
-        },
-        {
-          "name": "MI250",
-          "alpha": 17.13,
-          "beta": 4.42,
-          "maxBatchSize": 8,
           "atTokens": 512
         },
         {
@@ -979,87 +909,52 @@
           "atTokens": 512
         },
         {
-          "name": "MI300X",
+          "name": "2xAIU2",
+          "alpha": 274.1,
+          "beta": 70.7,
+          "maxBatchSize": 8,
+          "atTokens": 512
+        },
+        {
+          "name": "2xMI250",
+          "alpha": 17.13,
+          "beta": 4.42,
+          "maxBatchSize": 8,
+          "atTokens": 512
+        },
+        {
+          "name": "2xMI300X",
           "alpha": 10.34,
           "beta": 2.67,
           "maxBatchSize": 12,
           "atTokens": 512
         },
         {
-          "name": "2xAIU2",
+          "name": "4xAIU2",
           "alpha": 195.79,
           "beta": 50.5,
-          "maxBatchSize": 16,
-          "atTokens": 512
-        },
-        {
-          "name": "2xMI210",
-          "alpha": 23.63,
-          "beta": 6.09,
           "maxBatchSize": 8,
           "atTokens": 512
         },
         {
-          "name": "2xA100",
-          "alpha": 19.44,
-          "beta": 5.01,
-          "maxBatchSize": 10,
-          "atTokens": 512
-        },
-        {
-          "name": "2xG2",
-          "alpha": 16.12,
-          "beta": 4.16,
-          "maxBatchSize": 12,
-          "atTokens": 512
-        },
-        {
-          "name": "2xMI250",
-          "alpha": 12.13,
-          "beta": 3.13,
-          "maxBatchSize": 16,
-          "atTokens": 512
-        },
-        {
-          "name": "2xH100",
-          "alpha": 11.52,
-          "beta": 2.97,
-          "maxBatchSize": 10,
-          "atTokens": 512
-        },
-        {
-          "name": "2xMI300X",
-          "alpha": 7.31,
-          "beta": 1.89,
-          "maxBatchSize": 24,
-          "atTokens": 512
-        },
-        {
-          "name": "4xAIU2",
-          "alpha": 137.05,
-          "beta": 35.35,
-          "maxBatchSize": 32,
-          "atTokens": 512
-        },
-        {
           "name": "4xMI210",
-          "alpha": 16.71,
-          "beta": 4.31,
-          "maxBatchSize": 16,
+          "alpha": 33.43,
+          "beta": 8.62,
+          "maxBatchSize": 4,
           "atTokens": 512
         },
         {
           "name": "4xA100",
-          "alpha": 13.71,
-          "beta": 3.54,
-          "maxBatchSize": 20,
+          "alpha": 27.41,
+          "beta": 7.07,
+          "maxBatchSize": 5,
           "atTokens": 512
         },
         {
           "name": "4xG2",
-          "alpha": 11.42,
-          "beta": 2.95,
-          "maxBatchSize": 24,
+          "alpha": 16.12,
+          "beta": 4.16,
+          "maxBatchSize": 6,
           "atTokens": 512
         },
         {
@@ -1142,84 +1037,84 @@
           "name": "2xAIU2",
           "alpha": 88,
           "beta": 2.93,
-          "maxBatchSize": 204,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "2xMI210",
           "alpha": 10.62,
           "beta": 0.35,
-          "maxBatchSize": 102,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "2xA100",
           "alpha": 8.74,
           "beta": 0.29,
-          "maxBatchSize": 128,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "2xG2",
           "alpha": 7.25,
           "beta": 0.24,
-          "maxBatchSize": 153,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
           "alpha": 5.45,
           "beta": 0.18,
-          "maxBatchSize": 204,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 5.18,
           "beta": 0.17,
-          "maxBatchSize": 128,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 3.29,
           "beta": 0.11,
-          "maxBatchSize": 307,
+          "maxBatchSize": 153,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
           "alpha": 61.6,
           "beta": 2.05,
-          "maxBatchSize": 409,
+          "maxBatchSize": 102,
           "atTokens": 512
         },
         {
           "name": "4xMI210",
           "alpha": 7.51,
           "beta": 0.25,
-          "maxBatchSize": 204,
+          "maxBatchSize": 51,
           "atTokens": 512
         },
         {
           "name": "4xA100",
           "alpha": 6.16,
           "beta": 0.21,
-          "maxBatchSize": 256,
+          "maxBatchSize": 64,
           "atTokens": 512
         },
         {
           "name": "4xG2",
           "alpha": 5.13,
           "beta": 0.17,
-          "maxBatchSize": 307,
+          "maxBatchSize": 76,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
           "alpha": 3.85,
           "beta": 0.13,
-          "maxBatchSize": 409,
+          "maxBatchSize": 102,
           "atTokens": 512
         }
       ]
@@ -1228,13 +1123,6 @@
       "name": "mixtral_8_7b",
       "memSize": 168,
       "perfData": [
-        {
-          "name": "AIU2",
-          "alpha": 296.3,
-          "beta": 60.1,
-          "maxBatchSize": 12,
-          "atTokens": 512
-        },
         {
           "name": "L4",
           "alpha": 197.53,
@@ -1264,20 +1152,6 @@
           "atTokens": 512
         },
         {
-          "name": "G2",
-          "alpha": 24.69,
-          "beta": 5.01,
-          "maxBatchSize": 9,
-          "atTokens": 512
-        },
-        {
-          "name": "MI250",
-          "alpha": 18.52,
-          "beta": 3.76,
-          "maxBatchSize": 12,
-          "atTokens": 512
-        },
-        {
           "name": "H100",
           "alpha": 17.64,
           "beta": 3.58,
@@ -1293,15 +1167,8 @@
         },
         {
           "name": "2xAIU2",
-          "alpha": 211.64,
-          "beta": 42.93,
-          "maxBatchSize": 25,
-          "atTokens": 512
-        },
-        {
-          "name": "2xMI210",
-          "alpha": 25.54,
-          "beta": 5.18,
+          "alpha": 296.3,
+          "beta": 60.1,
           "maxBatchSize": 12,
           "atTokens": 512
         },
@@ -1309,42 +1176,42 @@
           "name": "2xA100",
           "alpha": 21.01,
           "beta": 4.26,
-          "maxBatchSize": 16,
+          "maxBatchSize": 8,
           "atTokens": 512
         },
         {
           "name": "2xG2",
-          "alpha": 17.43,
-          "beta": 3.54,
-          "maxBatchSize": 19,
+          "alpha": 24.69,
+          "beta": 5.01,
+          "maxBatchSize": 9,
           "atTokens": 512
         },
         {
           "name": "2xMI250",
-          "alpha": 13.11,
-          "beta": 2.66,
-          "maxBatchSize": 25,
+          "alpha": 18.52,
+          "beta": 3.76,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
           "name": "2xH100",
           "alpha": 12.45,
           "beta": 2.53,
-          "maxBatchSize": 16,
+          "maxBatchSize": 8,
           "atTokens": 512
         },
         {
           "name": "2xMI300X",
           "alpha": 7.9,
           "beta": 1.6,
-          "maxBatchSize": 38,
+          "maxBatchSize": 19,
           "atTokens": 512
         },
         {
           "name": "4xAIU2",
-          "alpha": 148.15,
-          "beta": 30.05,
-          "maxBatchSize": 51,
+          "alpha": 211.64,
+          "beta": 42.93,
+          "maxBatchSize": 12,
           "atTokens": 512
         },
         {
@@ -1358,21 +1225,21 @@
           "name": "4xA100",
           "alpha": 14.82,
           "beta": 3.01,
-          "maxBatchSize": 32,
+          "maxBatchSize": 8,
           "atTokens": 512
         },
         {
           "name": "4xG2",
-          "alpha": 12.35,
-          "beta": 2.5,
-          "maxBatchSize": 38,
+          "alpha": 17.43,
+          "beta": 3.54,
+          "maxBatchSize": 9,
           "atTokens": 512
         },
         {
           "name": "4xMI250",
-          "alpha": 9.26,
-          "beta": 1.88,
-          "maxBatchSize": 51,
+          "alpha": 13.11,
+          "beta": 2.66,
+          "maxBatchSize": 12,
           "atTokens": 512
         }
       ]

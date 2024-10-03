@@ -1,6 +1,7 @@
 {
-    "spec": {
-        "L4": {
+    "spec": [
+        {
+            "name": "L4",
             "type": "L4",
             "multiplicity": 1,
             "memSize": 24,
@@ -13,7 +14,8 @@
             },
             "cost": 6.00
         },
-        "L40S": {
+        {
+            "name": "L40S",
             "type": "L40S",
             "multiplicity": 1,
             "memSize": 48,
@@ -26,7 +28,8 @@
             },
             "cost": 32.00
         },
-        "A100": {
+        {
+            "name": "A100",
             "type": "A100",
             "multiplicity": 1,
             "memSize": 80,
@@ -39,7 +42,8 @@
             },
             "cost": 40.00
         },
-        "H100": {
+        {
+            "name": "H100",
             "type": "H100",
             "multiplicity": 1,
             "memSize": 80,
@@ -52,7 +56,8 @@
             },
             "cost": 75.00
         },
-        "AIU2": {
+        {
+            "name": "AIU2",
             "type": "AIU2",
             "multiplicity": 1,
             "memSize": 128,
@@ -65,7 +70,8 @@
             },
             "cost": 3.75
         },
-        "G2": {
+        {
+            "name": "G2",
             "type": "G2",
             "multiplicity": 1,
             "memSize": 96,
@@ -78,7 +84,8 @@
             },
             "cost": 23.00
         },
-        "MI210": {
+        {
+            "name": "MI210",
             "type": "MI210",
             "multiplicity": 1,
             "memSize": 64,
@@ -91,7 +98,8 @@
             },
             "cost": 26.00
         },
-        "MI250": {
+        {
+            "name": "MI250",
             "type": "MI250",
             "multiplicity": 1,
             "memSize": 128,
@@ -104,7 +112,8 @@
             },
             "cost": 46.00
         },
-        "MI300X": {
+        {
+            "name": "MI300X",
             "type": "MI300X",
             "multiplicity": 1,
             "memSize": 192,
@@ -117,7 +126,8 @@
             },
             "cost": 65.00
         },
-        "2xA100": {
+        {
+            "name": "2xA100",
             "type": "A100",
             "multiplicity": 2,
             "memSize": 160,
@@ -130,7 +140,8 @@
             },
             "cost": 80.00
         },
-        "2xH100": {
+        {
+            "name": "2xH100",
             "type": "H100",
             "multiplicity": 2,
             "memSize": 160,
@@ -143,7 +154,8 @@
             },
             "cost": 150.00
         },
-        "2xAIU2": {
+        {
+            "name": "2xAIU2",
             "type": "AIU2",
             "multiplicity": 2,
             "memSize": 256,
@@ -156,7 +168,8 @@
             },
             "cost": 7.50
         },
-        "2xG2": {
+        {
+            "name": "2xG2",
             "type": "G2",
             "multiplicity": 2,
             "memSize": 192,
@@ -169,7 +182,8 @@
             },
             "cost": 46.00
         },
-        "2xMI210": {
+        {
+            "name": "2xMI210",
             "type": "MI210",
             "multiplicity": 2,
             "memSize": 128,
@@ -182,7 +196,8 @@
             },
             "cost": 52.00
         },
-        "2xMI250": {
+        {
+            "name": "2xMI250",
             "type": "MI250",
             "multiplicity": 2,
             "memSize": 256,
@@ -195,7 +210,8 @@
             },
             "cost": 92.00
         },
-        "2xMI300X": {
+        {
+            "name": "2xMI300X",
             "type": "MI300X",
             "multiplicity": 2,
             "memSize": 384,
@@ -208,7 +224,8 @@
             },
             "cost": 130.00
         },
-        "4xA100": {
+        {
+            "name": "4xA100",
             "type": "A100",
             "multiplicity": 4,
             "memSize": 320,
@@ -221,7 +238,8 @@
             },
             "cost": 160.00
         },
-        "4xAIU2": {
+        {
+            "name": "4xAIU2",
             "type": "AIU2",
             "multiplicity": 4,
             "memSize": 512,
@@ -234,7 +252,8 @@
             },
             "cost": 15.00
         },
-        "4xG2": {
+        {
+            "name": "4xG2",
             "type": "G2",
             "multiplicity": 4,
             "memSize": 384,
@@ -247,7 +266,8 @@
             },
             "cost": 92.00
         },
-        "4xMI210": {
+        {
+            "name": "4xMI210",
             "type": "MI210",
             "multiplicity": 4,
             "memSize": 256,
@@ -260,7 +280,8 @@
             },
             "cost": 104.00
         },
-        "4xMI250": {
+        {
+            "name": "4xMI250",
             "type": "MI250",
             "multiplicity": 4,
             "memSize": 512,
@@ -273,7 +294,7 @@
             },
             "cost": 184.00
         }
-    },
+    ],
 
     "count": [
         {

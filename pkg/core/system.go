@@ -44,8 +44,8 @@ func (s *System) SetAcceleratorsFromSpec(byteValue []byte) error {
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
-	for k, v := range d.Spec {
-		s.accelerators[k] = NewAcceleratorFromSpec(k, &v)
+	for _, v := range d.Spec {
+		s.accelerators[v.Name] = NewAcceleratorFromSpec(v.Name, &v)
 	}
 	for _, v := range d.Count {
 		if cap, exists := s.capacity[v.Type]; exists {

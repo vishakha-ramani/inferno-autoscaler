@@ -15,12 +15,13 @@ type OptimizerSpec struct {
 
 // Data related to an Accelerator
 type AcceleratorData struct {
-	Spec  map[string]AcceleratorSpec `json:"spec"`  // map of accelerator names (e.g. A100, 2xA100) to specs
-	Count []AcceleratorCount         `json:"count"` // count of accelerator types
+	Spec  []AcceleratorSpec  `json:"spec"`  // accelerator specs
+	Count []AcceleratorCount `json:"count"` // count of accelerator types
 }
 
 // Specifications for accelerator data
 type AcceleratorSpec struct {
+	Name         string    `json:"name"`         // name of accelerator
 	Type         string    `json:"type"`         // name of accelerator type (e.g. A100)
 	Multiplicity int       `json:"multiplicity"` // number of cards of type for this accelerator
 	MemSize      int       `json:"memSize"`      // GB

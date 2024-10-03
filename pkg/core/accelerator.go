@@ -43,6 +43,10 @@ func (g *Accelerator) GetType() string {
 	return g.spec.Type
 }
 
+func (g *Accelerator) GetSpec() *config.AcceleratorSpec {
+	return g.spec
+}
+
 func (g *Accelerator) String() string {
 	return fmt.Sprintf("Accelerator: name=%s; type=%s; multiplicity=%d; memSize=%d; memBW=%d; cost=%v; power={ %d, %d, %d @ %v }",
 		g.name, g.spec.Type, g.spec.Multiplicity, g.spec.MemSize, g.spec.MemBW, g.spec.Cost,

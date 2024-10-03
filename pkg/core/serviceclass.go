@@ -96,6 +96,14 @@ func (c *ServiceClass) ResetAllocation() {
 	c.allocation = make(map[string]*Allocation)
 }
 
+func (c *ServiceClass) GetAllAllocations() map[string]map[string]*Allocation {
+	return c.allAllocations
+}
+
+func (c *ServiceClass) GetAllocationForPair(modelName string, acceleratorName string) *Allocation {
+	return c.allAllocations[modelName][acceleratorName]
+}
+
 func (c *ServiceClass) String() string {
 	return fmt.Sprintf("ServiceClass: name=%s; load=%v; allAllocations=%v; allocation=%v",
 		c.spec.Name, c.spec.Load, c.allAllocations, c.allocation)

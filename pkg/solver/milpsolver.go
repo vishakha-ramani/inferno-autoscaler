@@ -1,15 +1,18 @@
-package core
+package solver
 
 import (
 	"fmt"
 
+	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/tantawi/inferno/pkg/core"
 	lpsolveConfig "github.ibm.com/tantawi/lpsolve/pkg/config"
 	lpsolve "github.ibm.com/tantawi/lpsolve/pkg/core"
 	lpsolveUtils "github.ibm.com/tantawi/lpsolve/pkg/utils"
 )
 
 type MILPSolver struct {
-	system *System
+	system        *core.System
+	optimizerSpec *config.OptimizerSpec
 
 	numServers             int         // number of servers (a pair of service class and model)
 	numAccelerators        int         // number of accelerators
@@ -35,18 +38,19 @@ type MILPSolver struct {
 	accTypeLookup   []string                  // index -> acceleratorTypeName
 }
 
-func NewMILPSolver(system *System) *MILPSolver {
+func NewMILPSolver(system *core.System, optimizerSpec *config.OptimizerSpec) *MILPSolver {
 	return &MILPSolver{
-		system: system,
+		system:        system,
+		optimizerSpec: optimizerSpec,
 	}
 }
 
 func (v *MILPSolver) Solve() {
 	v.preProcess()
 
-	isLimited := !v.system.optimizer.solver.unlimited
-	isMulti := v.system.optimizer.solver.heterogeneous
-	useCplex := v.system.optimizer.solver.usecplex
+	isLimited := !v.optimizerSpec.Unlimited
+	isMulti := v.optimizerSpec.Heterogeneous
+	useCplex := v.optimizerSpec.UseCplex
 	v.optimize(isLimited, isMulti, useCplex)
 
 	v.postProcess()
@@ -69,7 +73,7 @@ func (v *MILPSolver) preProcess() {
 	for accName, acc := range accMap {
 		v.accIndex[accName] = index
 		v.accLookup[index] = accName
-		v.instanceCost[index] = float64(acc.spec.Cost)
+		v.instanceCost[index] = float64(acc.GetSpec().Cost)
 		index++
 	}
 
@@ -78,7 +82,7 @@ func (v *MILPSolver) preProcess() {
 	// fmt.Println(lpsolveUtils.Pretty1D("unitCost", v.instanceCost))
 
 	// create map and lookup arrays for accelerator types
-	capMap := s.capacity
+	capMap := s.GetCapacity()
 	v.numAcceleratorTypes = len(capMap)
 	v.accTypeIndex = make(map[string]int)
 	v.accTypeLookup = make([]string, v.numAcceleratorTypes)
@@ -100,7 +104,7 @@ func (v *MILPSolver) preProcess() {
 		accType := acc.GetType()
 		if accIndex, exists := v.accIndex[accName]; exists {
 			accTypeIndex := v.accTypeIndex[accType]
-			v.acceleratorTypesMatrix[accTypeIndex][accIndex] = acc.spec.Multiplicity
+			v.acceleratorTypesMatrix[accTypeIndex][accIndex] = acc.GetSpec().Multiplicity
 		}
 	}
 
@@ -115,7 +119,7 @@ func (v *MILPSolver) preProcess() {
 	scMap := s.GetServiceClasses()
 	for scName, sc := range scMap {
 		v.serverIndex[scName] = make(map[string]int)
-		for mName, allocMap := range sc.allAllocations {
+		for mName, allocMap := range sc.GetAllAllocations() {
 			if len(allocMap) > 0 {
 				v.serverIndex[scName][mName] = index
 				index++
@@ -142,15 +146,15 @@ func (v *MILPSolver) preProcess() {
 	}
 	modelMap := s.GetModels()
 	for scName, sc := range scMap {
-		for mName, ml := range sc.modelLoad {
+		for mName, ml := range sc.GetModelLoads() {
 			if i, exists := v.serverIndex[scName][mName]; exists {
 				v.arrivalRates[i] = float64(ml.ArrivalRate / 60 / 1000)
 				m := modelMap[mName]
 				for accName, j := range v.accIndex {
 					//acc := accMap[accName]
-					v.numInstancesPerReplica[i][j] = m.numInstances[accName]
-					if alloc := sc.allAllocations[mName][accName]; alloc != nil {
-						v.ratePerReplica[i][j] = float64(alloc.maxArrvRatePerReplica)
+					v.numInstancesPerReplica[i][j] = m.GetNumInstances(accName)
+					if alloc := sc.GetAllocationForPair(mName, accName); alloc != nil {
+						v.ratePerReplica[i][j] = float64(alloc.GetMaxArrvRatePerReplica())
 					}
 				}
 			}
@@ -281,7 +285,7 @@ func (v *MILPSolver) postProcess() {
 			accName := v.accLookup[j]
 			sc := s.GetServiceClass(scName)
 			// TODO: Fix this
-			if alloc := sc.allAllocations[mName][accName]; alloc != nil {
+			if alloc := sc.GetAllocationForPair(mName, accName); alloc != nil {
 				sc.SetAllocation(mName, alloc)
 			}
 		}

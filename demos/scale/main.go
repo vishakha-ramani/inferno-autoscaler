@@ -5,6 +5,8 @@ import (
 	"os"
 
 	core "github.ibm.com/tantawi/inferno/pkg/core"
+	"github.ibm.com/tantawi/inferno/pkg/manager"
+	"github.ibm.com/tantawi/inferno/pkg/solver"
 )
 
 func main() {
@@ -42,10 +44,16 @@ func main() {
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetOptimizerFromSpec(bytes_opt)
+
+	optimizer, err_opt := solver.NewOptimizerFromSpec(bytes_opt)
+	if err_opt != nil {
+		fmt.Println(err_acc)
+	}
+
+	manager := manager.NewManager(system, optimizer)
 
 	system.Calculate()
-	system.Optimize()
+	manager.Optimize()
 
 	className := "Premium"
 	modelName := "llama3_8b"

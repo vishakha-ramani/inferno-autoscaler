@@ -7,6 +7,8 @@ import (
 	"os"
 
 	core "github.ibm.com/tantawi/inferno/pkg/core"
+	"github.ibm.com/tantawi/inferno/pkg/manager"
+	"github.ibm.com/tantawi/inferno/pkg/solver"
 )
 
 func main() {
@@ -44,11 +46,18 @@ func main() {
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetOptimizerFromSpec(bytes_opt)
+	optimizer, err_opt := solver.NewOptimizerFromSpec(bytes_opt)
+	if err_opt != nil {
+		fmt.Println(err_acc)
+	}
+
+	manager := manager.NewManager(system, optimizer)
 
 	system.Calculate()
-	system.Optimize()
+	manager.Optimize()
+
 	fmt.Printf("%v", system)
+	fmt.Printf("%v", optimizer)
 
 	// generate random values in [alpha, 2 - alpha), where 0 < alpha < 1
 	alpha := float32(0.1)
@@ -71,6 +80,7 @@ func main() {
 	}
 
 	system.Calculate()
-	system.Optimize()
+	manager.Optimize()
 	fmt.Printf("%v", system)
+	fmt.Printf("%v", optimizer)
 }

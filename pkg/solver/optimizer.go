@@ -1,11 +1,13 @@
-package core
+package solver
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/tantawi/inferno/pkg/core"
 )
 
 type Optimizer struct {
@@ -14,18 +16,23 @@ type Optimizer struct {
 	solutionTimeMsec int64
 }
 
-func NewOptimizerFromSpec(spec *config.OptimizerSpec) *Optimizer {
-	return &Optimizer{
-		spec: spec,
+// Create optimizer from spec
+func NewOptimizerFromSpec(byteValue []byte) (*Optimizer, error) {
+	var d config.OptimizerData
+	if err := json.Unmarshal(byteValue, &d); err != nil {
+		return nil, err
 	}
+	o := &Optimizer{
+		spec: &d.Spec,
+	}
+	return o, nil
 }
 
-func (o *Optimizer) Optimize(system *System) {
+func (o *Optimizer) Optimize(system *core.System) {
 	if o.spec == nil {
 		return
 	}
-	o.solver = NewSolver(o.spec.Unlimited, o.spec.Heterogeneous,
-		o.spec.MILPSolver, o.spec.UseCplex)
+	o.solver = NewSolver(o.spec)
 
 	startTime := time.Now()
 	o.solver.Solve(system)

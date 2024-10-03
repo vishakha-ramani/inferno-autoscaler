@@ -14,8 +14,6 @@ type System struct {
 	models         map[string]*Model
 	serviceClasses map[string]*ServiceClass
 
-	optimizer *Optimizer
-
 	capacity         map[string]int               // available count of accelerator types
 	allocationByType map[string]*AllocationByType // number of allocated accelerator types
 }
@@ -83,16 +81,6 @@ func (s *System) SetServiceClassesFromSpec(byteValue []byte) error {
 	return nil
 }
 
-// Create optimizer from spec
-func (s *System) SetOptimizerFromSpec(byteValue []byte) error {
-	var d config.OptimizerData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return err
-	}
-	s.optimizer = NewOptimizerFromSpec(&d.Spec)
-	return nil
-}
-
 // Get accelerator object for a given accelerator name; nil if doesn't exist
 func (s *System) GetAccelerator(name string) *Accelerator {
 	return s.accelerators[name]
@@ -123,6 +111,10 @@ func (s *System) GetServiceClasses() map[string]*ServiceClass {
 	return s.serviceClasses
 }
 
+func (s *System) GetCapacity() map[string]int {
+	return s.capacity
+}
+
 // Calculate basic parameters
 func (s *System) Calculate() {
 	for _, g := range s.accelerators {
@@ -134,10 +126,6 @@ func (s *System) Calculate() {
 	for _, c := range s.serviceClasses {
 		c.Calculate(s.models, s.accelerators)
 	}
-}
-
-func (s *System) Optimize() {
-	s.optimizer.Optimize(s)
 }
 
 // Accumulate allocation data by accelerator type
@@ -245,8 +233,5 @@ func (s *System) String() string {
 		fmt.Fprintf(&b, "%v \n", a)
 	}
 	fmt.Fprintf(&b, "totalCost=%v \n", totalCost)
-	if s.optimizer != nil {
-		b.WriteString(s.optimizer.String())
-	}
 	return b.String()
 }

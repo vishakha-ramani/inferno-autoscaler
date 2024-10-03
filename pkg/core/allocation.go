@@ -204,6 +204,22 @@ func (a *Allocation) SetValue(value float32) {
 	a.value = value
 }
 
+func (a *Allocation) GetValue() float32 {
+	return a.value
+}
+
+func (a *Allocation) GetAccelerator() string {
+	return a.accelerator
+}
+
+func (a *Allocation) GetNumReplicas() int {
+	return a.numReplicas
+}
+
+func (a *Allocation) GetMaxArrvRatePerReplica() float32 {
+	return a.maxArrvRatePerReplica
+}
+
 // Calculate penalty for transitioning from this allocation (a) to another allocation (b)
 func (a *Allocation) TransitionPenalty(b *Allocation) float32 {
 	if a.accelerator == b.accelerator {

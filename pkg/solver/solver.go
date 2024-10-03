@@ -1,4 +1,4 @@
-package core
+package solver
 
 import (
 	"bytes"
@@ -6,60 +6,59 @@ import (
 	"fmt"
 	"math"
 	"slices"
+
+	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/tantawi/inferno/pkg/core"
 )
 
 // Solver of allocation assignment problem
 type Solver struct {
-	unlimited     bool
-	heterogeneous bool
-	milpsolver    bool
-	usecplex      bool
+	optimizerSpec *config.OptimizerSpec
 
 	// current allocation for all service classes and models
-	currentAllocation map[string]map[string]*Allocation
+	currentAllocation map[string]map[string]*core.Allocation
 
 	// difference in allocation for all service classes and models
-	diffAllocation map[string]map[string]*AllocationDiff
+	diffAllocation map[string]map[string]*core.AllocationDiff
 }
 
-func NewSolver(unlimited bool, heterogeneous bool, milpsolver bool, usecplex bool) *Solver {
+// o.spec.Unlimited, o.spec.Heterogeneous,		o.spec.MILPSolver, o.spec.UseCplex
+
+func NewSolver(optimizerSpec *config.OptimizerSpec) *Solver {
 	return &Solver{
-		unlimited:         unlimited,
-		heterogeneous:     heterogeneous,
-		milpsolver:        milpsolver,
-		usecplex:          usecplex,
-		currentAllocation: make(map[string]map[string]*Allocation),
-		diffAllocation:    make(map[string]map[string]*AllocationDiff),
+		optimizerSpec:     optimizerSpec,
+		currentAllocation: make(map[string]map[string]*core.Allocation),
+		diffAllocation:    make(map[string]map[string]*core.AllocationDiff),
 	}
 }
 
 // Entry in the solution space for a service class and model pair
 type entry struct {
-	sName       string        // service class
-	mName       string        // model name
-	curIndex    int           // current index in allocation list
-	allocations []*Allocation // ordered list of allocations
-	delta       float32       // delta penalty if current allocation not allowed and next allocation is allowed
+	sName       string             // service class
+	mName       string             // model name
+	curIndex    int                // current index in allocation list
+	allocations []*core.Allocation // ordered list of allocations
+	delta       float32            // delta penalty if current allocation not allowed and next allocation is allowed
 }
 
 // Find optimal allocation for all service classes
-func (s *Solver) Solve(system *System) {
+func (s *Solver) Solve(system *core.System) {
 	// take snapshot of current allocations
-	s.currentAllocation = make(map[string]map[string]*Allocation)
-	for srvClassName, sc := range system.serviceClasses {
-		s.currentAllocation[srvClassName] = make(map[string]*Allocation)
-		if sc.allocation == nil {
+	s.currentAllocation = make(map[string]map[string]*core.Allocation)
+	for srvClassName, sc := range system.GetServiceClasses() {
+		s.currentAllocation[srvClassName] = make(map[string]*core.Allocation)
+		if sc.GetAllocations() == nil {
 			continue
 		}
-		for modelName, alloc := range sc.allocation {
+		for modelName, alloc := range sc.GetAllocations() {
 			s.currentAllocation[srvClassName][modelName] = alloc.Clone()
 		}
 	}
 
 	// find solution
-	if s.milpsolver {
+	if s.optimizerSpec.MILPSolver {
 		s.SolveMILP(system)
-	} else if s.unlimited {
+	} else if s.optimizerSpec.Unlimited {
 		s.SolveUnlimited(system)
 	} else {
 		s.SolveLimited(system)
@@ -68,13 +67,13 @@ func (s *Solver) Solve(system *System) {
 
 	// TODO: cleanup after trying MIP solver
 
-	s.diffAllocation = make(map[string]map[string]*AllocationDiff)
-	for srvClassName, sc := range system.serviceClasses {
-		s.diffAllocation[srvClassName] = make(map[string]*AllocationDiff)
+	s.diffAllocation = make(map[string]map[string]*core.AllocationDiff)
+	for srvClassName, sc := range system.GetServiceClasses() {
+		s.diffAllocation[srvClassName] = make(map[string]*core.AllocationDiff)
 		curMapModel := s.currentAllocation[srvClassName]
-		mapModel := sc.allocation
+		mapModel := sc.GetAllocations()
 		for modelName := range system.GetModels() {
-			if allocDiff := CreateAllocationDiff(curMapModel[modelName], mapModel[modelName]); allocDiff != nil {
+			if allocDiff := core.CreateAllocationDiff(curMapModel[modelName], mapModel[modelName]); allocDiff != nil {
 				s.diffAllocation[srvClassName][modelName] = allocDiff
 			}
 		}
@@ -83,15 +82,15 @@ func (s *Solver) Solve(system *System) {
 }
 
 // Find optimal allocations assuming unlimited accelerator capacity
-func (s *Solver) SolveUnlimited(system *System) {
+func (s *Solver) SolveUnlimited(system *core.System) {
 	for _, v := range system.GetServiceClasses() {
 		// select allocation with minimum value
-		for mName, modelMap := range v.allAllocations {
+		for mName, modelMap := range v.GetAllAllocations() {
 			minVal := float32(math.MaxFloat32)
-			var minAlloc *Allocation
+			var minAlloc *core.Allocation
 			for _, alloc := range modelMap {
-				if alloc.value < minVal {
-					minVal = alloc.value
+				if alloc.GetValue() < minVal {
+					minVal = alloc.GetValue()
 					minAlloc = alloc
 				}
 			}
@@ -105,21 +104,21 @@ func (s *Solver) SolveUnlimited(system *System) {
 }
 
 // Find optimal allocations assuming limited accelerator capacity
-func (s *Solver) SolveLimited(system *System) {
+func (s *Solver) SolveLimited(system *core.System) {
 	// calculate available count of accelerator types
 	available := make(map[string]int)
-	for k := range system.capacity {
-		available[k] = system.capacity[k]
+	for k, v := range system.GetCapacity() {
+		available[k] = v
 	}
 	// for all service classes and models, sort allocations
 	var entries []*entry = make([]*entry, 0)
 	for srvClassName, sc := range system.GetServiceClasses() {
-		for modelName, modelMap := range sc.allAllocations {
+		for modelName, modelMap := range sc.GetAllAllocations() {
 			e := &entry{
 				sName:       srvClassName,
 				mName:       modelName,
 				curIndex:    0,
-				allocations: make([]*Allocation, len(modelMap)),
+				allocations: make([]*core.Allocation, len(modelMap)),
 				delta:       0,
 			}
 			i := 0
@@ -127,12 +126,12 @@ func (s *Solver) SolveLimited(system *System) {
 				e.allocations[i] = alloc
 				i++
 			}
-			slices.SortFunc(e.allocations, func(a, b *Allocation) int {
-				return cmp.Compare(a.value, b.value)
+			slices.SortFunc(e.allocations, func(a, b *core.Allocation) int {
+				return cmp.Compare(a.GetValue(), b.GetValue())
 			})
 			if len(e.allocations) > 1 {
 				// value is difference between this and next allocation
-				e.delta = e.allocations[1].value - e.allocations[0].value
+				e.delta = e.allocations[1].GetValue() - e.allocations[0].GetValue()
 			} else {
 				// last choice, large value for not assigning
 				e.delta = math.MaxFloat32
@@ -143,7 +142,7 @@ func (s *Solver) SolveLimited(system *System) {
 	// sort all entries
 	orderFunc := func(a, b *entry) int {
 		if a.delta == b.delta {
-			return cmp.Compare(b.allocations[b.curIndex].value, a.allocations[a.curIndex].value)
+			return cmp.Compare(b.allocations[b.curIndex].GetValue(), a.allocations[a.curIndex].GetValue())
 		}
 		return cmp.Compare(b.delta, a.delta)
 	}
@@ -157,12 +156,12 @@ func (s *Solver) SolveLimited(system *System) {
 			continue
 		}
 		alloc := top.allocations[top.curIndex]
-		gName := alloc.accelerator
-		replicas := alloc.numReplicas
+		gName := alloc.GetAccelerator()
+		replicas := alloc.GetNumReplicas()
 		acc := system.GetAccelerator(gName)
 		tName := acc.GetType()
 		model := system.GetModel(top.mName)
-		count := replicas * model.numInstances[gName] * acc.spec.Multiplicity
+		count := replicas * model.GetNumInstances(gName) * acc.GetSpec().Multiplicity
 
 		if available[tName] >= count {
 			available[tName] -= count
@@ -171,7 +170,7 @@ func (s *Solver) SolveLimited(system *System) {
 		} else {
 			top.curIndex++
 			if top.curIndex+1 < len(top.allocations) {
-				top.delta = top.allocations[top.curIndex+1].value - top.allocations[top.curIndex].value
+				top.delta = top.allocations[top.curIndex+1].GetValue() - top.allocations[top.curIndex].GetValue()
 			} else if top.curIndex == len(top.allocations) {
 				continue
 			} else {
@@ -183,12 +182,12 @@ func (s *Solver) SolveLimited(system *System) {
 	}
 }
 
-func (s *Solver) SolveMILP(system *System) {
-	mip := NewMILPSolver(system)
+func (s *Solver) SolveMILP(system *core.System) {
+	mip := NewMILPSolver(system, s.optimizerSpec)
 	mip.Solve()
 }
 
-func (s *Solver) GetAllocationDiff() map[string]map[string]*AllocationDiff {
+func (s *Solver) GetAllocationDiff() map[string]map[string]*core.AllocationDiff {
 	return s.diffAllocation
 }
 

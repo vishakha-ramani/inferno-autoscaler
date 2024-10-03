@@ -66,6 +66,11 @@ func (s *System) SetModelsFromSpec(byteValue []byte) error {
 	for _, v := range d.Spec {
 		s.models[v.Name] = NewModelFromSpec(&v)
 	}
+	for _, pd := range d.PerfData {
+		if m := s.models[pd.Name]; m != nil {
+			m.perfData[pd.Acc] = &pd
+		}
+	}
 	return nil
 }
 

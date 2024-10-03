@@ -19,13 +19,9 @@ type Model struct {
 }
 
 func NewModelFromSpec(spec *config.ModelSpec) *Model {
-	perfData := make(map[string]*config.ModelAcceleratorPerfData)
-	for _, pf := range spec.PerfData {
-		perfData[pf.Name] = &pf
-	}
 	return &Model{
 		spec:         spec,
-		perfData:     perfData,
+		perfData:     make(map[string]*config.ModelAcceleratorPerfData),
 		numInstances: make(map[string]int),
 	}
 }

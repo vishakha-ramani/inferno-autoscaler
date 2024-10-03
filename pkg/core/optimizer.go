@@ -24,7 +24,8 @@ func (o *Optimizer) Optimize(system *System) {
 	if o.spec == nil {
 		return
 	}
-	o.solver = NewSolver(o.spec.Unlimited, o.spec.Heterogeneous, o.spec.MILPSolver)
+	o.solver = NewSolver(o.spec.Unlimited, o.spec.Heterogeneous,
+		o.spec.MILPSolver, o.spec.UseCplex)
 
 	startTime := time.Now()
 	o.solver.Solve(system)

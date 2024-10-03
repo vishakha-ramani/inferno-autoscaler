@@ -46,7 +46,8 @@ func (v *MILPSolver) Solve() {
 
 	isLimited := !v.system.optimizer.solver.unlimited
 	isMulti := v.system.optimizer.solver.heterogeneous
-	v.optimize(isLimited, isMulti)
+	useCplex := v.system.optimizer.solver.usecplex
+	v.optimize(isLimited, isMulti, useCplex)
 
 	v.postProcess()
 }
@@ -74,7 +75,7 @@ func (v *MILPSolver) preProcess() {
 
 	// fmt.Println(v.accIndex)
 	// fmt.Println(v.accLookup)
-	// fmt.Println(lpsolveUtils.Pretty1DFloat64("unitCost", v.instanceCost))
+	// fmt.Println(lpsolveUtils.Pretty1D("unitCost", v.instanceCost))
 
 	// create map and lookup arrays for accelerator types
 	capMap := s.capacity
@@ -105,8 +106,8 @@ func (v *MILPSolver) preProcess() {
 
 	// fmt.Println(v.accTypeIndex)
 	// fmt.Println(v.accTypeLookup)
-	// fmt.Println(lpsolveUtils.Pretty1DInt("unitsAvailByType", v.unitsAvail))
-	// fmt.Println(lpsolveUtils.Pretty2DInt("acceleratorTypesMatrix", v.acceleratorTypesMatrix))
+	// fmt.Println(lpsolveUtils.Pretty1D("unitsAvailByType", v.unitsAvail))
+	// fmt.Println(lpsolveUtils.Pretty2D("acceleratorTypesMatrix", v.acceleratorTypesMatrix))
 
 	// create map and lookup arrays for servers (service classes, models)
 	index = 0
@@ -157,52 +158,88 @@ func (v *MILPSolver) preProcess() {
 	}
 
 	// fmt.Println(v.serverIndex)
-	// fmt.Println(lpsolveUtils.Pretty1DFloat64("arrivalRates", v.arrivalRates))
-	// fmt.Println(lpsolveUtils.Pretty2DFloat64("ratePerReplica", v.ratePerReplica))
-	// fmt.Println(lpsolveUtils.Pretty2DInt("numInstancesPerReplica", v.numInstancesPerReplica))
+	// fmt.Println(lpsolveUtils.Pretty1D("arrivalRates", v.arrivalRates))
+	// fmt.Println(lpsolveUtils.Pretty2D("ratePerReplica", v.ratePerReplica))
+	// fmt.Println(lpsolveUtils.Pretty2D("numInstancesPerReplica", v.numInstancesPerReplica))
 }
 
 // call MILP solver to optimize problem
-func (v *MILPSolver) optimize(isLimited bool, isMulti bool) {
-	// create a new MIP problem instance
+func (v *MILPSolver) optimize(isLimited bool, isMulti bool, useCplex bool) {
 	problemType := lpsolveConfig.SINGLE
 	if isMulti {
 		problemType = lpsolveConfig.MULTI
 	}
+	if p, err := v.createProblem(problemType, isLimited, useCplex); err != nil || p.Solve() != nil {
+		fmt.Println(err)
+	} else {
+		v.printResults(problemType, p)
+	}
+}
+
+func (v *MILPSolver) createProblem(problemType lpsolveConfig.ProblemType, isLimited bool, useCplex bool) (lpsolve.Problem, error) {
+	// create a new problem instance
 	var p lpsolve.Problem
 	var err error
 	switch problemType {
 	case lpsolveConfig.SINGLE:
-		p, err = lpsolve.CreateSingleAssignProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
-			v.ratePerReplica, v.arrivalRates)
+		if useCplex {
+			p, err = lpsolve.CreateCplexProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
+				v.ratePerReplica, v.arrivalRates)
+		} else {
+			p, err = lpsolve.CreateSingleAssignProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
+				v.ratePerReplica, v.arrivalRates)
+		}
 	case lpsolveConfig.MULTI:
-		p, err = lpsolve.CreateMultiAssignProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
-			v.ratePerReplica, v.arrivalRates)
+		if useCplex {
+			p, err = lpsolve.CreateCplexProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
+				v.ratePerReplica, v.arrivalRates)
+		} else {
+			p, err = lpsolve.CreateMultiAssignProblem(v.numServers, v.numAccelerators, v.instanceCost, v.numInstancesPerReplica,
+				v.ratePerReplica, v.arrivalRates)
+		}
 	default:
-		err = fmt.Errorf("unknown problem type: %s", problemType)
+		return nil, fmt.Errorf("unknown problem type: %s", problemType)
 	}
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return nil, err
 	}
 
 	// set accelerator count limited option
 	if isLimited {
 		if err = p.SetLimited(v.numAcceleratorTypes, v.unitsAvail, v.acceleratorTypesMatrix); err != nil {
-			fmt.Println(err.Error())
-			return
+			return nil, err
+		}
+		if useCplex {
+			switch problemType {
+			case lpsolveConfig.SINGLE:
+				SetFileNames(p, "single-limited")
+			case lpsolveConfig.MULTI:
+				SetFileNames(p, "multi-limited")
+			}
 		}
 	} else {
 		p.UnSetLimited()
+		if useCplex {
+			switch problemType {
+			case lpsolveConfig.SINGLE:
+				SetFileNames(p, "single-unlimited")
+			case lpsolveConfig.MULTI:
+				SetFileNames(p, "multi-unlimited")
+			}
+		}
 	}
+	return p, nil
+}
 
-	// solve the problem
-	if err = p.Solve(); err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+func SetFileNames(p lpsolve.Problem, name string) {
+	pc := p.(*lpsolve.CplexProblem)
+	pc.SetModelFileName(name + ".mod")
+	pc.SetDataFileName(name + ".dat")
+	pc.SetOutputFileName(name + ".txt")
+}
 
-	// print solution details
+// print solution details
+func (v *MILPSolver) printResults(problemType lpsolveConfig.ProblemType, p lpsolve.Problem) {
 	fmt.Printf("Problem type: %v\n", problemType)
 	fmt.Printf("Solution type: %v\n", p.GetSolutionType())
 	fmt.Printf("Solution time: %d msec\n", p.GetSolutionTimeMsec())
@@ -215,18 +252,17 @@ func (v *MILPSolver) optimize(isLimited bool, isMulti bool) {
 	fmt.Println()
 
 	v.numReplicas = p.GetNumReplicas()
-	fmt.Println(lpsolveUtils.Pretty2DInt("numReplicas", v.numReplicas))
+	fmt.Println(lpsolveUtils.Pretty2D("numReplicas", v.numReplicas))
 
 	v.instancesUsed = p.GetInstancesUsed()
-	fmt.Println(lpsolveUtils.Pretty1DInt("instancesUsed", v.instancesUsed))
+	fmt.Println(lpsolveUtils.Pretty1D("instancesUsed", v.instancesUsed))
 
-	if isLimited {
+	if p.IsLimited() {
 		fmt.Printf("AcceleratorTypes=%v \n", v.accTypeLookup)
-		fmt.Println(lpsolveUtils.Pretty1DInt("unitsAvail", v.unitsAvail))
+		fmt.Println(lpsolveUtils.Pretty1D("unitsAvail", v.unitsAvail))
 		v.unitsUsed = p.GetUnitsUsed()
-		fmt.Println(lpsolveUtils.Pretty1DInt("unitsUsed", v.unitsUsed))
+		fmt.Println(lpsolveUtils.Pretty1D("unitsUsed", v.unitsUsed))
 	}
-
 	fmt.Println()
 }
 

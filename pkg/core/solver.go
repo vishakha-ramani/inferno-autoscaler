@@ -13,6 +13,7 @@ type Solver struct {
 	unlimited     bool
 	heterogeneous bool
 	milpsolver    bool
+	usecplex      bool
 
 	// current allocation for all service classes and models
 	currentAllocation map[string]map[string]*Allocation
@@ -21,11 +22,12 @@ type Solver struct {
 	diffAllocation map[string]map[string]*AllocationDiff
 }
 
-func NewSolver(unlimited bool, heterogeneous bool, milpsolver bool) *Solver {
+func NewSolver(unlimited bool, heterogeneous bool, milpsolver bool, usecplex bool) *Solver {
 	return &Solver{
 		unlimited:         unlimited,
 		heterogeneous:     heterogeneous,
 		milpsolver:        milpsolver,
+		usecplex:          usecplex,
 		currentAllocation: make(map[string]map[string]*Allocation),
 		diffAllocation:    make(map[string]map[string]*AllocationDiff),
 	}

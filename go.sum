@@ -6,8 +6,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.ibm.com/tantawi/lpsolve v0.0.0-20240830200729-deef5273c3a9 h1:DI5sAj3HzB4YTjEDaMRr4u4Pg0w1dCweaCnctCXbgec=
-github.ibm.com/tantawi/lpsolve v0.0.0-20240830200729-deef5273c3a9/go.mod h1:bv7mRUWyEe7vrD+Sh4nEg/uIakecBW6ql7OuAxrbEuU=
+github.ibm.com/tantawi/lpsolve v0.0.0-20241002212734-790dbd513d1d h1:6jJhf0aDzsRFH88RhmzNkwC9CpCsyGYyQuTSD3h57tg=
+github.ibm.com/tantawi/lpsolve v0.0.0-20241002212734-790dbd513d1d/go.mod h1:bv7mRUWyEe7vrD+Sh4nEg/uIakecBW6ql7OuAxrbEuU=
 github.ibm.com/tantawi/queue-analysis v0.0.1 h1:AJpuxtGLDWiP8StpE67WviboputIag2+zZKjpiUv2pM=
 github.ibm.com/tantawi/queue-analysis v0.0.1/go.mod h1:elaMVkQiUzcsEm+X5R8CyII4qpX7yMXUWgseZjbzpas=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=

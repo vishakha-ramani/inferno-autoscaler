@@ -3,7 +3,7 @@ module github.ibm.com/tantawi/inferno
 go 1.23.0
 
 require (
-	github.ibm.com/tantawi/lpsolve v0.0.0-20240830200729-deef5273c3a9
+	github.ibm.com/tantawi/lpsolve v0.0.0-20241002212734-790dbd513d1d
 	github.ibm.com/tantawi/queue-analysis v0.0.1
 )
 

@@ -2,6 +2,7 @@
     "spec": {
         "unlimited": true,
         "heterogeneous": false,
-        "milpsolver" : false
+        "milpsolver" : false,
+        "useCplex" : false
     }
 }

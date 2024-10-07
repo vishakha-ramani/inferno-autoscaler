@@ -66,26 +66,33 @@ type ModelAcceleratorPerfData struct {
 	AtTokens     int     `json:"atTokens"`     // average number of tokens per request assumed in max batch size calculation
 }
 
-// Data related to a Service Class
-type ServiceClassData struct {
-	Spec []ServiceClassSpec `json:"spec"`
+// Data related to a Server
+type ServerData struct {
+	Spec []ServerSpec `json:"spec"`
 }
 
-// Specifications for service class data
-type ServiceClassSpec struct {
-	Name string     `json:"name"` // service class name
-	Load []LoadData `json:"load"`
-}
-
-// Specifications of load data for a combination of a service class and a model
-type LoadData struct {
-	Name        string  `json:"name"`        // model name
-	SLO_ITL     float32 `json:"slo-itl"`     // msec
-	SLO_TTW     float32 `json:"slo-ttw"`     // msec
+// Specifications of server and its load statistics
+type ServerSpec struct {
+	Name        string  `json:"name"`        // server name
+	Class       string  `json:"class"`       // service class name
+	Model       string  `json:"model"`       // model name
 	ArrivalRate float32 `json:"arrivalRate"` // req/min
 	AvgLength   int     `json:"avgLength"`   // number of tokens
 	ArrivalCOV  float32 `json:"arrivalCOV"`  // coefficient of variation of inter-request arrival time
 	ServiceCOV  float32 `json:"serviceCOV"`  // coefficient of variation of request service time
+}
+
+// Data related to a service class SLOs
+type ServiceClassData struct {
+	Spec []ServiceClassSpec `json:"spec"`
+}
+
+// Specifications of SLO data for a combination of a service class and a model
+type ServiceClassSpec struct {
+	Name    string  `json:"name"`    // service class name
+	Model   string  `json:"model"`   // model name
+	SLO_ITL float32 `json:"slo-itl"` // msec
+	SLO_TTW float32 `json:"slo-ttw"` // msec
 }
 
 type AllocationSolution struct {

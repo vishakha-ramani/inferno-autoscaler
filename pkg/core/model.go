@@ -43,6 +43,10 @@ func (m *Model) GetNumInstances(acceleratorName string) int {
 	return m.numInstances[acceleratorName]
 }
 
+func (m *Model) GetPerfData(acceleratorName string) *config.ModelAcceleratorPerfData {
+	return m.perfData[acceleratorName]
+}
+
 func (m *Model) String() string {
 	return fmt.Sprintf("Model: name=%s; memSize=%d",
 		m.spec.Name, m.spec.MemSize)

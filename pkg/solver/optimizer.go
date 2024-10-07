@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.ibm.com/tantawi/inferno/pkg/config"
-	"github.ibm.com/tantawi/inferno/pkg/core"
 )
 
 type Optimizer struct {
@@ -28,18 +27,16 @@ func NewOptimizerFromSpec(byteValue []byte) (*Optimizer, error) {
 	return o, nil
 }
 
-func (o *Optimizer) Optimize(system *core.System) {
+func (o *Optimizer) Optimize() {
 	if o.spec == nil {
 		return
 	}
 	o.solver = NewSolver(o.spec)
 
 	startTime := time.Now()
-	o.solver.Solve(system)
+	o.solver.Solve()
 	endTime := time.Now()
 	o.solutionTimeMsec = endTime.Sub(startTime).Milliseconds()
-
-	system.AllocateByType()
 }
 
 func (o *Optimizer) GetSolutionTimeMsec() int64 {

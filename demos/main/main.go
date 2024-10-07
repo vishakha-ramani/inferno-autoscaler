@@ -17,7 +17,8 @@ func main() {
 	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
-	fn_srv := prefix + "serviceclass-data.json"
+	fn_svc := prefix + "serviceclass-data.json"
+	fn_srv := prefix + "server-data.json"
 	fn_opt := prefix + "optimizer-data.json"
 	fn_sol := prefix + "solution-data.json"
 
@@ -35,11 +36,17 @@ func main() {
 	}
 	system.SetModelsFromSpec(bytes_mod)
 
+	bytes_svc, err_svc := os.ReadFile(fn_svc)
+	if err_svc != nil {
+		fmt.Println(err_svc)
+	}
+	system.SetServiceClassesFromSpec(bytes_svc)
+
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServiceClassesFromSpec(bytes_srv)
+	system.SetServersFromSpec(bytes_srv)
 
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {

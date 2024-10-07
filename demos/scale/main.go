@@ -17,7 +17,8 @@ func main() {
 	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
-	fn_srv := prefix + "serviceclass-data.json"
+	fn_svc := prefix + "serviceclass-data.json"
+	fn_srv := prefix + "server-data.json"
 	fn_opt := prefix + "optimizer-data.json"
 
 	system := core.NewSystem()
@@ -34,17 +35,22 @@ func main() {
 	}
 	system.SetModelsFromSpec(bytes_mod)
 
+	bytes_svc, err_svc := os.ReadFile(fn_svc)
+	if err_svc != nil {
+		fmt.Println(err_svc)
+	}
+	system.SetServiceClassesFromSpec(bytes_svc)
+
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServiceClassesFromSpec(bytes_srv)
+	system.SetServersFromSpec(bytes_srv)
 
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-
 	optimizer, err_opt := solver.NewOptimizerFromSpec(bytes_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
@@ -55,42 +61,36 @@ func main() {
 	system.Calculate()
 	manager.Optimize()
 
-	className := "Premium"
-	modelName := "llama3_8b"
+	serverName := "Premium/llama3_8b"
 
-	servClass := system.GetServiceClass(className)
-	if servClass == nil {
-		fmt.Printf("No service class data for class %s\n", className)
+	server := system.GetServer(serverName)
+	if server == nil {
+		fmt.Printf("No server %s\n", serverName)
 		return
 	}
-	model := system.GetModel(modelName)
-	if model == nil {
-		fmt.Printf("No model data for model %s\n", modelName)
-		return
-	}
-	allocBefore := servClass.GetModelAllocation(modelName)
+	allocBefore := server.GetAllocation()
 	if allocBefore == nil {
-		fmt.Printf("No allocation for class %s, model %s \n", className, modelName)
+		fmt.Printf("No allocation for server %s \n", serverName)
 		return
 	}
-	// change load on model
-	ml := servClass.GetModelLoad(modelName)
-	if ml == nil {
-		fmt.Printf("No model load data for class %s, model %s \n", className, modelName)
+	// change load on server
+	load := server.GetLoad()
+	if load == nil {
+		fmt.Printf("No model load data for server %s \n", serverName)
 		return
 	}
 	fmt.Println("AllocBefore: ", allocBefore)
-	ml.ArrivalRate *= 2.5
-	ml.AvgLength = int(float32(ml.AvgLength) * 1.5)
+	load.SetArrivalRate(load.GetArrivalRate() * 2.5)
+	load.SetAvgLength(int(float32(load.GetAvgLength()) * 1.5))
 
 	// scale allocation
-	allocAfter, inc := allocBefore.Scale(model, system.GetAccelerators(), ml)
+	allocAfter, inc := allocBefore.Scale(serverName)
 	fmt.Println("AllocAfter: ", allocAfter)
 	fmt.Println("Inc: ", inc)
 
 	// reallocate
 	var gName string
-	allocAfter, gName = allocBefore.ReAllocate(model, system.GetAccelerators(), ml)
+	allocAfter, gName = allocBefore.ReAllocate(serverName)
 	fmt.Println("AllocAfter: ", allocAfter)
 	fmt.Println("gName: ", gName)
 }

@@ -11,6 +11,7 @@ type Manager struct {
 }
 
 func NewManager(system *core.System, optimizer *solver.Optimizer) *Manager {
+	core.TheSystem = system
 	return &Manager{
 		system:    system,
 		optimizer: optimizer,
@@ -18,5 +19,6 @@ func NewManager(system *core.System, optimizer *solver.Optimizer) *Manager {
 }
 
 func (m *Manager) Optimize() {
-	m.optimizer.Optimize(m.system)
+	m.optimizer.Optimize()
+	m.system.AllocateByType()
 }

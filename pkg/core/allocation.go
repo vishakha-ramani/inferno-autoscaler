@@ -10,7 +10,7 @@ import (
 	"github.ibm.com/tantawi/queue-analysis/pkg/utils"
 )
 
-// An allocation of a model on an accelerator
+// Allocation details of an accelerator to a server
 type Allocation struct {
 	accelerator string  // name of accelerator
 	numReplicas int     // number of server replicas
@@ -27,33 +27,69 @@ type Allocation struct {
 // queueing model used in performance analysis
 var queueModel *queue.MM1ModelStateDependent
 
-// Create an allocation for a model on an accelerator; nil if not feasible
-func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadData) *Allocation {
-	gName := g.name
-	var ma *config.ModelAcceleratorPerfData
-	var exists bool
-	if ma, exists = m.perfData[gName]; !exists {
+// Create an allocation of an accelerator to a server; nil if not feasible
+func CreateAllocation(serverName string, gName string) *Allocation {
+	var (
+		acc *Accelerator
+
+		server *Server
+		load   *ServerLoad
+
+		model *Model
+		perf  *config.ModelAcceleratorPerfData
+
+		svc    *ServiceClass
+		target *Target
+	)
+
+	// get accelerator info
+	if acc = GetAccelerator(gName); acc == nil {
+		return nil
+	}
+
+	// get server info
+	if server = GetServer(serverName); server == nil {
+		return nil
+	}
+	if load = server.GetLoad(); load == nil {
+		return nil
+	}
+
+	// get model info
+	modelName := server.GetModelName()
+	if model = GetModel(modelName); model == nil {
+		return nil
+	}
+	if perf = model.GetPerfData(gName); perf == nil {
+		return nil
+	}
+
+	// get service class info
+	if svc = GetServiceClass(server.GetServiceClassName()); svc == nil {
+		return nil
+	}
+	if target = svc.GetModelTarget(modelName); target == nil {
 		return nil
 	}
 
 	// calculate max batch size (N) based on average request length (K)
-	K := ml.AvgLength
-	N := ma.MaxBatchSize * ma.AtTokens / K
+	K := load.avgLength
+	N := perf.MaxBatchSize * perf.AtTokens / K
 	if N < 1 {
 		N = 1
 	}
-	maxQueue := ma.MaxBatchSize * config.MaxQueueToBatchRatio
+	maxQueue := perf.MaxBatchSize * config.MaxQueueToBatchRatio
 
 	// distribution of token time assumed deterministic
-	tokenTimeLimit := ml.SLO_ITL
+	tokenTimeLimit := target.ITL
 	servTimeLimit := float32(K) * tokenTimeLimit
 	// distribution of waiting time assumed exponential
-	waitTimeLimit := ml.SLO_TTW / config.SLOMargin
+	waitTimeLimit := target.TTW / config.SLOMargin
 
 	// calculate state-dependent service rate for queueuing model
 	servRate := make([]float32, N)
 	for n := 1; n <= N; n++ {
-		servTime := ma.Alpha + ma.Beta*float32(n)
+		servTime := perf.Alpha + perf.Beta*float32(n)
 		servRate[n-1] = float32(n) / (servTime * float32(K))
 	}
 
@@ -87,16 +123,16 @@ func CreateAllocation(m *Model, g *Accelerator, ml *config.LoadData) *Allocation
 	lambdaStar := float32(math.Min(float64(lambdaStarService), float64(lambdaStarWait)))
 
 	// calculate number of replicas
-	totalLambda := ml.ArrivalRate / 60 / 1000
+	totalLambda := load.arrivalRate / 60 / 1000
 	numReplicas := int(math.Ceil(float64(totalLambda) / float64(lambdaStar)))
 
 	// calculate cost
-	totalNumInstances := m.numInstances[gName] * numReplicas
-	cost := g.spec.Cost * float32(totalNumInstances)
+	totalNumInstances := model.GetNumInstances(gName) * numReplicas
+	cost := acc.spec.Cost * float32(totalNumInstances)
 
 	// queueModel.Solve(lambdaStar, 1)
 	// fmt.Printf("model=%s; accelerator=%s; lambdaMin=%v; lambdaMax=%v; servTimeLimit= %v; waitTimeLimit=%v; lambdaStarService=%v; lambdaStarWait=%v; lambdaStar=%v \n",
-	// 	m.spec.Name, gName,
+	// 	model.spec.Name, gName,
 	// 	lambdaMin, lambdaMax, servTimeLimit, waitTimeLimit, lambdaStarService, lambdaStarWait, lambdaStar)
 	// fmt.Println(queueModel)
 
@@ -130,41 +166,77 @@ func EvalServTime(x float32) (float32, error) {
 	return queueModel.GetAvgServTime(), nil
 }
 
-// Create an allocation for a model on an accelerator; nil if not feasible
+// Create an allocation for an accelerator to a server; nil if not feasible
 // (using G/G/m model approximation)
-func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadData) *Allocation {
-	gName := g.name
-	var d *config.ModelAcceleratorPerfData
-	var exists bool
-	if d, exists = m.perfData[gName]; !exists {
+func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
+	var (
+		acc *Accelerator
+
+		server *Server
+		load   *ServerLoad
+
+		model *Model
+		perf  *config.ModelAcceleratorPerfData
+
+		svc    *ServiceClass
+		target *Target
+	)
+
+	// get accelerator info
+	if acc = GetAccelerator(gName); acc == nil {
 		return nil
 	}
 
-	gamma := ((ml.ArrivalCOV * ml.ArrivalCOV) + (ml.ServiceCOV * ml.ServiceCOV)) / 2
+	// get server info
+	if server = GetServer(serverName); server == nil {
+		return nil
+	}
+	if load = server.GetLoad(); load == nil {
+		return nil
+	}
 
-	K := ml.AvgLength
-	N := d.MaxBatchSize * d.AtTokens / K
+	// get model info
+	modelName := server.GetModelName()
+	if model = GetModel(modelName); model == nil {
+		return nil
+	}
+	if perf = model.GetPerfData(gName); perf == nil {
+		return nil
+	}
+
+	// get service class info
+	if svc = GetServiceClass(server.GetServiceClassName()); svc == nil {
+		return nil
+	}
+	if target = svc.GetModelTarget(modelName); target == nil {
+		return nil
+	}
+
+	gamma := ((load.arrivalCOV * load.arrivalCOV) + (load.serviceCOV * load.serviceCOV)) / 2
+
+	K := load.avgLength
+	N := perf.MaxBatchSize * perf.AtTokens / K
 	if N < 1 {
 		N = 1
 	}
 
-	servTime := d.Alpha + d.Beta*float32(N)
-	tokenTimeLimit := ml.SLO_ITL
+	servTime := perf.Alpha + perf.Beta*float32(N)
+	tokenTimeLimit := target.ITL
 	if servTime > tokenTimeLimit {
 		return nil
 	}
 
-	waitTimeLimit := ml.SLO_TTW / config.SLOMargin
+	waitTimeLimit := target.TTW / config.SLOMargin
 
-	xStar := float32(d.MaxBatchSize) * waitTimeLimit / (float32(K) * servTime * gamma)
+	xStar := float32(perf.MaxBatchSize) * waitTimeLimit / (float32(K) * servTime * gamma)
 	rhoStar := xStar / (1 + xStar)
 	lambdaStar := rhoStar / (float32(K) * servTime)
-	numReplicas := int(math.Ceil(float64(ml.ArrivalRate) / (float64(lambdaStar) * 60 * 1000)))
-	cost := g.spec.Cost * float32(m.numInstances[gName]*numReplicas*g.spec.Multiplicity)
+	numReplicas := int(math.Ceil(float64(load.arrivalRate) / (float64(lambdaStar) * 60 * 1000)))
+	cost := acc.spec.Cost * float32(model.GetNumInstances(gName)*numReplicas*acc.spec.Multiplicity)
 
-	rho := ml.ArrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
+	rho := load.arrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
 	x := rho / (1 - rho)
-	wait := (float32(K) * servTime) * gamma * x / float32(d.MaxBatchSize)
+	wait := (float32(K) * servTime) * gamma * x / float32(perf.MaxBatchSize)
 
 	alloc := &Allocation{accelerator: gName, numReplicas: numReplicas, batchSize: N,
 		cost: cost, servTime: servTime, waitTime: wait, rho: rho}
@@ -172,21 +244,38 @@ func CreateAllocationUsingGGm(m *Model, g *Accelerator, ml *config.LoadData) *Al
 	return alloc
 }
 
-func (a *Allocation) Scale(model *Model, accelerators map[string]*Accelerator, ml *config.LoadData) (alloc *Allocation, inc int) {
-	g := accelerators[a.accelerator]
-	if g == nil {
+func (a *Allocation) Scale(serverName string) (alloc *Allocation, inc int) {
+	var (
+		acc    *Accelerator
+		server *Server
+		load   *ServerLoad
+	)
+
+	// get server info
+	if server = GetServer(serverName); server == nil {
 		return nil, 0
 	}
-	alloc = CreateAllocation(model, g, ml)
+	if load = server.GetLoad(); load == nil {
+		return nil, 0
+	}
+
+	// get accelerator info
+	gName := a.accelerator
+	if acc = GetAccelerator(gName); acc == nil {
+		return nil, 0
+	}
+
+	// create new allocation
+	alloc = CreateAllocation(serverName, gName)
 	inc = alloc.numReplicas - a.numReplicas
 	return alloc, inc
 }
 
-func (a *Allocation) ReAllocate(model *Model, accelerators map[string]*Accelerator, ml *config.LoadData) (*Allocation, string) {
+func (a *Allocation) ReAllocate(serverName string) (*Allocation, string) {
 	minVal := float32(0)
 	var minAlloc *Allocation
-	for _, g := range accelerators {
-		if alloc := CreateAllocation(model, g, ml); alloc != nil {
+	for gName := range GetAccelerators() {
+		if alloc := CreateAllocation(serverName, gName); alloc != nil {
 			if minVal == 0 || alloc.value < minVal {
 				minVal = alloc.value
 				minAlloc = alloc
@@ -199,15 +288,6 @@ func (a *Allocation) ReAllocate(model *Model, accelerators map[string]*Accelerat
 	return minAlloc, minAlloc.accelerator
 }
 
-// Set the value for this allocation (may depend on cost, performance, ...)
-func (a *Allocation) SetValue(value float32) {
-	a.value = value
-}
-
-func (a *Allocation) GetValue() float32 {
-	return a.value
-}
-
 func (a *Allocation) GetAccelerator() string {
 	return a.accelerator
 }
@@ -218,6 +298,15 @@ func (a *Allocation) GetNumReplicas() int {
 
 func (a *Allocation) GetMaxArrvRatePerReplica() float32 {
 	return a.maxArrvRatePerReplica
+}
+
+// Set the value for this allocation (may depend on cost, performance, ...)
+func (a *Allocation) SetValue(value float32) {
+	a.value = value
+}
+
+func (a *Allocation) GetValue() float32 {
+	return a.value
 }
 
 // Calculate penalty for transitioning from this allocation (a) to another allocation (b)

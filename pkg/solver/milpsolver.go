@@ -11,7 +11,6 @@ import (
 )
 
 type MILPSolver struct {
-	system        *core.System
 	optimizerSpec *config.OptimizerSpec
 
 	numServers             int         // number of servers (a pair of service class and model)
@@ -29,18 +28,16 @@ type MILPSolver struct {
 	instancesUsed []int   // number of used accelerator units [numAccelerators]
 	unitsUsed     []int   // [numAcceleratorTypes]
 
-	accIndex        map[string]int            // acceleratorName -> index in accelerator arrays
-	accLookup       []string                  // index -> acceleratorName
-	serverIndex     map[string]map[string]int // serviceClassName -> modelName -> index in server arrays
-	servClassLookup []string                  // index -> serviceClassName
-	modelLookup     []string                  // index -> modelName
-	accTypeIndex    map[string]int            // acceleratorTypeName -> index in acceleratorType arrays
-	accTypeLookup   []string                  // index -> acceleratorTypeName
+	accIndex      map[string]int // acceleratorName -> index in accelerator arrays
+	accLookup     []string       // index -> acceleratorName
+	serverIndex   map[string]int // serverName -> index in server arrays
+	serverLookup  []string       // index -> serverName
+	accTypeIndex  map[string]int // acceleratorTypeName -> index in acceleratorType arrays
+	accTypeLookup []string       // index -> acceleratorTypeName
 }
 
-func NewMILPSolver(system *core.System, optimizerSpec *config.OptimizerSpec) *MILPSolver {
+func NewMILPSolver(optimizerSpec *config.OptimizerSpec) *MILPSolver {
 	return &MILPSolver{
-		system:        system,
 		optimizerSpec: optimizerSpec,
 	}
 }
@@ -59,10 +56,8 @@ func (v *MILPSolver) Solve() {
 // prepare input date for MILP solver
 func (v *MILPSolver) preProcess() {
 
-	s := v.system
-
 	// create map and lookup arrays for accelerators
-	accMap := s.GetAccelerators()
+	accMap := core.GetAccelerators()
 	v.numAccelerators = len(accMap)
 	v.accIndex = make(map[string]int)
 	v.accLookup = make([]string, v.numAccelerators)
@@ -82,7 +77,7 @@ func (v *MILPSolver) preProcess() {
 	// fmt.Println(lpsolveUtils.Pretty1D("unitCost", v.instanceCost))
 
 	// create map and lookup arrays for accelerator types
-	capMap := s.GetCapacity()
+	capMap := core.GetCapacity()
 	v.numAcceleratorTypes = len(capMap)
 	v.accTypeIndex = make(map[string]int)
 	v.accTypeLookup = make([]string, v.numAcceleratorTypes)
@@ -113,27 +108,18 @@ func (v *MILPSolver) preProcess() {
 	// fmt.Println(lpsolveUtils.Pretty1D("unitsAvailByType", v.unitsAvail))
 	// fmt.Println(lpsolveUtils.Pretty2D("acceleratorTypesMatrix", v.acceleratorTypesMatrix))
 
-	// create map and lookup arrays for servers (service classes, models)
+	// create map and lookup arrays for servers
 	index = 0
-	v.serverIndex = make(map[string]map[string]int)
-	scMap := s.GetServiceClasses()
-	for scName, sc := range scMap {
-		v.serverIndex[scName] = make(map[string]int)
-		for mName, allocMap := range sc.GetAllAllocations() {
-			if len(allocMap) > 0 {
-				v.serverIndex[scName][mName] = index
-				index++
-			}
-		}
+	v.serverIndex = make(map[string]int)
+	srvMap := core.GetServers()
+	for srvName := range srvMap {
+		v.serverIndex[srvName] = index
+		index++
 	}
 	v.numServers = index
-	v.servClassLookup = make([]string, v.numServers)
-	v.modelLookup = make([]string, v.numServers)
-	for scName, mMap := range v.serverIndex {
-		for mName, index := range mMap {
-			v.servClassLookup[index] = scName
-			v.modelLookup[index] = mName
-		}
+	v.serverLookup = make([]string, v.numServers)
+	for srvName, index := range v.serverIndex {
+		v.serverLookup[index] = srvName
 	}
 
 	// set values for arrival rates and per replica arrivals and number of instances
@@ -144,21 +130,24 @@ func (v *MILPSolver) preProcess() {
 		v.numInstancesPerReplica[i] = make([]int, v.numAccelerators)
 		v.ratePerReplica[i] = make([]float64, v.numAccelerators)
 	}
-	modelMap := s.GetModels()
-	for scName, sc := range scMap {
-		for mName, ml := range sc.GetModelLoads() {
-			if i, exists := v.serverIndex[scName][mName]; exists {
-				v.arrivalRates[i] = float64(ml.ArrivalRate / 60 / 1000)
-				m := modelMap[mName]
-				for accName, j := range v.accIndex {
-					//acc := accMap[accName]
-					v.numInstancesPerReplica[i][j] = m.GetNumInstances(accName)
-					if alloc := sc.GetAllocationForPair(mName, accName); alloc != nil {
-						v.ratePerReplica[i][j] = float64(alloc.GetMaxArrvRatePerReplica())
-					}
+	modelMap := core.GetModels()
+	for srvName, srv := range srvMap {
+		if i, exists := v.serverIndex[srvName]; exists {
+			load := srv.GetLoad()
+			if load == nil {
+				continue
+			}
+			v.arrivalRates[i] = float64(load.GetArrivalRate() / 60 / 1000)
+			m := modelMap[srv.GetModelName()]
+			for accName, j := range v.accIndex {
+				//acc := accMap[accName]
+				v.numInstancesPerReplica[i][j] = m.GetNumInstances(accName)
+				if alloc := srv.GetAllAllocations()[accName]; alloc != nil {
+					v.ratePerReplica[i][j] = float64(alloc.GetMaxArrvRatePerReplica())
 				}
 			}
 		}
+
 	}
 
 	// fmt.Println(v.serverIndex)
@@ -251,8 +240,7 @@ func (v *MILPSolver) printResults(problemType lpsolveConfig.ProblemType, p lpsol
 
 	fmt.Println()
 	fmt.Printf("Accelerators=%v \n", v.accLookup)
-	fmt.Printf("ServiceClasses=%v \n", v.servClassLookup)
-	fmt.Printf("Models=%v \n", v.modelLookup)
+	fmt.Printf("Servers=%v \n", v.serverLookup)
 	fmt.Println()
 
 	v.numReplicas = p.GetNumReplicas()
@@ -272,21 +260,17 @@ func (v *MILPSolver) printResults(problemType lpsolveConfig.ProblemType, p lpsol
 
 // process output date from MILP solver
 func (v *MILPSolver) postProcess() {
-	s := v.system
-
 	for i := 0; i < v.numServers; i++ {
-		scName := v.servClassLookup[i]
-		mName := v.modelLookup[i]
 		for j := 0; j < v.numAccelerators; j++ {
 			n := v.numReplicas[i][j]
 			if n == 0 {
 				continue
 			}
 			accName := v.accLookup[j]
-			sc := s.GetServiceClass(scName)
+			sc := core.GetServer(v.serverLookup[i])
 			// TODO: Fix this
-			if alloc := sc.GetAllocationForPair(mName, accName); alloc != nil {
-				sc.SetAllocation(mName, alloc)
+			if alloc := sc.GetAllAllocations()[accName]; alloc != nil {
+				sc.SetAllocation(alloc)
 			}
 		}
 	}

@@ -19,7 +19,8 @@ func main() {
 	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_mod := prefix + "model-data.json"
-	fn_srv := prefix + "serviceclass-data.json"
+	fn_svc := prefix + "serviceclass-data.json"
+	fn_srv := prefix + "server-data.json"
 	fn_opt := prefix + "optimizer-data.json"
 
 	system := core.NewSystem()
@@ -36,11 +37,17 @@ func main() {
 	}
 	system.SetModelsFromSpec(bytes_mod)
 
+	bytes_svc, err_svc := os.ReadFile(fn_svc)
+	if err_svc != nil {
+		fmt.Println(err_svc)
+	}
+	system.SetServiceClassesFromSpec(bytes_svc)
+
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServiceClassesFromSpec(bytes_srv)
+	system.SetServersFromSpec(bytes_srv)
 
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {
@@ -62,21 +69,28 @@ func main() {
 	// generate random values in [alpha, 2 - alpha), where 0 < alpha < 1
 	alpha := float32(0.1)
 
-	for _, c := range system.GetServiceClasses() {
-		for _, ml := range c.GetModelLoads() {
-			factorA := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-			ml.ArrivalRate *= 1 + factorA
-			if ml.ArrivalRate <= 0.0 {
-				ml.ArrivalRate = 1.0
-			}
-			factorB := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-			ml.AvgLength = int(math.Ceil(float64(float32(ml.AvgLength) * (1 + factorB))))
-			if ml.AvgLength <= 0 {
-				ml.AvgLength = 1
-			}
-			// fmt.Printf("c=%s, m=%s, rate=%v, tokens=%d \n",
-			// 	c.GetName(), ml.Name, ml.ArrivalRate, ml.AvgLength)
+	for _, server := range system.GetServers() {
+		load := server.GetLoad()
+		if load == nil {
+			continue
 		}
+
+		factorA := 2 * (rand.Float32() - 0.5) * (1 - alpha)
+		arv := load.GetArrivalRate() * (1 + factorA)
+		if arv <= 0 {
+			arv = 1
+		}
+		load.SetArrivalRate(arv)
+
+		factorB := 2 * (rand.Float32() - 0.5) * (1 - alpha)
+		avl := int(math.Ceil(float64(float32(load.GetAvgLength()) * (1 + factorB))))
+		if avl <= 0 {
+			avl = 1
+		}
+		load.SetAvgLength(avl)
+
+		// fmt.Printf("s=%s, rate=%v, tokens=%d \n",
+		// 	server.GetName(), load.GetArrivalRate(), load.GetAvgLength())
 	}
 
 	system.Calculate()

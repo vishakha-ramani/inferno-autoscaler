@@ -77,7 +77,7 @@ func (v *MILPSolver) preProcess() {
 	// fmt.Println(lpsolveUtils.Pretty1D("unitCost", v.instanceCost))
 
 	// create map and lookup arrays for accelerator types
-	capMap := core.GetCapacity()
+	capMap := core.GetCapacities()
 	v.numAcceleratorTypes = len(capMap)
 	v.accTypeIndex = make(map[string]int)
 	v.accTypeLookup = make([]string, v.numAcceleratorTypes)

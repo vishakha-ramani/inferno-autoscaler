@@ -41,7 +41,7 @@ func GetServers() map[string]*Server {
 	return TheSystem.servers
 }
 
-func GetCapacity() map[string]int {
+func GetCapacities() map[string]int {
 	return TheSystem.capacity
 }
 
@@ -84,16 +84,35 @@ func (s *System) SetAcceleratorsFromSpec(byteValue []byte) error {
 		return err
 	}
 	for _, v := range d.Spec {
-		s.accelerators[v.Name] = NewAcceleratorFromSpec(v.Name, &v)
+		s.AddAcceleratorFromSpec(v)
 	}
 	for _, v := range d.Count {
-		if cap, exists := s.capacity[v.Type]; exists {
-			s.capacity[v.Type] = cap + v.Count
-		} else {
-			s.capacity[v.Type] = v.Count
-		}
+		s.AddCapacityFromSpec(v)
 	}
 	return nil
+}
+
+// Add an accelerator
+func (s *System) AddAcceleratorFromSpec(spec config.AcceleratorSpec) {
+	s.accelerators[spec.Name] = NewAcceleratorFromSpec(&spec)
+}
+
+// Remove an accelerator
+func (s *System) RemoveAccelerator(name string) error {
+	if s.accelerators[name] == nil {
+		return fmt.Errorf("accelerator %s not found", name)
+	}
+	delete(s.accelerators, name)
+	return nil
+}
+
+// Add capacity of an accelerator type
+func (s *System) AddCapacityFromSpec(spec config.AcceleratorCount) {
+	if cap, exists := s.capacity[spec.Type]; exists {
+		s.capacity[spec.Type] = cap + spec.Count
+	} else {
+		s.capacity[spec.Type] = spec.Count
+	}
 }
 
 // Set data about models
@@ -103,13 +122,41 @@ func (s *System) SetModelsFromSpec(byteValue []byte) error {
 		return err
 	}
 	for _, v := range d.Spec {
-		s.models[v.Name] = NewModelFromSpec(&v)
+		s.AddModelFromSpec(v)
 	}
 	for _, pd := range d.PerfData {
 		if m := s.models[pd.Name]; m != nil {
 			m.perfData[pd.Acc] = &pd
 		}
 	}
+	return nil
+}
+
+// Add a model
+func (s *System) AddModelFromSpec(spec config.ModelSpec) {
+	s.models[spec.Name] = NewModelFromSpec(&spec)
+}
+
+// Remove a model
+func (s *System) RemoveModel(name string) error {
+	if s.models[name] == nil {
+		return fmt.Errorf("model %s not found", name)
+	}
+	delete(s.models, name)
+	return nil
+}
+
+// Add a server
+func (s *System) AddServerFromSpec(spec config.ServerSpec) {
+	s.servers[spec.Name] = NewServerFromSpec(&spec)
+}
+
+// Remove a server
+func (s *System) RemoveServer(name string) error {
+	if s.servers[name] == nil {
+		return fmt.Errorf("server %s not found", name)
+	}
+	delete(s.servers, name)
 	return nil
 }
 
@@ -127,6 +174,20 @@ func (s *System) SetServiceClassesFromSpec(byteValue []byte) error {
 		svc := s.serviceClasses[name]
 		svc.SetTargetFromSpec(&t)
 	}
+	return nil
+}
+
+// Add a service class
+func (s *System) AddServiceClass(name string) {
+	s.serviceClasses[name] = NewServiceClass(name)
+}
+
+// Remove a service class
+func (s *System) RemoveServiceClass(name string) error {
+	if s.serviceClasses[name] == nil {
+		return fmt.Errorf("service class %s not found", name)
+	}
+	delete(s.serviceClasses, name)
 	return nil
 }
 
@@ -183,8 +244,26 @@ func (s *System) GetServer(name string) *Server {
 }
 
 // Get capacities of accelerator types
-func (s *System) GetCapacity() map[string]int {
+func (s *System) GetCapacities() map[string]int {
 	return s.capacity
+}
+
+// Get capacity of an accelerator type
+func (s *System) GetCapacity(name string) (int, bool) {
+	if cap, exists := s.capacity[name]; !exists {
+		return 0, false
+	} else {
+		return cap, true
+	}
+}
+
+// Remove capacity of an accelerator type
+func (s *System) RemoveCapacity(name string) bool {
+	if _, exists := s.capacity[name]; !exists {
+		return false
+	}
+	delete(s.capacity, name)
+	return true
 }
 
 // Calculate basic parameters
@@ -233,7 +312,7 @@ func (s *System) AllocateByType() {
 }
 
 // generate json allocation solution for all servers in the system
-func (s *System) GetSolution() ([]byte, error) {
+func (s *System) GetSolution() ([]byte, *config.AllocationSolution, error) {
 	allocationSolution := config.AllocationSolution{
 		Spec: make(map[string]config.AllocationData),
 	}
@@ -256,9 +335,9 @@ func (s *System) GetSolution() ([]byte, error) {
 	}
 	// generate json
 	if byteValue, err := json.Marshal(allocationSolution); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else {
-		return byteValue, nil
+		return byteValue, &allocationSolution, nil
 	}
 }
 

@@ -20,6 +20,8 @@ type Server struct {
 
 	// allocated solution
 	allocation *Allocation
+
+	spec *config.ServerSpec
 }
 
 // request arrival and service statistics
@@ -60,6 +62,7 @@ func NewServerFromSpec(spec *config.ServerSpec) *Server {
 		load:             ld,
 		allAllocations:   map[string]*Allocation{},
 		allocation:       nil,
+		spec:             spec,
 	}
 }
 
@@ -107,6 +110,10 @@ func (s *Server) RemoveAllocation() {
 
 func (s *Server) GetAllAllocations() map[string]*Allocation {
 	return s.allAllocations
+}
+
+func (s *Server) GetSpec() *config.ServerSpec {
+	return s.spec
 }
 
 func (s *Server) String() string {

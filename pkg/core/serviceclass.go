@@ -50,6 +50,27 @@ func (c *ServiceClass) GetModelTarget(modelName string) *Target {
 	return c.targets[modelName]
 }
 
+func (c *ServiceClass) RemoveModelTarget(modelName string) {
+	delete(c.targets, modelName)
+}
+
+func (c *ServiceClass) GetSpec() *config.ServiceClassData {
+	specs := &config.ServiceClassData{
+		Spec: make([]config.ServiceClassSpec, len(c.targets)),
+	}
+	i := 0
+	for modelName, target := range c.targets {
+		specs.Spec[i] = config.ServiceClassSpec{
+			Name:    c.name,
+			Model:   modelName,
+			SLO_ITL: target.ITL,
+			SLO_TTW: target.TTW,
+		}
+		i++
+	}
+	return specs
+}
+
 func (c *ServiceClass) String() string {
 	return fmt.Sprintf("ServiceClass: name=%s; targets=%v",
 		c.name, c.targets)

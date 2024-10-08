@@ -97,7 +97,7 @@ func (s *Solver) SolveUnlimited() {
 func (s *Solver) SolveLimited() {
 	// calculate available count of accelerator types
 	available := make(map[string]int)
-	for k, v := range core.GetCapacity() {
+	for k, v := range core.GetCapacities() {
 		available[k] = v
 	}
 	// for all servers, sort allocations

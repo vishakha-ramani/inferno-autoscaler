@@ -1,6 +1,6 @@
 {
     "spec": {
-        "Bronze/granite_13b": {
+        "Bronze-granite_13b": {
             "serviceClass": "Bronze",
             "model": "granite_13b",
             "accelerator": "MI300X",
@@ -10,7 +10,7 @@
             "itlAverage": 11.42869,
             "waitAverage": 19.45996
         },
-        "Bronze/granite_20b": {
+        "Bronze-granite_20b": {
             "serviceClass": "Bronze",
             "model": "granite_20b",
             "accelerator": "MI300X",
@@ -20,7 +20,7 @@
             "itlAverage": 14.190127,
             "waitAverage": 5.6875
         },
-        "Bronze/granite_34b": {
+        "Bronze-granite_34b": {
             "serviceClass": "Bronze",
             "model": "granite_34b",
             "accelerator": "MI300X",
@@ -30,7 +30,7 @@
             "itlAverage": 21.135622,
             "waitAverage": 191.71484
         },
-        "Bronze/llama3_8b": {
+        "Bronze-llama3_8b": {
             "serviceClass": "Bronze",
             "model": "llama3_8b",
             "accelerator": "MI300X",
@@ -40,7 +40,7 @@
             "itlAverage": 7.2821927,
             "waitAverage": 32.973145
         },
-        "Bronze/llama_13b": {
+        "Bronze-llama_13b": {
             "serviceClass": "Bronze",
             "model": "llama_13b",
             "accelerator": "MI300X",
@@ -50,7 +50,7 @@
             "itlAverage": 14.42959,
             "waitAverage": 10.749023
         },
-        "Bronze/llama_70b": {
+        "Bronze-llama_70b": {
             "serviceClass": "Bronze",
             "model": "llama_70b",
             "accelerator": "4xMI250",
@@ -60,7 +60,7 @@
             "itlAverage": 24.695438,
             "waitAverage": 240.86133
         },
-        "Bronze/llama_7b": {
+        "Bronze-llama_7b": {
             "serviceClass": "Bronze",
             "model": "llama_7b",
             "accelerator": "G2",
@@ -70,7 +70,7 @@
             "itlAverage": 22.418085,
             "waitAverage": 145.5039
         },
-        "Bronze/mistral_7b": {
+        "Bronze-mistral_7b": {
             "serviceClass": "Bronze",
             "model": "mistral_7b",
             "accelerator": "MI300X",
@@ -80,7 +80,7 @@
             "itlAverage": 12.437292,
             "waitAverage": 44.65332
         },
-        "Bronze/mixtral_8_7b": {
+        "Bronze-mixtral_8_7b": {
             "serviceClass": "Bronze",
             "model": "mixtral_8_7b",
             "accelerator": "MI300X",
@@ -90,7 +90,7 @@
             "itlAverage": 21.277634,
             "waitAverage": 320.4746
         },
-        "Free/granite_13b": {
+        "Free-granite_13b": {
             "serviceClass": "Free",
             "model": "granite_13b",
             "accelerator": "MI300X",
@@ -100,7 +100,7 @@
             "itlAverage": 11.42869,
             "waitAverage": 19.45996
         },
-        "Free/granite_20b": {
+        "Free-granite_20b": {
             "serviceClass": "Free",
             "model": "granite_20b",
             "accelerator": "MI300X",
@@ -110,7 +110,7 @@
             "itlAverage": 15.395756,
             "waitAverage": 465.41797
         },
-        "Free/granite_34b": {
+        "Free-granite_34b": {
             "serviceClass": "Free",
             "model": "granite_34b",
             "accelerator": "MI300X",
@@ -120,7 +120,7 @@
             "itlAverage": 21.39877,
             "waitAverage": 454.64258
         },
-        "Free/llama3_8b": {
+        "Free-llama3_8b": {
             "serviceClass": "Free",
             "model": "llama3_8b",
             "accelerator": "MI300X",
@@ -130,7 +130,7 @@
             "itlAverage": 7.924246,
             "waitAverage": 325.02734
         },
-        "Free/llama_13b": {
+        "Free-llama_13b": {
             "serviceClass": "Free",
             "model": "llama_13b",
             "accelerator": "MI300X",
@@ -140,7 +140,7 @@
             "itlAverage": 17.154366,
             "waitAverage": 631.125
         },
-        "Free/llama_70b": {
+        "Free-llama_70b": {
             "serviceClass": "Free",
             "model": "llama_70b",
             "accelerator": "4xMI250",
@@ -150,7 +150,7 @@
             "itlAverage": 26.883633,
             "waitAverage": 610.16406
         },
-        "Free/llama_7b": {
+        "Free-llama_7b": {
             "serviceClass": "Free",
             "model": "llama_7b",
             "accelerator": "G2",
@@ -160,7 +160,7 @@
             "itlAverage": 22.418085,
             "waitAverage": 145.5039
         },
-        "Free/mistral_7b": {
+        "Free-mistral_7b": {
             "serviceClass": "Free",
             "model": "mistral_7b",
             "accelerator": "MI300X",
@@ -170,7 +170,7 @@
             "itlAverage": 12.437292,
             "waitAverage": 44.65332
         },
-        "Free/mixtral_8_7b": {
+        "Free-mixtral_8_7b": {
             "serviceClass": "Free",
             "model": "mixtral_8_7b",
             "accelerator": "MI300X",
@@ -180,7 +180,7 @@
             "itlAverage": 22.324787,
             "waitAverage": 635.2949
         },
-        "Premium/granite_13b": {
+        "Premium-granite_13b": {
             "serviceClass": "Premium",
             "model": "granite_13b",
             "accelerator": "MI300X",
@@ -190,7 +190,7 @@
             "itlAverage": 11.42869,
             "waitAverage": 19.45996
         },
-        "Premium/granite_20b": {
+        "Premium-granite_20b": {
             "serviceClass": "Premium",
             "model": "granite_20b",
             "accelerator": "MI300X",
@@ -200,7 +200,7 @@
             "itlAverage": 14.190127,
             "waitAverage": 5.6875
         },
-        "Premium/granite_34b": {
+        "Premium-granite_34b": {
             "serviceClass": "Premium",
             "model": "granite_34b",
             "accelerator": "MI300X",
@@ -210,7 +210,7 @@
             "itlAverage": 20.916056,
             "waitAverage": 85.990234
         },
-        "Premium/llama3_8b": {
+        "Premium-llama3_8b": {
             "serviceClass": "Premium",
             "model": "llama3_8b",
             "accelerator": "MI300X",
@@ -220,7 +220,7 @@
             "itlAverage": 6.582818,
             "waitAverage": 0.69091797
         },
-        "Premium/llama_13b": {
+        "Premium-llama_13b": {
             "serviceClass": "Premium",
             "model": "llama_13b",
             "accelerator": "G2",
@@ -230,7 +230,7 @@
             "itlAverage": 24.949406,
             "waitAverage": 137.84766
         },
-        "Premium/llama_70b": {
+        "Premium-llama_70b": {
             "serviceClass": "Premium",
             "model": "llama_70b",
             "accelerator": "4xMI250",
@@ -240,7 +240,7 @@
             "itlAverage": 21.659323,
             "waitAverage": 44.427734
         },
-        "Premium/llama_7b": {
+        "Premium-llama_7b": {
             "serviceClass": "Premium",
             "model": "llama_7b",
             "accelerator": "G2",
@@ -250,7 +250,7 @@
             "itlAverage": 22.418085,
             "waitAverage": 145.5039
         },
-        "Premium/mistral_7b": {
+        "Premium-mistral_7b": {
             "serviceClass": "Premium",
             "model": "mistral_7b",
             "accelerator": "MI250",
@@ -260,7 +260,7 @@
             "itlAverage": 16.997248,
             "waitAverage": 137.48047
         },
-        "Premium/mixtral_8_7b": {
+        "Premium-mixtral_8_7b": {
             "serviceClass": "Premium",
             "model": "mixtral_8_7b",
             "accelerator": "MI300X",

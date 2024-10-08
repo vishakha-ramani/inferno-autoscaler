@@ -26,6 +26,16 @@ func NewModelFromSpec(spec *config.ModelSpec) *Model {
 	}
 }
 
+func (m *Model) AddPerfDataFromSpec(spec *config.ModelAcceleratorPerfData) {
+	if spec.Name == m.GetName() {
+		m.perfData[spec.Acc] = spec
+	}
+}
+
+func (m *Model) RemovePerfData(accName string) {
+	delete(m.perfData, accName)
+}
+
 // Calculate basic parameters
 func (m *Model) Calculate(accelerators map[string]*Accelerator) {
 	for gName := range m.perfData {
@@ -37,6 +47,10 @@ func (m *Model) Calculate(accelerators map[string]*Accelerator) {
 
 func (m *Model) GetName() string {
 	return m.spec.Name
+}
+
+func (m *Model) GetSpec() *config.ModelSpec {
+	return m.spec
 }
 
 func (m *Model) GetNumInstances(acceleratorName string) int {

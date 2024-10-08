@@ -1,6 +1,6 @@
 {
     "spec": {
-        "Bronze/granite_13b": {
+        "Bronze-granite_13b": {
             "serviceClass": "Bronze",
             "model": "granite_13b",
             "accelerator": "G2",
@@ -10,7 +10,7 @@
             "itlAverage": 21.16437,
             "waitAverage": 102.09766
         },
-        "Bronze/granite_34b": {
+        "Bronze-granite_34b": {
             "serviceClass": "Bronze",
             "model": "granite_34b",
             "accelerator": "G2",
@@ -20,7 +20,7 @@
             "itlAverage": 43.17973,
             "waitAverage": 324.78516
         },
-        "Bronze/llama_13b": {
+        "Bronze-llama_13b": {
             "serviceClass": "Bronze",
             "model": "llama_13b",
             "accelerator": "G2",
@@ -30,7 +30,7 @@
             "itlAverage": 24.949406,
             "waitAverage": 137.84766
         },
-        "Bronze/llama_70b": {
+        "Bronze-llama_70b": {
             "serviceClass": "Bronze",
             "model": "llama_70b",
             "accelerator": "G2",
@@ -40,7 +40,7 @@
             "itlAverage": 31.448805,
             "waitAverage": 331.9746
         },
-        "Bronze/mixtral_8_7b": {
+        "Bronze-mixtral_8_7b": {
             "serviceClass": "Bronze",
             "model": "mixtral_8_7b",
             "accelerator": "G2",
@@ -50,7 +50,7 @@
             "itlAverage": 33.952778,
             "waitAverage": 326.22266
         },
-        "Free/granite_13b": {
+        "Free-granite_13b": {
             "serviceClass": "Free",
             "model": "granite_13b",
             "accelerator": "G2",
@@ -60,7 +60,7 @@
             "itlAverage": 21.791157,
             "waitAverage": 468.5332
         },
-        "Free/granite_34b": {
+        "Free-granite_34b": {
             "serviceClass": "Free",
             "model": "granite_34b",
             "accelerator": "G2",
@@ -70,7 +70,7 @@
             "itlAverage": 43.407078,
             "waitAverage": 621.75
         },
-        "Free/llama_13b": {
+        "Free-llama_13b": {
             "serviceClass": "Free",
             "model": "llama_13b",
             "accelerator": "G2",
@@ -80,7 +80,7 @@
             "itlAverage": 26.131357,
             "waitAverage": 513.2383
         },
-        "Free/llama_70b": {
+        "Free-llama_70b": {
             "serviceClass": "Free",
             "model": "llama_70b",
             "accelerator": "G2",
@@ -90,7 +90,7 @@
             "itlAverage": 32.145664,
             "waitAverage": 659.4375
         },
-        "Free/mixtral_8_7b": {
+        "Free-mixtral_8_7b": {
             "serviceClass": "Free",
             "model": "mixtral_8_7b",
             "accelerator": "G2",
@@ -100,7 +100,7 @@
             "itlAverage": 34.84781,
             "waitAverage": 655.7461
         },
-        "Premium/granite_13b": {
+        "Premium-granite_13b": {
             "serviceClass": "Premium",
             "model": "granite_13b",
             "accelerator": "G2",
@@ -110,7 +110,7 @@
             "itlAverage": 21.16437,
             "waitAverage": 102.09766
         },
-        "Premium/granite_34b": {
+        "Premium-granite_34b": {
             "serviceClass": "Premium",
             "model": "granite_34b",
             "accelerator": "G2",
@@ -120,7 +120,7 @@
             "itlAverage": 42.971577,
             "waitAverage": 166.47656
         },
-        "Premium/llama_13b": {
+        "Premium-llama_13b": {
             "serviceClass": "Premium",
             "model": "llama_13b",
             "accelerator": "G2",
@@ -130,7 +130,7 @@
             "itlAverage": 23.317575,
             "waitAverage": 12.806641
         },
-        "Premium/llama_70b": {
+        "Premium-llama_70b": {
             "serviceClass": "Premium",
             "model": "llama_70b",
             "accelerator": "G2",
@@ -140,7 +140,7 @@
             "itlAverage": 30.862234,
             "waitAverage": 161.66992
         },
-        "Premium/mixtral_8_7b": {
+        "Premium-mixtral_8_7b": {
             "serviceClass": "Premium",
             "model": "mixtral_8_7b",
             "accelerator": "G2",

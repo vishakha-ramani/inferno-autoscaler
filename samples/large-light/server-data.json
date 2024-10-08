@@ -1,7 +1,7 @@
 {
     "spec": [
         {
-            "name": "Premium/llama_7b",
+            "name": "Premium-llama_7b",
             "class": "Premium",
             "model": "llama_7b",
             "arrivalRate": 12,
@@ -10,7 +10,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/llama_13b",
+            "name": "Premium-llama_13b",
             "class": "Premium",
             "model": "llama_13b",
             "arrivalRate": 12,
@@ -19,7 +19,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/llama3_8b",
+            "name": "Premium-llama3_8b",
             "class": "Premium",
             "model": "llama3_8b",
             "arrivalRate": 12,
@@ -28,7 +28,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/llama_70b",
+            "name": "Premium-llama_70b",
             "class": "Premium",
             "model": "llama_70b",
             "arrivalRate": 12,
@@ -37,7 +37,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/mistral_7b",
+            "name": "Premium-mistral_7b",
             "class": "Premium",
             "model": "mistral_7b",
             "arrivalRate": 12,
@@ -46,7 +46,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/granite_13b",
+            "name": "Premium-granite_13b",
             "class": "Premium",
             "model": "granite_13b",
             "arrivalRate": 12,
@@ -55,7 +55,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/granite_20b",
+            "name": "Premium-granite_20b",
             "class": "Premium",
             "model": "granite_20b",
             "arrivalRate": 12,
@@ -64,7 +64,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/granite_34b",
+            "name": "Premium-granite_34b",
             "class": "Premium",
             "model": "granite_34b",
             "arrivalRate": 12,
@@ -73,7 +73,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Premium/mixtral_8_7b",
+            "name": "Premium-mixtral_8_7b",
             "class": "Premium",
             "model": "mixtral_8_7b",
             "arrivalRate": 12,
@@ -82,7 +82,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/llama_7b",
+            "name": "Bronze-llama_7b",
             "class": "Bronze",
             "model": "llama_7b",
             "arrivalRate": 24,
@@ -91,7 +91,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/llama_13b",
+            "name": "Bronze-llama_13b",
             "class": "Bronze",
             "model": "llama_13b",
             "arrivalRate": 24,
@@ -100,7 +100,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/llama3_8b",
+            "name": "Bronze-llama3_8b",
             "class": "Bronze",
             "model": "llama3_8b",
             "arrivalRate": 24,
@@ -109,7 +109,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/llama_70b",
+            "name": "Bronze-llama_70b",
             "class": "Bronze",
             "model": "llama_70b",
             "arrivalRate": 24,
@@ -118,7 +118,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/mistral_7b",
+            "name": "Bronze-mistral_7b",
             "class": "Bronze",
             "model": "mistral_7b",
             "arrivalRate": 24,
@@ -127,7 +127,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/granite_13b",
+            "name": "Bronze-granite_13b",
             "class": "Bronze",
             "model": "granite_13b",
             "arrivalRate": 24,
@@ -136,7 +136,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/granite_20b",
+            "name": "Bronze-granite_20b",
             "class": "Bronze",
             "model": "granite_20b",
             "arrivalRate": 24,
@@ -145,7 +145,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/granite_34b",
+            "name": "Bronze-granite_34b",
             "class": "Bronze",
             "model": "granite_34b",
             "arrivalRate": 24,
@@ -154,7 +154,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Bronze/mixtral_8_7b",
+            "name": "Bronze-mixtral_8_7b",
             "class": "Bronze",
             "model": "mixtral_8_7b",
             "arrivalRate": 24,
@@ -163,7 +163,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/llama_7b",
+            "name": "Free-llama_7b",
             "class": "Free",
             "model": "llama_7b",
             "arrivalRate": 48,
@@ -172,7 +172,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/llama_13b",
+            "name": "Free-llama_13b",
             "class": "Free",
             "model": "llama_13b",
             "arrivalRate": 48,
@@ -181,7 +181,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/llama3_8b",
+            "name": "Free-llama3_8b",
             "class": "Free",
             "model": "llama3_8b",
             "arrivalRate": 48,
@@ -190,7 +190,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/llama_70b",
+            "name": "Free-llama_70b",
             "class": "Free",
             "model": "llama_70b",
             "arrivalRate": 48,
@@ -199,7 +199,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/mistral_7b",
+            "name": "Free-mistral_7b",
             "class": "Free",
             "model": "mistral_7b",
             "arrivalRate": 48,
@@ -208,7 +208,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/granite_13b",
+            "name": "Free-granite_13b",
             "class": "Free",
             "model": "granite_13b",
             "arrivalRate": 48,
@@ -217,7 +217,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/granite_20b",
+            "name": "Free-granite_20b",
             "class": "Free",
             "model": "granite_20b",
             "arrivalRate": 48,
@@ -226,7 +226,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/granite_34b",
+            "name": "Free-granite_34b",
             "class": "Free",
             "model": "granite_34b",
             "arrivalRate": 48,
@@ -235,7 +235,7 @@
             "serviceCOV": 1.5
         },
         {
-            "name": "Free/mixtral_8_7b",
+            "name": "Free-mixtral_8_7b",
             "class": "Free",
             "model": "mixtral_8_7b",
             "arrivalRate": 48,

@@ -27,6 +27,12 @@ func NewOptimizerFromSpec(byteValue []byte) (*Optimizer, error) {
 	return o, nil
 }
 
+func NewOptimizer(spec *config.OptimizerSpec) *Optimizer {
+	return &Optimizer{
+		spec: spec,
+	}
+}
+
 func (o *Optimizer) Optimize() {
 	if o.spec == nil {
 		return

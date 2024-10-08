@@ -17,9 +17,9 @@ type Accelerator struct {
 	slopeHigh float32 // power profile slope at high utilization
 }
 
-func NewAcceleratorFromSpec(name string, spec *config.AcceleratorSpec) *Accelerator {
+func NewAcceleratorFromSpec(spec *config.AcceleratorSpec) *Accelerator {
 	return &Accelerator{
-		name: name,
+		name: spec.Name,
 		spec: spec,
 	}
 }

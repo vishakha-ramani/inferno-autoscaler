@@ -62,7 +62,7 @@ func main() {
 	system.Calculate()
 	manager.Optimize()
 
-	bytes_sol, err_sol := system.GetSolution()
+	bytes_sol, _, err_sol := system.GetSolution()
 	if err_sol != nil {
 		fmt.Println(err_sol)
 	} else {

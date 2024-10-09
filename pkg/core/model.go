@@ -9,6 +9,7 @@ import (
 
 // An inference model
 type Model struct {
+	name string
 	spec *config.ModelSpec
 
 	// model performance data for specified accelerators
@@ -20,45 +21,46 @@ type Model struct {
 
 func NewModelFromSpec(spec *config.ModelSpec) *Model {
 	return &Model{
+		name:         spec.Name,
 		spec:         spec,
 		perfData:     make(map[string]*config.ModelAcceleratorPerfData),
 		numInstances: make(map[string]int),
 	}
 }
 
+// Calculate basic parameters
+func (m *Model) Calculate(accelerators map[string]*Accelerator) {
+	for gName := range m.perfData {
+		if g, exists := accelerators[gName]; exists {
+			m.numInstances[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.MemSize())))
+		}
+	}
+}
+
+func (m *Model) Name() string {
+	return m.name
+}
+
+func (m *Model) Spec() *config.ModelSpec {
+	return m.spec
+}
+
+func (m *Model) NumInstances(acceleratorName string) int {
+	return m.numInstances[acceleratorName]
+}
+
+func (m *Model) PerfData(acceleratorName string) *config.ModelAcceleratorPerfData {
+	return m.perfData[acceleratorName]
+}
+
 func (m *Model) AddPerfDataFromSpec(spec *config.ModelAcceleratorPerfData) {
-	if spec.Name == m.GetName() {
+	if spec.Name == m.name {
 		m.perfData[spec.Acc] = spec
 	}
 }
 
 func (m *Model) RemovePerfData(accName string) {
 	delete(m.perfData, accName)
-}
-
-// Calculate basic parameters
-func (m *Model) Calculate(accelerators map[string]*Accelerator) {
-	for gName := range m.perfData {
-		if g, exists := accelerators[gName]; exists {
-			m.numInstances[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.spec.MemSize)))
-		}
-	}
-}
-
-func (m *Model) GetName() string {
-	return m.spec.Name
-}
-
-func (m *Model) GetSpec() *config.ModelSpec {
-	return m.spec
-}
-
-func (m *Model) GetNumInstances(acceleratorName string) int {
-	return m.numInstances[acceleratorName]
-}
-
-func (m *Model) GetPerfData(acceleratorName string) *config.ModelAcceleratorPerfData {
-	return m.perfData[acceleratorName]
 }
 
 func (m *Model) String() string {

@@ -7,14 +7,15 @@ import (
 )
 
 // An accelerator used in an inference server
-//   - full GPU unit
-//   - multiple GPU units
+//   - full or multiple GPU units
 type Accelerator struct {
 	name string
 	spec *config.AcceleratorSpec
 
-	slopeLow  float32 // power profile slope at low utilization
-	slopeHigh float32 // power profile slope at high utilization
+	// power profile slope at low utilization
+	slopeLow float32
+	// power profile slope at high utilization
+	slopeHigh float32
 }
 
 func NewAcceleratorFromSpec(spec *config.AcceleratorSpec) *Accelerator {
@@ -39,12 +40,28 @@ func (g *Accelerator) Power(util float32) float32 {
 	}
 }
 
-func (g *Accelerator) GetType() string {
+func (g *Accelerator) Name() string {
+	return g.name
+}
+
+func (g *Accelerator) Spec() *config.AcceleratorSpec {
+	return g.spec
+}
+
+func (g *Accelerator) Type() string {
 	return g.spec.Type
 }
 
-func (g *Accelerator) GetSpec() *config.AcceleratorSpec {
-	return g.spec
+func (g *Accelerator) Cost() float32 {
+	return g.spec.Cost
+}
+
+func (g *Accelerator) Multiplicity() int {
+	return g.spec.Multiplicity
+}
+
+func (g *Accelerator) MemSize() int {
+	return g.spec.MemSize
 }
 
 func (g *Accelerator) String() string {

@@ -68,7 +68,7 @@ func (v *MILPSolver) preProcess() {
 	for accName, acc := range accMap {
 		v.accIndex[accName] = index
 		v.accLookup[index] = accName
-		v.instanceCost[index] = float64(acc.GetSpec().Cost)
+		v.instanceCost[index] = float64(acc.Spec().Cost)
 		index++
 	}
 
@@ -96,10 +96,10 @@ func (v *MILPSolver) preProcess() {
 
 	// set matrix of accelerator types to accelerators
 	for accName, acc := range accMap {
-		accType := acc.GetType()
+		accType := acc.Type()
 		if accIndex, exists := v.accIndex[accName]; exists {
 			accTypeIndex := v.accTypeIndex[accType]
-			v.acceleratorTypesMatrix[accTypeIndex][accIndex] = acc.GetSpec().Multiplicity
+			v.acceleratorTypesMatrix[accTypeIndex][accIndex] = acc.Spec().Multiplicity
 		}
 	}
 
@@ -133,17 +133,17 @@ func (v *MILPSolver) preProcess() {
 	modelMap := core.GetModels()
 	for srvName, srv := range srvMap {
 		if i, exists := v.serverIndex[srvName]; exists {
-			load := srv.GetLoad()
+			load := srv.Load()
 			if load == nil {
 				continue
 			}
-			v.arrivalRates[i] = float64(load.GetArrivalRate() / 60 / 1000)
-			m := modelMap[srv.GetModelName()]
+			v.arrivalRates[i] = float64(load.ArrivalRate() / 60 / 1000)
+			m := modelMap[srv.ModelName()]
 			for accName, j := range v.accIndex {
 				//acc := accMap[accName]
-				v.numInstancesPerReplica[i][j] = m.GetNumInstances(accName)
-				if alloc := srv.GetAllAllocations()[accName]; alloc != nil {
-					v.ratePerReplica[i][j] = float64(alloc.GetMaxArrvRatePerReplica())
+				v.numInstancesPerReplica[i][j] = m.NumInstances(accName)
+				if alloc := srv.AllAllocations()[accName]; alloc != nil {
+					v.ratePerReplica[i][j] = float64(alloc.MaxArrvRatePerReplica())
 				}
 			}
 		}
@@ -269,7 +269,7 @@ func (v *MILPSolver) postProcess() {
 			accName := v.accLookup[j]
 			sc := core.GetServer(v.serverLookup[i])
 			// TODO: Fix this
-			if alloc := sc.GetAllAllocations()[accName]; alloc != nil {
+			if alloc := sc.AllAllocations()[accName]; alloc != nil {
 				sc.SetAllocation(alloc)
 			}
 		}

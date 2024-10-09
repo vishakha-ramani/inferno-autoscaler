@@ -6,7 +6,7 @@ import (
 	"github.ibm.com/tantawi/inferno/pkg/config"
 )
 
-// A serverfor a service class and model
+// A server for a service class and model
 type Server struct {
 	name             string
 	serviceClassName string
@@ -32,7 +32,7 @@ type ServerLoad struct {
 	serviceCOV  float32 // coefficient of variation of request service time
 }
 
-func (ld *ServerLoad) GetArrivalRate() float32 {
+func (ld *ServerLoad) ArrivalRate() float32 {
 	return ld.arrivalRate
 }
 
@@ -40,7 +40,7 @@ func (ld *ServerLoad) SetArrivalRate(a float32) {
 	ld.arrivalRate = a
 }
 
-func (ld *ServerLoad) GetAvgLength() int {
+func (ld *ServerLoad) AvgLength() int {
 	return ld.avgLength
 }
 
@@ -70,33 +70,33 @@ func NewServerFromSpec(spec *config.ServerSpec) *Server {
 func (s *Server) Calculate(accelerators map[string]*Accelerator) {
 	s.allAllocations = make(map[string]*Allocation)
 	for _, g := range accelerators {
-		if alloc := CreateAllocation(s.name, g.name); alloc != nil {
+		if alloc := CreateAllocation(s.name, g.Name()); alloc != nil {
 			if curAlloc := s.allocation; curAlloc != nil {
 				penalty := curAlloc.TransitionPenalty(alloc)
 				alloc.SetValue(penalty)
 			}
-			s.allAllocations[g.name] = alloc
+			s.allAllocations[g.Name()] = alloc
 		}
 	}
 }
 
-func (s *Server) GetName() string {
+func (s *Server) Name() string {
 	return s.name
 }
 
-func (s *Server) GetServiceClassName() string {
+func (s *Server) ServiceClassName() string {
 	return s.serviceClassName
 }
 
-func (s *Server) GetModelName() string {
+func (s *Server) ModelName() string {
 	return s.modelName
 }
 
-func (s *Server) GetLoad() *ServerLoad {
+func (s *Server) Load() *ServerLoad {
 	return s.load
 }
 
-func (s *Server) GetAllocation() *Allocation {
+func (s *Server) Allocation() *Allocation {
 	return s.allocation
 }
 
@@ -108,11 +108,11 @@ func (s *Server) RemoveAllocation() {
 	s.allocation = nil
 }
 
-func (s *Server) GetAllAllocations() map[string]*Allocation {
+func (s *Server) AllAllocations() map[string]*Allocation {
 	return s.allAllocations
 }
 
-func (s *Server) GetSpec() *config.ServerSpec {
+func (s *Server) Spec() *config.ServerSpec {
 	return s.spec
 }
 

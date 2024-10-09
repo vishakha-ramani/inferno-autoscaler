@@ -32,7 +32,7 @@ func NewServiceClass(name string) *ServiceClass {
 	}
 }
 
-// set target SLOs for a model in a service class
+// set target SLOs for a model in a service class (replace if already exists)
 func (c *ServiceClass) SetTargetFromSpec(spec *config.ServiceClassSpec) {
 	if spec.Name == c.name {
 		c.targets[spec.Model] = &Target{
@@ -42,11 +42,11 @@ func (c *ServiceClass) SetTargetFromSpec(spec *config.ServiceClassSpec) {
 	}
 }
 
-func (c *ServiceClass) GetName() string {
+func (c *ServiceClass) Name() string {
 	return c.name
 }
 
-func (c *ServiceClass) GetModelTarget(modelName string) *Target {
+func (c *ServiceClass) ModelTarget(modelName string) *Target {
 	return c.targets[modelName]
 }
 
@@ -54,7 +54,7 @@ func (c *ServiceClass) RemoveModelTarget(modelName string) {
 	delete(c.targets, modelName)
 }
 
-func (c *ServiceClass) GetSpec() *config.ServiceClassData {
+func (c *ServiceClass) Spec() *config.ServiceClassData {
 	specs := &config.ServiceClassData{
 		Spec: make([]config.ServiceClassSpec, len(c.targets)),
 	}

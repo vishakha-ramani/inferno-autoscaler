@@ -29,31 +29,31 @@ func main() {
 	if err_acc != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetAcceleratorsFromSpec(bytes_acc)
+	system.SetAcceleratorsFromData(bytes_acc)
 
 	bytes_mod, err_mod := os.ReadFile(fn_mod)
 	if err_mod != nil {
 		fmt.Println(err_mod)
 	}
-	system.SetModelsFromSpec(bytes_mod)
+	system.SetModelsFromData(bytes_mod)
 
 	bytes_svc, err_svc := os.ReadFile(fn_svc)
 	if err_svc != nil {
 		fmt.Println(err_svc)
 	}
-	system.SetServiceClassesFromSpec(bytes_svc)
+	system.SetServiceClassesFromData(bytes_svc)
 
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServersFromSpec(bytes_srv)
+	system.SetServersFromData(bytes_srv)
 
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-	optimizer, err_opt := solver.NewOptimizerFromSpec(bytes_opt)
+	optimizer, err_opt := solver.NewOptimizerFromData(bytes_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
@@ -69,21 +69,21 @@ func main() {
 	// generate random values in [alpha, 2 - alpha), where 0 < alpha < 1
 	alpha := float32(0.1)
 
-	for _, server := range system.GetServers() {
-		load := server.GetLoad()
+	for _, server := range system.Servers() {
+		load := server.Load()
 		if load == nil {
 			continue
 		}
 
 		factorA := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-		arv := load.GetArrivalRate() * (1 + factorA)
+		arv := load.ArrivalRate() * (1 + factorA)
 		if arv <= 0 {
 			arv = 1
 		}
 		load.SetArrivalRate(arv)
 
 		factorB := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-		avl := int(math.Ceil(float64(float32(load.GetAvgLength()) * (1 + factorB))))
+		avl := int(math.Ceil(float64(float32(load.AvgLength()) * (1 + factorB))))
 		if avl <= 0 {
 			avl = 1
 		}

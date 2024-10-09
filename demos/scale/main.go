@@ -27,31 +27,31 @@ func main() {
 	if err_acc != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetAcceleratorsFromSpec(bytes_acc)
+	system.SetAcceleratorsFromData(bytes_acc)
 
 	bytes_mod, err_mod := os.ReadFile(fn_mod)
 	if err_mod != nil {
 		fmt.Println(err_mod)
 	}
-	system.SetModelsFromSpec(bytes_mod)
+	system.SetModelsFromData(bytes_mod)
 
 	bytes_svc, err_svc := os.ReadFile(fn_svc)
 	if err_svc != nil {
 		fmt.Println(err_svc)
 	}
-	system.SetServiceClassesFromSpec(bytes_svc)
+	system.SetServiceClassesFromData(bytes_svc)
 
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServersFromSpec(bytes_srv)
+	system.SetServersFromData(bytes_srv)
 
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-	optimizer, err_opt := solver.NewOptimizerFromSpec(bytes_opt)
+	optimizer, err_opt := solver.NewOptimizerFromData(bytes_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
@@ -63,25 +63,25 @@ func main() {
 
 	serverName := "Premium/llama3_8b"
 
-	server := system.GetServer(serverName)
+	server := system.Server(serverName)
 	if server == nil {
 		fmt.Printf("No server %s\n", serverName)
 		return
 	}
-	allocBefore := server.GetAllocation()
+	allocBefore := server.Allocation()
 	if allocBefore == nil {
 		fmt.Printf("No allocation for server %s \n", serverName)
 		return
 	}
 	// change load on server
-	load := server.GetLoad()
+	load := server.Load()
 	if load == nil {
 		fmt.Printf("No model load data for server %s \n", serverName)
 		return
 	}
 	fmt.Println("AllocBefore: ", allocBefore)
-	load.SetArrivalRate(load.GetArrivalRate() * 2.5)
-	load.SetAvgLength(int(float32(load.GetAvgLength()) * 1.5))
+	load.SetArrivalRate(load.ArrivalRate() * 2.5)
+	load.SetAvgLength(int(float32(load.AvgLength()) * 1.5))
 
 	// scale allocation
 	allocAfter, inc := allocBefore.Scale(serverName)

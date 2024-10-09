@@ -51,24 +51,24 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	if server = GetServer(serverName); server == nil {
 		return nil
 	}
-	if load = server.GetLoad(); load == nil {
+	if load = server.Load(); load == nil {
 		return nil
 	}
 
 	// get model info
-	modelName := server.GetModelName()
+	modelName := server.ModelName()
 	if model = GetModel(modelName); model == nil {
 		return nil
 	}
-	if perf = model.GetPerfData(gName); perf == nil {
+	if perf = model.PerfData(gName); perf == nil {
 		return nil
 	}
 
 	// get service class info
-	if svc = GetServiceClass(server.GetServiceClassName()); svc == nil {
+	if svc = GetServiceClass(server.ServiceClassName()); svc == nil {
 		return nil
 	}
-	if target = svc.GetModelTarget(modelName); target == nil {
+	if target = svc.ModelTarget(modelName); target == nil {
 		return nil
 	}
 
@@ -127,8 +127,8 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	numReplicas := int(math.Ceil(float64(totalLambda) / float64(lambdaStar)))
 
 	// calculate cost
-	totalNumInstances := model.GetNumInstances(gName) * numReplicas
-	cost := acc.spec.Cost * float32(totalNumInstances)
+	totalNumInstances := model.NumInstances(gName) * numReplicas
+	cost := acc.Cost() * float32(totalNumInstances)
 
 	// queueModel.Solve(lambdaStar, 1)
 	// fmt.Printf("model=%s; accelerator=%s; lambdaMin=%v; lambdaMax=%v; servTimeLimit= %v; waitTimeLimit=%v; lambdaStarService=%v; lambdaStarWait=%v; lambdaStar=%v \n",
@@ -191,24 +191,24 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 	if server = GetServer(serverName); server == nil {
 		return nil
 	}
-	if load = server.GetLoad(); load == nil {
+	if load = server.Load(); load == nil {
 		return nil
 	}
 
 	// get model info
-	modelName := server.GetModelName()
+	modelName := server.ModelName()
 	if model = GetModel(modelName); model == nil {
 		return nil
 	}
-	if perf = model.GetPerfData(gName); perf == nil {
+	if perf = model.PerfData(gName); perf == nil {
 		return nil
 	}
 
 	// get service class info
-	if svc = GetServiceClass(server.GetServiceClassName()); svc == nil {
+	if svc = GetServiceClass(server.ServiceClassName()); svc == nil {
 		return nil
 	}
-	if target = svc.GetModelTarget(modelName); target == nil {
+	if target = svc.ModelTarget(modelName); target == nil {
 		return nil
 	}
 
@@ -232,7 +232,7 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 	rhoStar := xStar / (1 + xStar)
 	lambdaStar := rhoStar / (float32(K) * servTime)
 	numReplicas := int(math.Ceil(float64(load.arrivalRate) / (float64(lambdaStar) * 60 * 1000)))
-	cost := acc.spec.Cost * float32(model.GetNumInstances(gName)*numReplicas*acc.spec.Multiplicity)
+	cost := acc.Cost() * float32(model.NumInstances(gName)*numReplicas*acc.Multiplicity())
 
 	rho := load.arrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
 	x := rho / (1 - rho)
@@ -255,7 +255,7 @@ func (a *Allocation) Scale(serverName string) (alloc *Allocation, inc int) {
 	if server = GetServer(serverName); server == nil {
 		return nil, 0
 	}
-	if load = server.GetLoad(); load == nil {
+	if load = server.Load(); load == nil {
 		return nil, 0
 	}
 
@@ -288,15 +288,15 @@ func (a *Allocation) ReAllocate(serverName string) (*Allocation, string) {
 	return minAlloc, minAlloc.accelerator
 }
 
-func (a *Allocation) GetAccelerator() string {
+func (a *Allocation) Accelerator() string {
 	return a.accelerator
 }
 
-func (a *Allocation) GetNumReplicas() int {
+func (a *Allocation) NumReplicas() int {
 	return a.numReplicas
 }
 
-func (a *Allocation) GetMaxArrvRatePerReplica() float32 {
+func (a *Allocation) MaxArrvRatePerReplica() float32 {
 	return a.maxArrvRatePerReplica
 }
 
@@ -305,7 +305,7 @@ func (a *Allocation) SetValue(value float32) {
 	a.value = value
 }
 
-func (a *Allocation) GetValue() float32 {
+func (a *Allocation) Value() float32 {
 	return a.value
 }
 

@@ -16,6 +16,7 @@ var system *core.System
 
 func main() {
 
+	// instantiate a clean system
 	system = core.NewSystem()
 
 	// populate system data from files (for testing only)
@@ -33,25 +34,25 @@ func main() {
 	if err_acc != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetAcceleratorsFromSpec(bytes_acc)
+	system.SetAcceleratorsFromData(bytes_acc)
 
 	bytes_mod, err_mod := os.ReadFile(fn_mod)
 	if err_mod != nil {
 		fmt.Println(err_mod)
 	}
-	system.SetModelsFromSpec(bytes_mod)
+	system.SetModelsFromData(bytes_mod)
 
 	bytes_svc, err_svc := os.ReadFile(fn_svc)
 	if err_svc != nil {
 		fmt.Println(err_svc)
 	}
-	system.SetServiceClassesFromSpec(bytes_svc)
+	system.SetServiceClassesFromData(bytes_svc)
 
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServersFromSpec(bytes_srv)
+	system.SetServersFromData(bytes_srv)
 	// end populate system data
 
 	// REST Server
@@ -76,9 +77,9 @@ func main() {
 	router.GET("/addServiceClass/:name", addServiceClass)
 	router.GET("/removeServiceClass/:name", removeServiceClass)
 
-	router.GET("/getServiceClassModelTargets/:name/:model", getServiceClassModelTargets)
-	router.POST("/addServiceClassModelTargets", addServiceClassModelTargets)
-	router.GET("/removeServiceClassModelTargets/:name/:model", removeServiceClassModelTargets)
+	router.GET("/getServiceClassModelTarget/:name/:model", getServiceClassModelTarget)
+	router.POST("/addServiceClassModelTarget", addServiceClassModelTarget)
+	router.GET("/removeServiceClassModelTarget/:name/:model", removeServiceClassModelTarget)
 
 	router.GET("/getServers", getServers)
 	router.GET("/getServer/:name", getServer)
@@ -104,11 +105,11 @@ func main() {
 
 // Handlers
 func getAccelerators(c *gin.Context) {
-	accMap := system.GetAccelerators()
+	accMap := system.Accelerators()
 	gpus := make([]config.AcceleratorSpec, len(accMap))
 	i := 0
 	for _, acc := range accMap {
-		gpus[i] = *acc.GetSpec()
+		gpus[i] = *acc.Spec()
 		i++
 	}
 	c.IndentedJSON(http.StatusOK, gpus)
@@ -116,12 +117,12 @@ func getAccelerators(c *gin.Context) {
 
 func getAccelerator(c *gin.Context) {
 	name := c.Param("name")
-	acc := system.GetAccelerator(name)
+	acc := system.Accelerator(name)
 	if acc == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, acc.GetSpec())
+	c.IndentedJSON(http.StatusOK, acc.Spec())
 }
 
 func addAccelerator(c *gin.Context) {
@@ -135,16 +136,16 @@ func addAccelerator(c *gin.Context) {
 
 func removeAccelerator(c *gin.Context) {
 	name := c.Param("name")
-	acc := system.GetAccelerator(name)
+	acc := system.Accelerator(name)
 	if err := system.RemoveAccelerator(name); err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, acc.GetSpec())
+	c.IndentedJSON(http.StatusOK, acc.Spec())
 }
 
 func getCapacities(c *gin.Context) {
-	capMap := system.GetCapacities()
+	capMap := system.Capacities()
 	capacities := make([]config.AcceleratorCount, len(capMap))
 	i := 0
 	for k, v := range capMap {
@@ -159,7 +160,7 @@ func getCapacities(c *gin.Context) {
 
 func getCapacity(c *gin.Context) {
 	t := c.Param("type")
-	cap, exists := system.GetCapacity(t)
+	cap, exists := system.Capacity(t)
 	if !exists {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "capacity for " + t + " not found"})
 		return
@@ -176,7 +177,7 @@ func addCapacity(c *gin.Context) {
 		return
 	}
 	system.AddCapacityFromSpec(count)
-	cap, _ := system.GetCapacity(count.Type)
+	cap, _ := system.Capacity(count.Type)
 	c.IndentedJSON(http.StatusOK, config.AcceleratorCount{
 		Type:  count.Type,
 		Count: cap,
@@ -185,7 +186,7 @@ func addCapacity(c *gin.Context) {
 
 func removeCapacity(c *gin.Context) {
 	t := c.Param("type")
-	cap, _ := system.GetCapacity(t)
+	cap, _ := system.Capacity(t)
 	if !system.RemoveCapacity(t) {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator type " + t + " not found"})
 		return
@@ -197,11 +198,11 @@ func removeCapacity(c *gin.Context) {
 }
 
 func getModels(c *gin.Context) {
-	modelMap := system.GetModels()
+	modelMap := system.Models()
 	models := make([]config.ModelSpec, len(modelMap))
 	i := 0
 	for _, model := range modelMap {
-		models[i] = *model.GetSpec()
+		models[i] = *model.Spec()
 		i++
 	}
 	c.IndentedJSON(http.StatusOK, models)
@@ -209,12 +210,12 @@ func getModels(c *gin.Context) {
 
 func getModel(c *gin.Context) {
 	name := c.Param("name")
-	model := system.GetModel(name)
+	model := system.Model(name)
 	if model == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, model.GetSpec())
+	c.IndentedJSON(http.StatusOK, model.Spec())
 }
 
 func addModel(c *gin.Context) {
@@ -228,20 +229,20 @@ func addModel(c *gin.Context) {
 
 func removeModel(c *gin.Context) {
 	name := c.Param("name")
-	model := system.GetModel(name)
+	model := system.Model(name)
 	if err := system.RemoveModel(name); err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, model.GetSpec())
+	c.IndentedJSON(http.StatusOK, model.Spec())
 }
 
 func getServiceClasses(c *gin.Context) {
-	svcMap := system.GetServiceClasses()
+	svcMap := system.ServiceClasses()
 	svcs := make([]config.ServiceClassData, len(svcMap))
 	i := 0
 	for _, svc := range svcMap {
-		svcs[i] = *svc.GetSpec()
+		svcs[i] = *svc.Spec()
 		i++
 	}
 	c.IndentedJSON(http.StatusOK, svcs)
@@ -249,40 +250,40 @@ func getServiceClasses(c *gin.Context) {
 
 func getServiceClass(c *gin.Context) {
 	name := c.Param("name")
-	svc := system.GetServiceClass(name)
+	svc := system.ServiceClass(name)
 	if svc == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, svc.GetSpec())
+	c.IndentedJSON(http.StatusOK, svc.Spec())
 }
 
 func addServiceClass(c *gin.Context) {
 	name := c.Param("name")
 	system.AddServiceClass(name)
-	svc := system.GetServiceClass(name)
-	c.IndentedJSON(http.StatusOK, svc.GetSpec())
+	svc := system.ServiceClass(name)
+	c.IndentedJSON(http.StatusOK, svc.Spec())
 }
 
 func removeServiceClass(c *gin.Context) {
 	name := c.Param("name")
-	svc := system.GetServiceClass(name)
+	svc := system.ServiceClass(name)
 	if err := system.RemoveServiceClass(name); err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, svc.GetSpec())
+	c.IndentedJSON(http.StatusOK, svc.Spec())
 }
 
-func getServiceClassModelTargets(c *gin.Context) {
+func getServiceClassModelTarget(c *gin.Context) {
 	name := c.Param("name")
 	model := c.Param("model")
-	svc := system.GetServiceClass(name)
+	svc := system.ServiceClass(name)
 	if svc == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
 		return
 	}
-	target := svc.GetModelTarget(model)
+	target := svc.ModelTarget(model)
 	if target == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + model + " not found"})
 		return
@@ -295,29 +296,29 @@ func getServiceClassModelTargets(c *gin.Context) {
 	})
 }
 
-func addServiceClassModelTargets(c *gin.Context) {
+func addServiceClassModelTarget(c *gin.Context) {
 	var targetSpec config.ServiceClassSpec
 	if err := c.BindJSON(&targetSpec); err != nil {
 		return
 	}
 	svcName := targetSpec.Name
-	if system.GetServiceClass(svcName) == nil {
+	if system.ServiceClass(svcName) == nil {
 		system.AddServiceClass(svcName)
 	}
-	svc := system.GetServiceClass(svcName)
+	svc := system.ServiceClass(svcName)
 	svc.SetTargetFromSpec(&targetSpec)
 	c.IndentedJSON(http.StatusOK, targetSpec)
 }
 
-func removeServiceClassModelTargets(c *gin.Context) {
+func removeServiceClassModelTarget(c *gin.Context) {
 	name := c.Param("name")
 	model := c.Param("model")
-	svc := system.GetServiceClass(name)
+	svc := system.ServiceClass(name)
 	if svc == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
 		return
 	}
-	target := svc.GetModelTarget(model)
+	target := svc.ModelTarget(model)
 	if target == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + model + " not found"})
 		return
@@ -332,11 +333,11 @@ func removeServiceClassModelTargets(c *gin.Context) {
 }
 
 func getServers(c *gin.Context) {
-	srvMap := system.GetServers()
+	srvMap := system.Servers()
 	servers := make([]config.ServerSpec, len(srvMap))
 	i := 0
 	for _, server := range srvMap {
-		servers[i] = *server.GetSpec()
+		servers[i] = *server.Spec()
 		i++
 	}
 	c.IndentedJSON(http.StatusOK, servers)
@@ -344,12 +345,12 @@ func getServers(c *gin.Context) {
 
 func getServer(c *gin.Context) {
 	name := c.Param("name")
-	server := system.GetServer(name)
+	server := system.Server(name)
 	if server == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "server " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, server.GetSpec())
+	c.IndentedJSON(http.StatusOK, server.Spec())
 }
 
 func addServer(c *gin.Context) {
@@ -363,23 +364,23 @@ func addServer(c *gin.Context) {
 
 func removeServer(c *gin.Context) {
 	name := c.Param("name")
-	server := system.GetServer(name)
+	server := system.Server(name)
 	if err := system.RemoveServer(name); err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "server " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, server.GetSpec())
+	c.IndentedJSON(http.StatusOK, server.Spec())
 }
 
 func getModelAcceleratorPerf(c *gin.Context) {
 	name := c.Param("name")
 	acc := c.Param("acc")
-	model := system.GetModel(name)
+	model := system.Model(name)
 	if model == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
 		return
 	}
-	perfData := model.GetPerfData(acc)
+	perfData := model.PerfData(acc)
 	if perfData == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + acc + " not found"})
 		return
@@ -393,7 +394,7 @@ func addModelAcceleratorPerf(c *gin.Context) {
 		return
 	}
 	modelName := perfData.Name
-	model := system.GetModel(modelName)
+	model := system.Model(modelName)
 	if model == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + modelName + " not found"})
 		return
@@ -405,12 +406,12 @@ func addModelAcceleratorPerf(c *gin.Context) {
 func removeModelAcceleratorPerf(c *gin.Context) {
 	name := c.Param("name")
 	acc := c.Param("acc")
-	model := system.GetModel(name)
+	model := system.Model(name)
 	if model == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
 		return
 	}
-	perfData := model.GetPerfData(acc)
+	perfData := model.PerfData(acc)
 	if perfData == nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + acc + " not found"})
 		return
@@ -424,14 +425,10 @@ func optimize(c *gin.Context) {
 	if err := c.BindJSON(&optimizerSpec); err != nil {
 		return
 	}
-	optimizer := solver.NewOptimizer(&optimizerSpec)
+	optimizer := solver.NewOptimizerFromSpec(&optimizerSpec)
 	manager := manager.NewManager(system, optimizer)
 	system.Calculate()
 	manager.Optimize()
-	_, solution, err := system.GetSolution()
-	if err != nil {
-		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "error marshaling solution"})
-		return
-	}
+	solution := system.GenerateSolution()
 	c.IndentedJSON(http.StatusOK, solution)
 }

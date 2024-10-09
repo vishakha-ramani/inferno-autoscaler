@@ -22,8 +22,6 @@ type Solver struct {
 	diffAllocation map[string]*core.AllocationDiff
 }
 
-// o.spec.Unlimited, o.spec.Heterogeneous,		o.spec.MILPSolver, o.spec.UseCplex
-
 func NewSolver(optimizerSpec *config.OptimizerSpec) *Solver {
 	return &Solver{
 		optimizerSpec:     optimizerSpec,
@@ -40,12 +38,19 @@ type entry struct {
 	delta       float32            // delta penalty if current allocation not allowed and next allocation is allowed
 }
 
+func (e *entry) String() string {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "sName=%s, curIndex=%d, delta=%v, allocations=%v \n",
+		e.serverName, e.curIndex, e.delta, e.allocations)
+	return b.String()
+}
+
 // Find optimal allocation for all service classes
 func (s *Solver) Solve() {
 	// take snapshot of current allocations
 	s.currentAllocation = make(map[string]*core.Allocation)
 	for serverName, server := range core.GetServers() {
-		if alloc := server.GetAllocation(); alloc != nil {
+		if alloc := server.Allocation(); alloc != nil {
 			s.currentAllocation[serverName] = alloc.Clone()
 		}
 	}
@@ -65,7 +70,7 @@ func (s *Solver) Solve() {
 	s.diffAllocation = make(map[string]*core.AllocationDiff)
 	for serverName, server := range core.GetServers() {
 		curMapModel := s.currentAllocation[serverName]
-		mapModel := server.GetAllocation()
+		mapModel := server.Allocation()
 		if allocDiff := core.CreateAllocationDiff(curMapModel, mapModel); allocDiff != nil {
 			s.diffAllocation[serverName] = allocDiff
 		}
@@ -79,9 +84,9 @@ func (s *Solver) SolveUnlimited() {
 		// select allocation with minimum value
 		minVal := float32(math.MaxFloat32)
 		var minAlloc *core.Allocation
-		for _, alloc := range server.GetAllAllocations() {
-			if alloc.GetValue() < minVal {
-				minVal = alloc.GetValue()
+		for _, alloc := range server.AllAllocations() {
+			if alloc.Value() < minVal {
+				minVal = alloc.Value()
 				minAlloc = alloc
 			}
 		}
@@ -103,7 +108,7 @@ func (s *Solver) SolveLimited() {
 	// for all servers, sort allocations
 	var entries []*entry = make([]*entry, 0)
 	for serverName, server := range core.GetServers() {
-		allAllocs := server.GetAllAllocations()
+		allAllocs := server.AllAllocations()
 		e := &entry{
 			serverName:  serverName,
 			curIndex:    0,
@@ -116,11 +121,11 @@ func (s *Solver) SolveLimited() {
 			i++
 		}
 		slices.SortFunc(e.allocations, func(a, b *core.Allocation) int {
-			return cmp.Compare(a.GetValue(), b.GetValue())
+			return cmp.Compare(a.Value(), b.Value())
 		})
 		if len(e.allocations) > 1 {
 			// value is difference between this and next allocation
-			e.delta = e.allocations[1].GetValue() - e.allocations[0].GetValue()
+			e.delta = e.allocations[1].Value() - e.allocations[0].Value()
 		} else {
 			// last choice, large value for not assigning
 			e.delta = math.MaxFloat32
@@ -130,7 +135,7 @@ func (s *Solver) SolveLimited() {
 	// sort all entries
 	orderFunc := func(a, b *entry) int {
 		if a.delta == b.delta {
-			return cmp.Compare(b.allocations[b.curIndex].GetValue(), a.allocations[a.curIndex].GetValue())
+			return cmp.Compare(b.allocations[b.curIndex].Value(), a.allocations[a.curIndex].Value())
 		}
 		return cmp.Compare(b.delta, a.delta)
 	}
@@ -149,17 +154,17 @@ func (s *Solver) SolveLimited() {
 		if server == nil {
 			continue
 		}
-		model := core.GetModel(server.GetModelName())
+		model := core.GetModel(server.ModelName())
 		if model == nil {
 			continue
 		}
 
 		alloc := top.allocations[top.curIndex]
-		gName := alloc.GetAccelerator()
-		replicas := alloc.GetNumReplicas()
+		gName := alloc.Accelerator()
+		replicas := alloc.NumReplicas()
 		acc := core.GetAccelerator(gName)
-		tName := acc.GetType()
-		count := replicas * model.GetNumInstances(gName) * acc.GetSpec().Multiplicity
+		tName := acc.Type()
+		count := replicas * model.NumInstances(gName) * acc.Spec().Multiplicity
 
 		if available[tName] >= count {
 			available[tName] -= count
@@ -168,7 +173,7 @@ func (s *Solver) SolveLimited() {
 		} else {
 			top.curIndex++
 			if top.curIndex+1 < len(top.allocations) {
-				top.delta = top.allocations[top.curIndex+1].GetValue() - top.allocations[top.curIndex].GetValue()
+				top.delta = top.allocations[top.curIndex+1].Value() - top.allocations[top.curIndex].Value()
 			} else if top.curIndex == len(top.allocations) {
 				continue
 			} else {
@@ -185,15 +190,8 @@ func (s *Solver) SolveMILP() {
 	mip.Solve()
 }
 
-func (s *Solver) GetAllocationDiff() map[string]*core.AllocationDiff {
+func (s *Solver) AllocationDiff() map[string]*core.AllocationDiff {
 	return s.diffAllocation
-}
-
-func (e *entry) String() string {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "sName=%s, curIndex=%d, delta=%v, allocations=%v \n",
-		e.serverName, e.curIndex, e.delta, e.allocations)
-	return b.String()
 }
 
 func (s *Solver) String() string {

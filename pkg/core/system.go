@@ -9,24 +9,24 @@ import (
 )
 
 var (
-	// the system object
+	// a static reference to the singleton system object
 	TheSystem *System
 )
 
 func GetAccelerator(name string) *Accelerator {
-	return TheSystem.GetAccelerator(name)
+	return TheSystem.Accelerator(name)
 }
 
 func GetModel(name string) *Model {
-	return TheSystem.GetModel(name)
+	return TheSystem.Model(name)
 }
 
 func GetServiceClass(name string) *ServiceClass {
-	return TheSystem.GetServiceClass(name)
+	return TheSystem.ServiceClass(name)
 }
 
 func GetServer(name string) *Server {
-	return TheSystem.GetServer(name)
+	return TheSystem.Server(name)
 }
 
 func GetAccelerators() map[string]*Accelerator {
@@ -52,11 +52,12 @@ type System struct {
 	serviceClasses map[string]*ServiceClass
 	servers        map[string]*Server
 
-	capacity         map[string]int               // available count of accelerator types
-	allocationByType map[string]*AllocationByType // number of allocated accelerator types
+	capacity           map[string]int               // available count of accelerator types
+	allocationByType   map[string]*AllocationByType // number of allocated accelerator types
+	allocationSolution *config.AllocationSolution
 }
 
-// Data about allocated accelerator types
+// Allocation data about an accelerator type
 type AllocationByType struct {
 	name  string  // name of accelerator type
 	count int     // total number of this type
@@ -72,13 +73,14 @@ func NewSystem() *System {
 		serviceClasses: make(map[string]*ServiceClass),
 		servers:        make(map[string]*Server),
 
-		capacity:         make(map[string]int),
-		allocationByType: map[string]*AllocationByType{},
+		capacity:           make(map[string]int),
+		allocationByType:   map[string]*AllocationByType{},
+		allocationSolution: nil,
 	}
 }
 
-// Set data about accelerators
-func (s *System) SetAcceleratorsFromSpec(byteValue []byte) error {
+// Set accelerators from data
+func (s *System) SetAcceleratorsFromData(byteValue []byte) error {
 	var d config.AcceleratorData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
@@ -92,7 +94,7 @@ func (s *System) SetAcceleratorsFromSpec(byteValue []byte) error {
 	return nil
 }
 
-// Add an accelerator
+// Add an accelerator (replace if already exists)
 func (s *System) AddAcceleratorFromSpec(spec config.AcceleratorSpec) {
 	s.accelerators[spec.Name] = NewAcceleratorFromSpec(&spec)
 }
@@ -106,7 +108,7 @@ func (s *System) RemoveAccelerator(name string) error {
 	return nil
 }
 
-// Add capacity of an accelerator type
+// Add capacity for an accelerator type
 func (s *System) AddCapacityFromSpec(spec config.AcceleratorCount) {
 	if cap, exists := s.capacity[spec.Type]; exists {
 		s.capacity[spec.Type] = cap + spec.Count
@@ -115,8 +117,8 @@ func (s *System) AddCapacityFromSpec(spec config.AcceleratorCount) {
 	}
 }
 
-// Set data about models
-func (s *System) SetModelsFromSpec(byteValue []byte) error {
+// Set models from data
+func (s *System) SetModelsFromData(byteValue []byte) error {
 	var d config.ModelData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
@@ -126,13 +128,13 @@ func (s *System) SetModelsFromSpec(byteValue []byte) error {
 	}
 	for _, pd := range d.PerfData {
 		if m := s.models[pd.Name]; m != nil {
-			m.perfData[pd.Acc] = &pd
+			m.AddPerfDataFromSpec(&pd)
 		}
 	}
 	return nil
 }
 
-// Add a model
+// Add a model (replace if already exists)
 func (s *System) AddModelFromSpec(spec config.ModelSpec) {
 	s.models[spec.Name] = NewModelFromSpec(&spec)
 }
@@ -146,7 +148,7 @@ func (s *System) RemoveModel(name string) error {
 	return nil
 }
 
-// Add a server
+// Add a server (replace if already exists)
 func (s *System) AddServerFromSpec(spec config.ServerSpec) {
 	s.servers[spec.Name] = NewServerFromSpec(&spec)
 }
@@ -160,8 +162,8 @@ func (s *System) RemoveServer(name string) error {
 	return nil
 }
 
-// Set data about service classes
-func (s *System) SetServiceClassesFromSpec(byteValue []byte) error {
+// Set service classes from data
+func (s *System) SetServiceClassesFromData(byteValue []byte) error {
 	var d config.ServiceClassData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
@@ -177,7 +179,7 @@ func (s *System) SetServiceClassesFromSpec(byteValue []byte) error {
 	return nil
 }
 
-// Add a service class
+// Add a service class (replace if already exists)
 func (s *System) AddServiceClass(name string) {
 	s.serviceClasses[name] = NewServiceClass(name)
 }
@@ -191,8 +193,8 @@ func (s *System) RemoveServiceClass(name string) error {
 	return nil
 }
 
-// Set data about servers
-func (s *System) SetServersFromSpec(byteValue []byte) error {
+// Set servers from data
+func (s *System) SetServersFromData(byteValue []byte) error {
 	var d config.ServerData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
@@ -204,52 +206,52 @@ func (s *System) SetServersFromSpec(byteValue []byte) error {
 }
 
 // Get all accelerators
-func (s *System) GetAccelerators() map[string]*Accelerator {
+func (s *System) Accelerators() map[string]*Accelerator {
 	return s.accelerators
 }
 
 // Get all models
-func (s *System) GetModels() map[string]*Model {
+func (s *System) Models() map[string]*Model {
 	return s.models
 }
 
 // Get all service classes
-func (s *System) GetServiceClasses() map[string]*ServiceClass {
+func (s *System) ServiceClasses() map[string]*ServiceClass {
 	return s.serviceClasses
 }
 
 // Get all servers
-func (s *System) GetServers() map[string]*Server {
+func (s *System) Servers() map[string]*Server {
 	return s.servers
 }
 
 // Get accelerator object for a given accelerator name; nil if doesn't exist
-func (s *System) GetAccelerator(name string) *Accelerator {
+func (s *System) Accelerator(name string) *Accelerator {
 	return s.accelerators[name]
 }
 
 // Get model object for a given model name; nil if doesn't exist
-func (s *System) GetModel(name string) *Model {
+func (s *System) Model(name string) *Model {
 	return s.models[name]
 }
 
 // Get service class object for a given service class name; nil if doesn't exist
-func (s *System) GetServiceClass(name string) *ServiceClass {
+func (s *System) ServiceClass(name string) *ServiceClass {
 	return s.serviceClasses[name]
 }
 
 // Get server object for a given server name; nil if doesn't exist
-func (s *System) GetServer(name string) *Server {
+func (s *System) Server(name string) *Server {
 	return s.servers[name]
 }
 
 // Get capacities of accelerator types
-func (s *System) GetCapacities() map[string]int {
+func (s *System) Capacities() map[string]int {
 	return s.capacity
 }
 
 // Get capacity of an accelerator type
-func (s *System) GetCapacity(name string) (int, bool) {
+func (s *System) Capacity(name string) (int, bool) {
 	if cap, exists := s.capacity[name]; !exists {
 		return 0, false
 	} else {
@@ -282,19 +284,19 @@ func (s *System) Calculate() {
 // Accumulate allocation data by accelerator type
 func (s *System) AllocateByType() {
 	s.allocationByType = map[string]*AllocationByType{}
-	for _, server := range s.GetServers() {
-		modelName := server.GetModelName()
-		serverAlloc := server.GetAllocation()
+	for _, server := range s.Servers() {
+		modelName := server.ModelName()
+		serverAlloc := server.Allocation()
 		if serverAlloc == nil {
 			continue
 		}
 		accName := serverAlloc.accelerator
 		acc := s.accelerators[accName]
-		model := s.GetModel(modelName)
+		model := s.Model(modelName)
 		if acc == nil || model == nil {
 			continue
 		}
-		nameType := acc.GetType()
+		nameType := acc.Type()
 		var alloc *AllocationByType
 		var exists bool
 		if alloc, exists = s.allocationByType[nameType]; !exists {
@@ -305,25 +307,25 @@ func (s *System) AllocateByType() {
 				cost:  0,
 			}
 		}
-		alloc.count += serverAlloc.numReplicas * model.numInstances[accName] * acc.spec.Multiplicity
+		alloc.count += serverAlloc.numReplicas * model.numInstances[accName] * acc.Multiplicity()
 		alloc.cost += serverAlloc.cost
 		s.allocationByType[nameType] = alloc
 	}
 }
 
 // generate json allocation solution for all servers in the system
-func (s *System) GetSolution() ([]byte, *config.AllocationSolution, error) {
+func (s *System) GenerateSolution() *config.AllocationSolution {
 	allocationSolution := config.AllocationSolution{
 		Spec: make(map[string]config.AllocationData),
 	}
 	for serverName, server := range s.servers {
-		serverAlloc := server.GetAllocation()
+		serverAlloc := server.Allocation()
 		if serverAlloc == nil {
 			continue
 		}
 		allocData := config.AllocationData{
-			ServiceClass: server.GetServiceClassName(),
-			Model:        server.GetModelName(),
+			ServiceClass: server.ServiceClassName(),
+			Model:        server.ModelName(),
 			Accelerator:  serverAlloc.accelerator,
 			NumReplicas:  serverAlloc.numReplicas,
 			MaxBatch:     serverAlloc.batchSize,
@@ -333,12 +335,8 @@ func (s *System) GetSolution() ([]byte, *config.AllocationSolution, error) {
 		}
 		allocationSolution.Spec[serverName] = allocData
 	}
-	// generate json
-	if byteValue, err := json.Marshal(allocationSolution); err != nil {
-		return nil, nil, err
-	} else {
-		return byteValue, &allocationSolution, nil
-	}
+	s.allocationSolution = &allocationSolution
+	return &allocationSolution
 }
 
 func (a *AllocationByType) String() string {
@@ -350,38 +348,38 @@ func (a *AllocationByType) String() string {
 func (s *System) String() string {
 	var b bytes.Buffer
 	// b.WriteString("Accelerators: \n")
-	// for _, g := range s.GetAccelerators() {
+	// for _, g := range s.accelerators {
 	// 	fmt.Fprintln(&b, g)
 	// }
 	// fmt.Fprintf(&b, "capacity=%v \n", s.capacity)
 	// b.WriteString("Models: \n")
-	// for _, m := range s.GetModels() {
+	// for _, m := range s.models {
 	// 	fmt.Fprintln(&b, m)
 	// }
 	// b.WriteString("ServiceClasses: \n")
-	// for _, c := range s.GetServiceClasses() {
+	// for _, c := range s.serviceClasses {
 	// 	fmt.Fprintln(&b, c)
 	// }
 	// b.WriteString("Servers: \n")
-	// for _, s := range s.GetServers() {
+	// for _, s := range s.servers {
 	// 	fmt.Fprintln(&b, s)
 	// }
 
 	b.WriteString("Solution: \n")
 	totalCost := float32(0)
-	for serverName, server := range s.GetServers() {
-		srvClassName := server.GetServiceClassName()
-		modelName := server.GetModelName()
-		load := server.GetLoad()
+	for serverName, server := range s.Servers() {
+		srvClassName := server.ServiceClassName()
+		modelName := server.ModelName()
+		load := server.Load()
 		svc := GetServiceClass(srvClassName)
 		if load == nil || svc == nil {
 			continue
 		}
-		target := svc.GetModelTarget(modelName)
+		target := svc.ModelTarget(modelName)
 		if target == nil {
 			continue
 		}
-		alloc := server.GetAllocation()
+		alloc := server.Allocation()
 		if alloc == nil {
 			fmt.Fprintf(&b, "s=%s; c=%s; m=%s; no feasible allocation! \n", serverName, srvClassName, modelName)
 			continue

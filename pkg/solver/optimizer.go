@@ -15,19 +15,17 @@ type Optimizer struct {
 	solutionTimeMsec int64
 }
 
-// Create optimizer from spec
-func NewOptimizerFromSpec(byteValue []byte) (*Optimizer, error) {
+// Create optimizer from data
+func NewOptimizerFromData(byteValue []byte) (*Optimizer, error) {
 	var d config.OptimizerData
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return nil, err
 	}
-	o := &Optimizer{
-		spec: &d.Spec,
-	}
-	return o, nil
+	return NewOptimizerFromSpec(&d.Spec), nil
 }
 
-func NewOptimizer(spec *config.OptimizerSpec) *Optimizer {
+// Create optimizer from spec
+func NewOptimizerFromSpec(spec *config.OptimizerSpec) *Optimizer {
 	return &Optimizer{
 		spec: spec,
 	}
@@ -45,7 +43,7 @@ func (o *Optimizer) Optimize() {
 	o.solutionTimeMsec = endTime.Sub(startTime).Milliseconds()
 }
 
-func (o *Optimizer) GetSolutionTimeMsec() int64 {
+func (o *Optimizer) SolutionTimeMsec() int64 {
 	return o.solutionTimeMsec
 }
 

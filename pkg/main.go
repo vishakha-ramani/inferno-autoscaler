@@ -91,7 +91,15 @@ func main() {
 
 	router.POST("/optimize", optimize)
 
-	router.Run("localhost:8080")
+	// start server
+	var host, port string
+	if host = os.Getenv(config.RestHostEnvName); host == "" {
+		host = config.DefaultRestHost
+	}
+	if port = os.Getenv(config.RestPortEnvName); port == "" {
+		port = config.DefaultRestPort
+	}
+	router.Run(host + ":" + port)
 }
 
 // Handlers

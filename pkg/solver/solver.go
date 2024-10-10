@@ -50,8 +50,8 @@ func (s *Solver) Solve() {
 	// take snapshot of current allocations
 	s.currentAllocation = make(map[string]*core.Allocation)
 	for serverName, server := range core.GetServers() {
-		if alloc := server.Allocation(); alloc != nil {
-			s.currentAllocation[serverName] = alloc.Clone()
+		if alloc := server.CurAllocation(); alloc != nil {
+			s.currentAllocation[serverName] = alloc
 		}
 	}
 
@@ -69,9 +69,9 @@ func (s *Solver) Solve() {
 
 	s.diffAllocation = make(map[string]*core.AllocationDiff)
 	for serverName, server := range core.GetServers() {
-		curMapModel := s.currentAllocation[serverName]
-		mapModel := server.Allocation()
-		if allocDiff := core.CreateAllocationDiff(curMapModel, mapModel); allocDiff != nil {
+		curAlloc := s.currentAllocation[serverName]
+		desiredAlloc := server.Allocation()
+		if allocDiff := core.CreateAllocationDiff(curAlloc, desiredAlloc); allocDiff != nil {
 			s.diffAllocation[serverName] = allocDiff
 		}
 	}

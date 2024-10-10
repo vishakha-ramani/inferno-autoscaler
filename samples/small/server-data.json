@@ -4,136 +4,196 @@
             "name": "Premium-llama_13b",
             "class": "Premium",
             "model": "llama_13b",
-            "arrivalRate": 60,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 60,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Premium-llama_70b",
             "class": "Premium",
             "model": "llama_70b",
-            "arrivalRate": 60,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 60,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Premium-granite_13b",
             "class": "Premium",
             "model": "granite_13b",
-            "arrivalRate": 60,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 60,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Premium-granite_34b",
             "class": "Premium",
             "model": "granite_34b",
-            "arrivalRate": 60,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 60,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Premium-mixtral_8_7b",
             "class": "Premium",
             "model": "mixtral_8_7b",
-            "arrivalRate": 60,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 60,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Bronze-llama_13b",
             "class": "Bronze",
             "model": "llama_13b",
-            "arrivalRate": 120,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Bronze-llama_70b",
             "class": "Bronze",
             "model": "llama_70b",
-            "arrivalRate": 120,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Bronze-granite_13b",
             "class": "Bronze",
             "model": "granite_13b",
-            "arrivalRate": 120,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Bronze-granite_34b",
             "class": "Bronze",
             "model": "granite_34b",
-            "arrivalRate": 120,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Bronze-mixtral_8_7b",
             "class": "Bronze",
             "model": "mixtral_8_7b",
-            "arrivalRate": 120,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Free-llama_13b",
             "class": "Free",
             "model": "llama_13b",
-            "arrivalRate": 240,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 240,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Free-llama_70b",
             "class": "Free",
             "model": "llama_70b",
-            "arrivalRate": 240,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 240,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Free-granite_13b",
             "class": "Free",
             "model": "granite_13b",
-            "arrivalRate": 240,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 240,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Free-granite_34b",
             "class": "Free",
             "model": "granite_34b",
-            "arrivalRate": 240,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 240,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         },
         {
             "name": "Free-mixtral_8_7b",
             "class": "Free",
             "model": "mixtral_8_7b",
-            "arrivalRate": 240,
-            "avgLength": 1024,
-            "arrivalCOV": 1.5,
-            "serviceCOV": 1.5
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 240,
+                    "avgLength": 1024,
+                    "arrivalCOV": 1.5,
+                    "serviceCOV": 1.5
+                }
+            }
         }
     ]
 }

@@ -91,6 +91,7 @@ func main() {
 	router.GET("/removeModelAcceleratorPerf/:name/:acc", removeModelAcceleratorPerf)
 
 	router.POST("/optimize", optimize)
+	router.GET("/applyAllocation", applyAllocation)
 
 	// start server
 	var host, port string
@@ -431,4 +432,11 @@ func optimize(c *gin.Context) {
 	manager.Optimize()
 	solution := system.GenerateSolution()
 	c.IndentedJSON(http.StatusOK, solution)
+}
+
+func applyAllocation(c *gin.Context) {
+	for _, server := range system.Servers() {
+		server.ApplyDesiredAlloc()
+	}
+	c.IndentedJSON(http.StatusOK, "Done")
 }

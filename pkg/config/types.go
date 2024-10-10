@@ -71,11 +71,17 @@ type ServerData struct {
 	Spec []ServerSpec `json:"spec"`
 }
 
-// Specifications of server and its load statistics
+// Specifications of a server
 type ServerSpec struct {
-	Name        string  `json:"name"`        // server name
-	Class       string  `json:"class"`       // service class name
-	Model       string  `json:"model"`       // model name
+	Name         string         `json:"name"`         // server name
+	Class        string         `json:"class"`        // service class name
+	Model        string         `json:"model"`        // model name
+	CurrentAlloc AllocationData `json:"currentAlloc"` // current allocation
+	DesiredAlloc AllocationData `json:"desiredAlloc"` // desired allocation
+}
+
+// Specifications of server load statistics
+type ServerLoadSpec struct {
 	ArrivalRate float32 `json:"arrivalRate"` // req/min
 	AvgLength   int     `json:"avgLength"`   // number of tokens
 	ArrivalCOV  float32 `json:"arrivalCOV"`  // coefficient of variation of inter-request arrival time
@@ -99,14 +105,13 @@ type AllocationSolution struct {
 	Spec map[string]AllocationData `json:"spec"` // map of server names to allocation data
 }
 
-// Data about a server (a combination of a service class and a model) allocation
+// Data about a server allocation
 type AllocationData struct {
-	ServiceClass string  `json:"serviceClass"` // service class name
-	Model        string  `json:"model"`        // model name
-	Accelerator  string  `json:"accelerator"`  // accelerator name
-	NumReplicas  int     `json:"numReplicas"`  // number of replicas
-	MaxBatch     int     `json:"maxBatch"`     // max batch size
-	Cost         float32 `json:"cost"`         // cost of allocation
-	ITLAverage   float32 `json:"itlAverage"`   // average ITL
-	WaitAverage  float32 `json:"waitAverage"`  // average wait time
+	Accelerator string         `json:"accelerator"` // accelerator name
+	NumReplicas int            `json:"numReplicas"` // number of replicas
+	MaxBatch    int            `json:"maxBatch"`    // max batch size
+	Cost        float32        `json:"cost"`        // cost of allocation
+	ITLAverage  float32        `json:"itlAverage"`  // average ITL
+	WaitAverage float32        `json:"waitAverage"` // average wait time
+	Load        ServerLoadSpec `json:"load"`        // server load statistics
 }

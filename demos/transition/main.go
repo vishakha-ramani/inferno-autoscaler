@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"os"
 
+	"github.ibm.com/tantawi/inferno/pkg/config"
 	core "github.ibm.com/tantawi/inferno/pkg/core"
 	"github.ibm.com/tantawi/inferno/pkg/manager"
 	"github.ibm.com/tantawi/inferno/pkg/solver"
@@ -76,21 +77,29 @@ func main() {
 		}
 
 		factorA := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-		arv := load.ArrivalRate() * (1 + factorA)
-		if arv <= 0 {
-			arv = 1
+		newArv := load.ArrivalRate * (1 + factorA)
+		if newArv <= 0 {
+			newArv = 1
 		}
-		load.SetArrivalRate(arv)
 
 		factorB := 2 * (rand.Float32() - 0.5) * (1 - alpha)
-		avl := int(math.Ceil(float64(float32(load.AvgLength()) * (1 + factorB))))
-		if avl <= 0 {
-			avl = 1
+		newLength := int(math.Ceil(float64(float32(load.AvgLength) * (1 + factorB))))
+		if newLength <= 0 {
+			newLength = 1
 		}
-		load.SetAvgLength(avl)
+		newLoad := config.ServerLoadSpec{
+			ArrivalRate: newArv,
+			AvgLength:   newLength,
+			ArrivalCOV:  load.ArrivalCOV,
+			ServiceCOV:  load.ServiceCOV,
+		}
+		server.SetLoad(&newLoad)
+		if curAllocation := server.CurAllocation(); curAllocation != nil {
+			server.SetCurAllocation(server.Allocation().Clone())
+		}
 
 		// fmt.Printf("s=%s, rate=%v, tokens=%d \n",
-		// 	server.GetName(), load.GetArrivalRate(), load.GetAvgLength())
+		// 	server.Name(), load.ArrivalRate, load.AvgLength)
 	}
 
 	system.Calculate()

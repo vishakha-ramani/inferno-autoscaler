@@ -33,7 +33,7 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 		acc *Accelerator
 
 		server *Server
-		load   *ServerLoad
+		load   *config.ServerLoadSpec
 
 		model *Model
 		perf  *config.ModelAcceleratorPerfData
@@ -73,7 +73,7 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	}
 
 	// calculate max batch size (N) based on average request length (K)
-	K := load.avgLength
+	K := load.AvgLength
 	N := perf.MaxBatchSize * perf.AtTokens / K
 	if N < 1 {
 		N = 1
@@ -123,7 +123,7 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	lambdaStar := float32(math.Min(float64(lambdaStarService), float64(lambdaStarWait)))
 
 	// calculate number of replicas
-	totalLambda := load.arrivalRate / 60 / 1000
+	totalLambda := load.ArrivalRate / 60 / 1000
 	numReplicas := int(math.Ceil(float64(totalLambda) / float64(lambdaStar)))
 
 	// calculate cost
@@ -173,7 +173,7 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 		acc *Accelerator
 
 		server *Server
-		load   *ServerLoad
+		load   *config.ServerLoadSpec
 
 		model *Model
 		perf  *config.ModelAcceleratorPerfData
@@ -212,9 +212,9 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 		return nil
 	}
 
-	gamma := ((load.arrivalCOV * load.arrivalCOV) + (load.serviceCOV * load.serviceCOV)) / 2
+	gamma := ((load.ArrivalCOV * load.ArrivalCOV) + (load.ServiceCOV * load.ServiceCOV)) / 2
 
-	K := load.avgLength
+	K := load.AvgLength
 	N := perf.MaxBatchSize * perf.AtTokens / K
 	if N < 1 {
 		N = 1
@@ -231,10 +231,10 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 	xStar := float32(perf.MaxBatchSize) * waitTimeLimit / (float32(K) * servTime * gamma)
 	rhoStar := xStar / (1 + xStar)
 	lambdaStar := rhoStar / (float32(K) * servTime)
-	numReplicas := int(math.Ceil(float64(load.arrivalRate) / (float64(lambdaStar) * 60 * 1000)))
+	numReplicas := int(math.Ceil(float64(load.ArrivalRate) / (float64(lambdaStar) * 60 * 1000)))
 	cost := acc.Cost() * float32(model.NumInstances(gName)*numReplicas*acc.Multiplicity())
 
-	rho := load.arrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
+	rho := load.ArrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
 	x := rho / (1 - rho)
 	wait := (float32(K) * servTime) * gamma * x / float32(perf.MaxBatchSize)
 
@@ -248,7 +248,7 @@ func (a *Allocation) Scale(serverName string) (alloc *Allocation, inc int) {
 	var (
 		acc    *Accelerator
 		server *Server
-		load   *ServerLoad
+		load   *config.ServerLoadSpec
 	)
 
 	// get server info
@@ -333,6 +333,28 @@ func (a *Allocation) Clone() *Allocation {
 		rho:         a.rho,
 
 		maxArrvRatePerReplica: a.maxArrvRatePerReplica,
+	}
+}
+
+func (a *Allocation) AllocationData() *config.AllocationData {
+	return &config.AllocationData{
+		Accelerator: a.accelerator,
+		NumReplicas: a.numReplicas,
+		MaxBatch:    a.batchSize,
+		Cost:        a.cost,
+		ITLAverage:  a.servTime,
+		WaitAverage: a.waitTime,
+	}
+}
+
+func AllocationFromData(data *config.AllocationData) *Allocation {
+	return &Allocation{
+		accelerator: data.Accelerator,
+		numReplicas: data.NumReplicas,
+		batchSize:   data.MaxBatch,
+		cost:        data.Cost,
+		servTime:    data.ITLAverage,
+		waitTime:    data.WaitAverage,
 	}
 }
 

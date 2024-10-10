@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.ibm.com/tantawi/inferno/pkg/config"
 	core "github.ibm.com/tantawi/inferno/pkg/core"
 	"github.ibm.com/tantawi/inferno/pkg/manager"
 	"github.ibm.com/tantawi/inferno/pkg/solver"
@@ -61,7 +62,7 @@ func main() {
 	system.Calculate()
 	manager.Optimize()
 
-	serverName := "Premium/llama3_8b"
+	serverName := "Premium-llama3_8b"
 
 	server := system.Server(serverName)
 	if server == nil {
@@ -80,8 +81,15 @@ func main() {
 		return
 	}
 	fmt.Println("AllocBefore: ", allocBefore)
-	load.SetArrivalRate(load.ArrivalRate() * 2.5)
-	load.SetAvgLength(int(float32(load.AvgLength()) * 1.5))
+	newArv := load.ArrivalRate * 2.5
+	newLength := int(float32(load.AvgLength) * 1.5)
+	newLoad := config.ServerLoadSpec{
+		ArrivalRate: newArv,
+		AvgLength:   newLength,
+		ArrivalCOV:  load.ArrivalCOV,
+		ServiceCOV:  load.ServiceCOV,
+	}
+	server.SetLoad(&newLoad)
 
 	// scale allocation
 	allocAfter, inc := allocBefore.Scale(serverName)

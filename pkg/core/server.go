@@ -13,7 +13,7 @@ type Server struct {
 	modelName        string
 
 	// server load statistics
-	load *ServerLoad
+	load *config.ServerLoadSpec
 
 	// for all accelerators
 	allAllocations map[string]*Allocation
@@ -21,47 +21,21 @@ type Server struct {
 	// allocated solution
 	allocation *Allocation
 
+	// current allocation
+	curAllocation *Allocation
+
 	spec *config.ServerSpec
 }
 
-// request arrival and service statistics
-type ServerLoad struct {
-	arrivalRate float32 // req/min
-	avgLength   int     // number of tokens
-	arrivalCOV  float32 // coefficient of variation of inter-request arrival time
-	serviceCOV  float32 // coefficient of variation of request service time
-}
-
-func (ld *ServerLoad) ArrivalRate() float32 {
-	return ld.arrivalRate
-}
-
-func (ld *ServerLoad) SetArrivalRate(a float32) {
-	ld.arrivalRate = a
-}
-
-func (ld *ServerLoad) AvgLength() int {
-	return ld.avgLength
-}
-
-func (ld *ServerLoad) SetAvgLength(l int) {
-	ld.avgLength = l
-}
-
 func NewServerFromSpec(spec *config.ServerSpec) *Server {
-	ld := &ServerLoad{
-		arrivalRate: spec.ArrivalRate,
-		avgLength:   spec.AvgLength,
-		arrivalCOV:  spec.ArrivalCOV,
-		serviceCOV:  spec.ServiceCOV,
-	}
+	ld := spec.CurrentAlloc.Load
 	return &Server{
 		name:             spec.Name,
 		serviceClassName: spec.Class,
 		modelName:        spec.Model,
-		load:             ld,
+		load:             &ld,
 		allAllocations:   map[string]*Allocation{},
-		allocation:       nil,
+		curAllocation:    AllocationFromData(&spec.CurrentAlloc),
 		spec:             spec,
 	}
 }
@@ -71,8 +45,8 @@ func (s *Server) Calculate(accelerators map[string]*Accelerator) {
 	s.allAllocations = make(map[string]*Allocation)
 	for _, g := range accelerators {
 		if alloc := CreateAllocation(s.name, g.Name()); alloc != nil {
-			if curAlloc := s.allocation; curAlloc != nil {
-				penalty := curAlloc.TransitionPenalty(alloc)
+			if s.curAllocation != nil {
+				penalty := s.curAllocation.TransitionPenalty(alloc)
 				alloc.SetValue(penalty)
 			}
 			s.allAllocations[g.Name()] = alloc
@@ -92,8 +66,12 @@ func (s *Server) ModelName() string {
 	return s.modelName
 }
 
-func (s *Server) Load() *ServerLoad {
+func (s *Server) Load() *config.ServerLoadSpec {
 	return s.load
+}
+
+func (s *Server) SetLoad(load *config.ServerLoadSpec) {
+	s.load = load
 }
 
 func (s *Server) Allocation() *Allocation {
@@ -102,10 +80,19 @@ func (s *Server) Allocation() *Allocation {
 
 func (s *Server) SetAllocation(alloc *Allocation) {
 	s.allocation = alloc
+	s.UpdateDesiredAlloc()
 }
 
 func (s *Server) RemoveAllocation() {
 	s.allocation = nil
+}
+
+func (s *Server) CurAllocation() *Allocation {
+	return s.curAllocation
+}
+
+func (s *Server) SetCurAllocation(curAllocation *Allocation) {
+	s.curAllocation = curAllocation
 }
 
 func (s *Server) AllAllocations() map[string]*Allocation {
@@ -114,6 +101,21 @@ func (s *Server) AllAllocations() map[string]*Allocation {
 
 func (s *Server) Spec() *config.ServerSpec {
 	return s.spec
+}
+
+func (s *Server) UpdateDesiredAlloc() {
+	if s.allocation != nil {
+		s.spec.DesiredAlloc = *s.allocation.AllocationData()
+		s.spec.DesiredAlloc.Load = *s.load
+	} else {
+		s.spec.DesiredAlloc = config.AllocationData{}
+	}
+}
+
+func (s *Server) ApplyDesiredAlloc() {
+	s.spec.CurrentAlloc = s.spec.DesiredAlloc
+	s.curAllocation = AllocationFromData(&s.spec.CurrentAlloc)
+	s.load = &s.spec.CurrentAlloc.Load
 }
 
 func (s *Server) String() string {

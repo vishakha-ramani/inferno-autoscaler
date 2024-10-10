@@ -1,274 +1,382 @@
 {
     "spec": {
         "Bronze-granite_13b": {
-            "serviceClass": "Bronze",
-            "model": "granite_13b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 23,
             "itlAverage": 20.318785,
-            "waitAverage": 6.7773438
+            "waitAverage": 6.7773438,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-granite_20b": {
-            "serviceClass": "Bronze",
-            "model": "granite_20b",
-            "accelerator": "G2",
-            "numReplicas": 2,
+            "accelerator": "2xG2",
+            "numReplicas": 1,
             "maxBatch": 14,
             "cost": 46,
-            "itlAverage": 27.613647,
-            "waitAverage": 15.21875
+            "itlAverage": 20.189974,
+            "waitAverage": 269.80273,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-granite_34b": {
-            "serviceClass": "Bronze",
-            "model": "granite_34b",
             "accelerator": "MI300X",
             "numReplicas": 2,
             "maxBatch": 14,
             "cost": 130,
             "itlAverage": 19.978321,
-            "waitAverage": 0.49023438
+            "waitAverage": 0.49023438,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-llama3_8b": {
-            "serviceClass": "Bronze",
-            "model": "llama3_8b",
-            "accelerator": "G2",
-            "numReplicas": 2,
+            "accelerator": "2xG2",
+            "numReplicas": 1,
             "maxBatch": 9,
             "cost": 46,
-            "itlAverage": 12.5256,
-            "waitAverage": 7.3759766
+            "itlAverage": 9.280935,
+            "waitAverage": 65.663086,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-llama_13b": {
-            "serviceClass": "Bronze",
-            "model": "llama_13b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 23,
             "itlAverage": 24.949406,
-            "waitAverage": 137.84766
+            "waitAverage": 137.84766,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-llama_70b": {
-            "serviceClass": "Bronze",
-            "model": "llama_70b",
             "accelerator": "4xMI250",
             "numReplicas": 2,
             "maxBatch": 16,
             "cost": 368,
             "itlAverage": 19.687296,
-            "waitAverage": 9.683594
+            "waitAverage": 9.683594,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-llama_7b": {
-            "serviceClass": "Bronze",
-            "model": "llama_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 13.117694,
-            "waitAverage": 0
+            "waitAverage": 0,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-mistral_7b": {
-            "serviceClass": "Bronze",
-            "model": "mistral_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 12.32666,
-            "waitAverage": 0
+            "waitAverage": 0,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Bronze-mixtral_8_7b": {
-            "serviceClass": "Bronze",
-            "model": "mixtral_8_7b",
             "accelerator": "MI300X",
             "numReplicas": 3,
             "maxBatch": 9,
             "cost": 195,
             "itlAverage": 19.456348,
-            "waitAverage": 72.36133
+            "waitAverage": 72.36133,
+            "load": {
+                "arrivalRate": 24,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-granite_13b": {
-            "serviceClass": "Free",
-            "model": "granite_13b",
             "accelerator": "2xG2",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 46,
             "itlAverage": 15.3451805,
-            "waitAverage": 290.20898
+            "waitAverage": 290.20898,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-granite_20b": {
-            "serviceClass": "Free",
-            "model": "granite_20b",
             "accelerator": "MI300X",
             "numReplicas": 1,
             "maxBatch": 28,
             "cost": 65,
             "itlAverage": 13.536987,
-            "waitAverage": 0.109375
+            "waitAverage": 0.109375,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-granite_34b": {
-            "serviceClass": "Free",
-            "model": "granite_34b",
             "accelerator": "MI300X",
             "numReplicas": 2,
             "maxBatch": 14,
             "cost": 130,
             "itlAverage": 21.39877,
-            "waitAverage": 454.64258
+            "waitAverage": 454.64258,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-llama3_8b": {
-            "serviceClass": "Free",
-            "model": "llama3_8b",
             "accelerator": "MI300X",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 65,
             "itlAverage": 6.221203,
-            "waitAverage": 0.026367188
+            "waitAverage": 0.026367188,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-llama_13b": {
-            "serviceClass": "Free",
-            "model": "llama_13b",
             "accelerator": "G2",
             "numReplicas": 2,
             "maxBatch": 19,
             "cost": 46,
             "itlAverage": 24.949406,
-            "waitAverage": 137.84766
+            "waitAverage": 137.84766,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-llama_70b": {
-            "serviceClass": "Free",
-            "model": "llama_70b",
             "accelerator": "4xMI250",
             "numReplicas": 3,
             "maxBatch": 16,
             "cost": 552,
             "itlAverage": 26.883633,
-            "waitAverage": 610.16406
+            "waitAverage": 610.16406,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-llama_7b": {
-            "serviceClass": "Free",
-            "model": "llama_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 18.150286,
-            "waitAverage": 0.5644531
+            "waitAverage": 0.5644531,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-mistral_7b": {
-            "serviceClass": "Free",
-            "model": "mistral_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 14.706046,
-            "waitAverage": 0.0009765625
+            "waitAverage": 0.0009765625,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Free-mixtral_8_7b": {
-            "serviceClass": "Free",
-            "model": "mixtral_8_7b",
             "accelerator": "MI300X",
             "numReplicas": 5,
             "maxBatch": 9,
             "cost": 325,
             "itlAverage": 21.277634,
-            "waitAverage": 320.4746
+            "waitAverage": 320.4746,
+            "load": {
+                "arrivalRate": 48,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-granite_13b": {
-            "serviceClass": "Premium",
-            "model": "granite_13b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 23,
             "itlAverage": 18.799013,
-            "waitAverage": 0
+            "waitAverage": 0,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-granite_20b": {
-            "serviceClass": "Premium",
-            "model": "granite_20b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 14,
             "cost": 23,
             "itlAverage": 27.613647,
-            "waitAverage": 15.21875
+            "waitAverage": 15.21875,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-granite_34b": {
-            "serviceClass": "Premium",
-            "model": "granite_34b",
             "accelerator": "MI300X",
             "numReplicas": 1,
             "maxBatch": 14,
             "cost": 65,
             "itlAverage": 19.978321,
-            "waitAverage": 0.49023438
+            "waitAverage": 0.49023438,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-llama3_8b": {
-            "serviceClass": "Premium",
-            "model": "llama3_8b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 9,
             "cost": 23,
             "itlAverage": 12.5256,
-            "waitAverage": 7.3759766
+            "waitAverage": 7.3759766,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-llama_13b": {
-            "serviceClass": "Premium",
-            "model": "llama_13b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 19,
             "cost": 23,
             "itlAverage": 20.587986,
-            "waitAverage": 0.00390625
+            "waitAverage": 0.00390625,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-llama_70b": {
-            "serviceClass": "Premium",
-            "model": "llama_70b",
             "accelerator": "4xMI250",
             "numReplicas": 1,
             "maxBatch": 16,
             "cost": 184,
             "itlAverage": 19.687296,
-            "waitAverage": 9.683594
+            "waitAverage": 9.683594,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-llama_7b": {
-            "serviceClass": "Premium",
-            "model": "llama_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 11.520478,
-            "waitAverage": 0
+            "waitAverage": 0,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-mistral_7b": {
-            "serviceClass": "Premium",
-            "model": "mistral_7b",
             "accelerator": "G2",
             "numReplicas": 1,
             "maxBatch": 38,
             "cost": 23,
             "itlAverage": 11.40409,
-            "waitAverage": 0
+            "waitAverage": 0,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         },
         "Premium-mixtral_8_7b": {
-            "serviceClass": "Premium",
-            "model": "mixtral_8_7b",
             "accelerator": "MI300X",
             "numReplicas": 2,
             "maxBatch": 9,
             "cost": 130,
             "itlAverage": 17.519691,
-            "waitAverage": 6.7460938
+            "waitAverage": 6.7460938,
+            "load": {
+                "arrivalRate": 12,
+                "avgLength": 1024,
+                "arrivalCOV": 1.5,
+                "serviceCOV": 1.5
+            }
         }
     }
 }

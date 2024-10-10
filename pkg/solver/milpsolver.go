@@ -137,7 +137,7 @@ func (v *MILPSolver) preProcess() {
 			if load == nil {
 				continue
 			}
-			v.arrivalRates[i] = float64(load.ArrivalRate() / 60 / 1000)
+			v.arrivalRates[i] = float64(load.ArrivalRate / 60 / 1000)
 			m := modelMap[srv.ModelName()]
 			for accName, j := range v.accIndex {
 				//acc := accMap[accName]

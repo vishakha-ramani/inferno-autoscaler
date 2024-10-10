@@ -323,17 +323,10 @@ func (s *System) GenerateSolution() *config.AllocationSolution {
 		if serverAlloc == nil {
 			continue
 		}
-		allocData := config.AllocationData{
-			ServiceClass: server.ServiceClassName(),
-			Model:        server.ModelName(),
-			Accelerator:  serverAlloc.accelerator,
-			NumReplicas:  serverAlloc.numReplicas,
-			MaxBatch:     serverAlloc.batchSize,
-			Cost:         serverAlloc.cost,
-			ITLAverage:   serverAlloc.servTime,
-			WaitAverage:  serverAlloc.waitTime,
-		}
-		allocationSolution.Spec[serverName] = allocData
+		load := server.Load()
+		allocData := serverAlloc.AllocationData()
+		allocData.Load = *load
+		allocationSolution.Spec[serverName] = *allocData
 	}
 	s.allocationSolution = &allocationSolution
 	return &allocationSolution
@@ -385,8 +378,8 @@ func (s *System) String() string {
 			continue
 		}
 		totalCost += alloc.cost
-		rate := load.arrivalRate
-		tokens := load.avgLength
+		rate := load.ArrivalRate
+		tokens := load.AvgLength
 		fmt.Fprintf(&b, "c=%s; m=%s; rate=%v; tk=%d; sol=%d, alloc=%v; ", srvClassName, modelName, rate, tokens, len(server.allAllocations), alloc)
 		fmt.Fprintf(&b, "slo-itl=%v, slo-ttw=%v \n", target.ITL, target.TTW)
 	}

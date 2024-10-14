@@ -46,20 +46,14 @@ type AcceleratorCount struct {
 
 // Data related to a Model
 type ModelData struct {
-	Spec     []ModelSpec                `json:"spec"`
 	PerfData []ModelAcceleratorPerfData `json:"perfData"` // performance data for model on accelerators
-}
-
-// Specifications for model data
-type ModelSpec struct {
-	Name    string `json:"name"`    // name of model
-	MemSize int    `json:"memSize"` // GB
 }
 
 // Specifications for a combination of a model and accelerator data
 type ModelAcceleratorPerfData struct {
 	Name         string  `json:"name"`         // model name
 	Acc          string  `json:"acc"`          // accelerator name
+	AccCount     int     `json:"accCount"`     // number of accelerator units used by model
 	Alpha        float32 `json:"alpha"`        // alpha parameter of ITL
 	Beta         float32 `json:"beta"`         // beta parameter of ITL
 	MaxBatchSize int     `json:"maxBatchSize"` // max batch size based on average number of tokens per request

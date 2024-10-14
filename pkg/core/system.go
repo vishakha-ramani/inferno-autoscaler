@@ -123,20 +123,22 @@ func (s *System) SetModelsFromData(byteValue []byte) error {
 	if err := json.Unmarshal(byteValue, &d); err != nil {
 		return err
 	}
-	for _, v := range d.Spec {
-		s.AddModelFromSpec(v)
-	}
 	for _, pd := range d.PerfData {
-		if m := s.models[pd.Name]; m != nil {
-			m.AddPerfDataFromSpec(&pd)
+		modelName := pd.Name
+		var model *Model
+		if model = s.models[modelName]; model == nil {
+			model = s.AddModel(modelName)
 		}
+		model.AddPerfDataFromSpec(&pd)
 	}
 	return nil
 }
 
 // Add a model (replace if already exists)
-func (s *System) AddModelFromSpec(spec config.ModelSpec) {
-	s.models[spec.Name] = NewModelFromSpec(&spec)
+func (s *System) AddModel(name string) *Model {
+	model := NewModel(name)
+	s.models[name] = model
+	return model
 }
 
 // Remove a model

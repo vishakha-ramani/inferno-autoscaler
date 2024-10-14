@@ -69,7 +69,7 @@ func main() {
 
 	router.GET("/getModels", getModels)
 	router.GET("/getModel/:name", getModel)
-	router.POST("/addModel", addModel)
+	router.GET("/addModel/:name", addModel)
 	router.GET("/removeModel/:name", removeModel)
 
 	router.GET("/getServiceClasses", getServiceClasses)
@@ -200,13 +200,13 @@ func removeCapacity(c *gin.Context) {
 
 func getModels(c *gin.Context) {
 	modelMap := system.Models()
-	models := make([]config.ModelSpec, len(modelMap))
+	modelNames := make([]string, len(modelMap))
 	i := 0
 	for _, model := range modelMap {
-		models[i] = *model.Spec()
+		modelNames[i] = model.Name()
 		i++
 	}
-	c.IndentedJSON(http.StatusOK, models)
+	c.IndentedJSON(http.StatusOK, modelNames)
 }
 
 func getModel(c *gin.Context) {
@@ -220,22 +220,18 @@ func getModel(c *gin.Context) {
 }
 
 func addModel(c *gin.Context) {
-	var model config.ModelSpec
-	if err := c.BindJSON(&model); err != nil {
-		return
-	}
-	system.AddModelFromSpec(model)
-	c.IndentedJSON(http.StatusOK, model)
+	name := c.Param("name")
+	system.AddModel(name)
+	c.IndentedJSON(http.StatusOK, name)
 }
 
 func removeModel(c *gin.Context) {
 	name := c.Param("name")
-	model := system.Model(name)
 	if err := system.RemoveModel(name); err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, model.Spec())
+	c.IndentedJSON(http.StatusOK, name)
 }
 
 func getServiceClasses(c *gin.Context) {

@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"math"
 
 	"github.ibm.com/tantawi/inferno/pkg/config"
 )
@@ -10,7 +9,6 @@ import (
 // An inference model
 type Model struct {
 	name string
-	spec *config.ModelSpec
 
 	// model performance data for specified accelerators
 	perfData map[string]*config.ModelAcceleratorPerfData
@@ -19,10 +17,9 @@ type Model struct {
 	numInstances map[string]int
 }
 
-func NewModelFromSpec(spec *config.ModelSpec) *Model {
+func NewModel(name string) *Model {
 	return &Model{
-		name:         spec.Name,
-		spec:         spec,
+		name:         name,
 		perfData:     make(map[string]*config.ModelAcceleratorPerfData),
 		numInstances: make(map[string]int),
 	}
@@ -30,19 +27,11 @@ func NewModelFromSpec(spec *config.ModelSpec) *Model {
 
 // Calculate basic parameters
 func (m *Model) Calculate(accelerators map[string]*Accelerator) {
-	for gName := range m.perfData {
-		if g, exists := accelerators[gName]; exists {
-			m.numInstances[gName] = int(math.Ceil(float64(m.spec.MemSize) / float64(g.MemSize())))
-		}
-	}
+	// add any operations here
 }
 
 func (m *Model) Name() string {
 	return m.name
-}
-
-func (m *Model) Spec() *config.ModelSpec {
-	return m.spec
 }
 
 func (m *Model) NumInstances(acceleratorName string) int {
@@ -56,6 +45,11 @@ func (m *Model) PerfData(acceleratorName string) *config.ModelAcceleratorPerfDat
 func (m *Model) AddPerfDataFromSpec(spec *config.ModelAcceleratorPerfData) {
 	if spec.Name == m.name {
 		m.perfData[spec.Acc] = spec
+		var count int
+		if count = spec.AccCount; count <= 0 {
+			count = 1
+		}
+		m.numInstances[spec.Acc] = count
 	}
 }
 
@@ -63,7 +57,19 @@ func (m *Model) RemovePerfData(accName string) {
 	delete(m.perfData, accName)
 }
 
+func (m *Model) Spec() *config.ModelData {
+	md := &config.ModelData{
+		PerfData: make([]config.ModelAcceleratorPerfData, len(m.perfData)),
+	}
+	i := 0
+	for _, pd := range m.perfData {
+		md.PerfData[i] = *pd
+		i++
+	}
+	return md
+}
+
 func (m *Model) String() string {
-	return fmt.Sprintf("Model: name=%s; memSize=%d",
-		m.spec.Name, m.spec.MemSize)
+	return fmt.Sprintf("Model: name=%s; numInstances=%v",
+		m.name, m.numInstances)
 }

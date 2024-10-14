@@ -18,7 +18,7 @@
             "accelerator": "G2",
             "numReplicas": 32,
             "maxBatch": 7,
-            "cost": 1472,
+            "cost": 736,
             "itlAverage": 43.17973,
             "waitAverage": 324.78516,
             "load": {
@@ -46,7 +46,7 @@
             "accelerator": "G2",
             "numReplicas": 134,
             "maxBatch": 3,
-            "cost": 9246,
+            "cost": 6164,
             "itlAverage": 31.448805,
             "waitAverage": 331.9746,
             "load": {
@@ -88,7 +88,7 @@
             "accelerator": "G2",
             "numReplicas": 57,
             "maxBatch": 7,
-            "cost": 2622,
+            "cost": 1311,
             "itlAverage": 43.407078,
             "waitAverage": 621.75,
             "load": {
@@ -116,7 +116,7 @@
             "accelerator": "G2",
             "numReplicas": 214,
             "maxBatch": 3,
-            "cost": 14766,
+            "cost": 9844,
             "itlAverage": 32.145664,
             "waitAverage": 659.4375,
             "load": {
@@ -158,7 +158,7 @@
             "accelerator": "G2",
             "numReplicas": 18,
             "maxBatch": 7,
-            "cost": 828,
+            "cost": 414,
             "itlAverage": 42.971577,
             "waitAverage": 166.47656,
             "load": {
@@ -186,7 +186,7 @@
             "accelerator": "G2",
             "numReplicas": 85,
             "maxBatch": 3,
-            "cost": 5865,
+            "cost": 3910,
             "itlAverage": 30.862234,
             "waitAverage": 161.66992,
             "load": {

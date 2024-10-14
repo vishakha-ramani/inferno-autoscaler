@@ -21,7 +21,7 @@ func main() {
 	//	1D: models
 	//	2D: accelerators x models
 
-	memSize := []int{39, 60, 102, 21, 39, 72, 210, 21, 168}
+	// memSize := []int{39, 60, 102, 21, 39, 72, 210, 21, 168}
 
 	alpha := [][]float32{
 		{205.80, 297.80, 487.70, 116.90, 201.30, 129.30, 274.10, 123.20, 296.30},
@@ -95,25 +95,45 @@ func main() {
 		{204, 153, 76, 409, 204, 102, 32, 409, 51},
 	}
 
+	count := [][]int{
+		{1, 1, 1, 1, 1, 1, 2, 1, 2},
+		{2, 4, 4, 1, 2, 4, 8, 1, 8},
+		{1, 2, 4, 1, 1, 2, 4, 1, 4},
+		{1, 1, 2, 1, 1, 2, 4, 1, 4},
+		{1, 1, 2, 1, 1, 1, 4, 1, 4},
+		{1, 1, 2, 1, 1, 1, 4, 1, 2},
+		{1, 1, 1, 1, 1, 1, 2, 1, 2},
+		{1, 1, 2, 1, 1, 1, 4, 1, 4},
+		{1, 1, 1, 1, 1, 1, 2, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 2, 1, 2},
+		{1, 1, 1, 1, 1, 1, 2, 1, 2},
+		{1, 1, 1, 1, 1, 1, 2, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 2, 1, 2},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+	}
+
 	atTokens := 512
 
 	// create data structures
 	numAcc := len(aNames)
 	numModels := len(mNames)
 	models := config.ModelData{
-		Spec:     make([]config.ModelSpec, numModels),
 		PerfData: make([]config.ModelAcceleratorPerfData, numModels*numAcc),
 	}
 	k := 0
 	for i, n := range mNames {
-		m := config.ModelSpec{
-			Name:    n,
-			MemSize: memSize[i],
-		}
 		for j, a := range aNames {
 			pd := config.ModelAcceleratorPerfData{
 				Name:         n,
 				Acc:          a,
+				AccCount:     count[j][i],
 				Alpha:        alpha[j][i],
 				Beta:         beta[j][i],
 				MaxBatchSize: maxBatchSize[j][i],
@@ -122,7 +142,6 @@ func main() {
 			models.PerfData[k] = pd
 			k++
 		}
-		models.Spec[i] = m
 	}
 
 	// generate json

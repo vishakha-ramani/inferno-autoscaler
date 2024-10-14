@@ -1,46 +1,9 @@
 {
-  "spec": [
-    {
-      "name": "granite_13b",
-      "memSize": 39
-    },
-    {
-      "name": "granite_20b",
-      "memSize": 60
-    },
-    {
-      "name": "granite_34b",
-      "memSize": 102
-    },
-    {
-      "name": "llama_7b",
-      "memSize": 21
-    },
-    {
-      "name": "llama_13b",
-      "memSize": 39
-    },
-    {
-      "name": "llama3_8b",
-      "memSize": 72
-    },
-    {
-      "name": "llama_70b",
-      "memSize": 210
-    },
-    {
-      "name": "mistral_7b",
-      "memSize": 21
-    },
-    {
-      "name": "mixtral_8_7b",
-      "memSize": 168
-    }
-  ],
   "perfData": [
     {
       "name": "granite_13b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 205.8,
       "beta": 4.1,
       "maxBatchSize": 51,
@@ -49,6 +12,7 @@
     {
       "name": "granite_13b",
       "acc": "L4",
+      "accCount": 2,
       "alpha": 137.2,
       "beta": 2.73,
       "maxBatchSize": 9,
@@ -57,6 +21,7 @@
     {
       "name": "granite_13b",
       "acc": "L40S",
+      "accCount": 1,
       "alpha": 47.86,
       "beta": 0.95,
       "maxBatchSize": 19,
@@ -65,6 +30,7 @@
     {
       "name": "granite_13b",
       "acc": "MI210",
+      "accCount": 1,
       "alpha": 25.1,
       "beta": 0.5,
       "maxBatchSize": 25,
@@ -73,6 +39,7 @@
     {
       "name": "granite_13b",
       "acc": "A100",
+      "accCount": 1,
       "alpha": 20.58,
       "beta": 0.41,
       "maxBatchSize": 32,
@@ -81,6 +48,7 @@
     {
       "name": "granite_13b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 17.15,
       "beta": 0.34,
       "maxBatchSize": 38,
@@ -89,6 +57,7 @@
     {
       "name": "granite_13b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 12.86,
       "beta": 0.26,
       "maxBatchSize": 51,
@@ -97,6 +66,7 @@
     {
       "name": "granite_13b",
       "acc": "H100",
+      "accCount": 1,
       "alpha": 12.25,
       "beta": 0.24,
       "maxBatchSize": 32,
@@ -105,6 +75,7 @@
     {
       "name": "granite_13b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 7.77,
       "beta": 0.15,
       "maxBatchSize": 76,
@@ -113,6 +84,7 @@
     {
       "name": "granite_13b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 147,
       "beta": 2.93,
       "maxBatchSize": 51,
@@ -121,6 +93,7 @@
     {
       "name": "granite_13b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 17.74,
       "beta": 0.35,
       "maxBatchSize": 25,
@@ -129,6 +102,7 @@
     {
       "name": "granite_13b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 14.6,
       "beta": 0.29,
       "maxBatchSize": 32,
@@ -137,6 +111,7 @@
     {
       "name": "granite_13b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 12.11,
       "beta": 0.24,
       "maxBatchSize": 38,
@@ -145,6 +120,7 @@
     {
       "name": "granite_13b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 9.11,
       "beta": 0.18,
       "maxBatchSize": 51,
@@ -153,6 +129,7 @@
     {
       "name": "granite_13b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 8.65,
       "beta": 0.17,
       "maxBatchSize": 32,
@@ -161,6 +138,7 @@
     {
       "name": "granite_13b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 5.49,
       "beta": 0.11,
       "maxBatchSize": 76,
@@ -169,6 +147,7 @@
     {
       "name": "granite_13b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 102.9,
       "beta": 2.05,
       "maxBatchSize": 51,
@@ -177,6 +156,7 @@
     {
       "name": "granite_13b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 12.55,
       "beta": 0.25,
       "maxBatchSize": 125,
@@ -185,6 +165,7 @@
     {
       "name": "granite_13b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 10.29,
       "beta": 0.21,
       "maxBatchSize": 32,
@@ -193,6 +174,7 @@
     {
       "name": "granite_13b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 8.58,
       "beta": 0.17,
       "maxBatchSize": 38,
@@ -201,6 +183,7 @@
     {
       "name": "granite_13b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 6.43,
       "beta": 0.13,
       "maxBatchSize": 51,
@@ -209,6 +192,7 @@
     {
       "name": "granite_20b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 297.8,
       "beta": 5,
       "maxBatchSize": 38,
@@ -217,6 +201,7 @@
     {
       "name": "granite_20b",
       "acc": "L4",
+      "accCount": 4,
       "alpha": 198.53,
       "beta": 3.33,
       "maxBatchSize": 7,
@@ -225,6 +210,7 @@
     {
       "name": "granite_20b",
       "acc": "L40S",
+      "accCount": 2,
       "alpha": 69.26,
       "beta": 1.16,
       "maxBatchSize": 14,
@@ -233,6 +219,7 @@
     {
       "name": "granite_20b",
       "acc": "MI210",
+      "accCount": 1,
       "alpha": 36.32,
       "beta": 0.61,
       "maxBatchSize": 19,
@@ -241,6 +228,7 @@
     {
       "name": "granite_20b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 24.82,
       "beta": 0.42,
       "maxBatchSize": 28,
@@ -249,6 +237,7 @@
     {
       "name": "granite_20b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 18.61,
       "beta": 0.31,
       "maxBatchSize": 38,
@@ -257,6 +246,7 @@
     {
       "name": "granite_20b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 11.24,
       "beta": 0.19,
       "maxBatchSize": 57,
@@ -265,6 +255,7 @@
     {
       "name": "granite_20b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 212.71,
       "beta": 3.57,
       "maxBatchSize": 38,
@@ -273,6 +264,7 @@
     {
       "name": "granite_20b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 25.67,
       "beta": 0.43,
       "maxBatchSize": 19,
@@ -281,6 +273,7 @@
     {
       "name": "granite_20b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 29.78,
       "beta": 0.5,
       "maxBatchSize": 24,
@@ -289,6 +282,7 @@
     {
       "name": "granite_20b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 17.52,
       "beta": 0.29,
       "maxBatchSize": 28,
@@ -297,6 +291,7 @@
     {
       "name": "granite_20b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 13.18,
       "beta": 0.22,
       "maxBatchSize": 38,
@@ -305,6 +300,7 @@
     {
       "name": "granite_20b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 17.73,
       "beta": 0.3,
       "maxBatchSize": 24,
@@ -313,6 +309,7 @@
     {
       "name": "granite_20b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 7.94,
       "beta": 0.13,
       "maxBatchSize": 57,
@@ -321,6 +318,7 @@
     {
       "name": "granite_20b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 148.9,
       "beta": 2.5,
       "maxBatchSize": 38,
@@ -329,6 +327,7 @@
     {
       "name": "granite_20b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 18.16,
       "beta": 0.3,
       "maxBatchSize": 19,
@@ -337,6 +336,7 @@
     {
       "name": "granite_20b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 21.12,
       "beta": 0.35,
       "maxBatchSize": 24,
@@ -345,6 +345,7 @@
     {
       "name": "granite_20b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 12.41,
       "beta": 0.21,
       "maxBatchSize": 28,
@@ -353,6 +354,7 @@
     {
       "name": "granite_20b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 9.31,
       "beta": 0.16,
       "maxBatchSize": 38,
@@ -361,6 +363,7 @@
     {
       "name": "granite_34b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 487.7,
       "beta": 8.2,
       "maxBatchSize": 19,
@@ -369,6 +372,7 @@
     {
       "name": "granite_34b",
       "acc": "L4",
+      "accCount": 4,
       "alpha": 325.13,
       "beta": 5.47,
       "maxBatchSize": 3,
@@ -377,6 +381,7 @@
     {
       "name": "granite_34b",
       "acc": "L40S",
+      "accCount": 4,
       "alpha": 113.42,
       "beta": 1.91,
       "maxBatchSize": 7,
@@ -385,6 +390,7 @@
     {
       "name": "granite_34b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 30.48,
       "beta": 0.51,
       "maxBatchSize": 19,
@@ -393,6 +399,7 @@
     {
       "name": "granite_34b",
       "acc": "H100",
+      "accCount": 2,
       "alpha": 20.49,
       "beta": 0.34,
       "maxBatchSize": 12,
@@ -401,6 +408,7 @@
     {
       "name": "granite_34b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 18.4,
       "beta": 0.31,
       "maxBatchSize": 28,
@@ -409,6 +417,7 @@
     {
       "name": "granite_34b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 348.36,
       "beta": 5.86,
       "maxBatchSize": 19,
@@ -417,6 +426,7 @@
     {
       "name": "granite_34b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 59.48,
       "beta": 1,
       "maxBatchSize": 9,
@@ -425,6 +435,7 @@
     {
       "name": "granite_34b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 34.59,
       "beta": 0.58,
       "maxBatchSize": 12,
@@ -433,6 +444,7 @@
     {
       "name": "granite_34b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 28.69,
       "beta": 0.48,
       "maxBatchSize": 14,
@@ -441,6 +453,7 @@
     {
       "name": "granite_34b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 21.58,
       "beta": 0.36,
       "maxBatchSize": 19,
@@ -449,6 +462,7 @@
     {
       "name": "granite_34b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 20.49,
       "beta": 0.34,
       "maxBatchSize": 12,
@@ -457,6 +471,7 @@
     {
       "name": "granite_34b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 13.01,
       "beta": 0.22,
       "maxBatchSize": 28,
@@ -465,6 +480,7 @@
     {
       "name": "granite_34b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 243.85,
       "beta": 4.1,
       "maxBatchSize": 19,
@@ -473,6 +489,7 @@
     {
       "name": "granite_34b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 42.04,
       "beta": 0.71,
       "maxBatchSize": 19,
@@ -481,6 +498,7 @@
     {
       "name": "granite_34b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 24.39,
       "beta": 0.41,
       "maxBatchSize": 12,
@@ -489,6 +507,7 @@
     {
       "name": "granite_34b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 20.32,
       "beta": 0.34,
       "maxBatchSize": 14,
@@ -497,6 +516,7 @@
     {
       "name": "granite_34b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 15.24,
       "beta": 0.26,
       "maxBatchSize": 19,
@@ -505,6 +525,7 @@
     {
       "name": "llama_7b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 116.9,
       "beta": 6.3,
       "maxBatchSize": 102,
@@ -513,6 +534,7 @@
     {
       "name": "llama_7b",
       "acc": "L4",
+      "accCount": 1,
       "alpha": 77.93,
       "beta": 4.2,
       "maxBatchSize": 19,
@@ -521,6 +543,7 @@
     {
       "name": "llama_7b",
       "acc": "L40S",
+      "accCount": 1,
       "alpha": 27.19,
       "beta": 1.47,
       "maxBatchSize": 38,
@@ -529,6 +552,7 @@
     {
       "name": "llama_7b",
       "acc": "MI210",
+      "accCount": 1,
       "alpha": 14.26,
       "beta": 0.77,
       "maxBatchSize": 51,
@@ -537,6 +561,7 @@
     {
       "name": "llama_7b",
       "acc": "A100",
+      "accCount": 1,
       "alpha": 11.69,
       "beta": 0.63,
       "maxBatchSize": 64,
@@ -545,6 +570,7 @@
     {
       "name": "llama_7b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 9.74,
       "beta": 0.53,
       "maxBatchSize": 76,
@@ -553,6 +579,7 @@
     {
       "name": "llama_7b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 7.31,
       "beta": 0.39,
       "maxBatchSize": 102,
@@ -561,6 +588,7 @@
     {
       "name": "llama_7b",
       "acc": "H100",
+      "accCount": 1,
       "alpha": 6.96,
       "beta": 0.38,
       "maxBatchSize": 64,
@@ -569,6 +597,7 @@
     {
       "name": "llama_7b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 4.41,
       "beta": 0.24,
       "maxBatchSize": 153,
@@ -577,6 +606,7 @@
     {
       "name": "llama_7b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 83.5,
       "beta": 4.5,
       "maxBatchSize": 102,
@@ -585,6 +615,7 @@
     {
       "name": "llama_7b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 10.08,
       "beta": 0.54,
       "maxBatchSize": 51,
@@ -593,6 +624,7 @@
     {
       "name": "llama_7b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 8.29,
       "beta": 0.45,
       "maxBatchSize": 64,
@@ -601,6 +633,7 @@
     {
       "name": "llama_7b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 6.88,
       "beta": 0.37,
       "maxBatchSize": 76,
@@ -609,6 +642,7 @@
     {
       "name": "llama_7b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 5.17,
       "beta": 0.28,
       "maxBatchSize": 102,
@@ -617,6 +651,7 @@
     {
       "name": "llama_7b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 4.91,
       "beta": 0.26,
       "maxBatchSize": 64,
@@ -625,6 +660,7 @@
     {
       "name": "llama_7b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 3.12,
       "beta": 0.17,
       "maxBatchSize": 153,
@@ -633,6 +669,7 @@
     {
       "name": "llama_7b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 58.45,
       "beta": 3.15,
       "maxBatchSize": 102,
@@ -641,6 +678,7 @@
     {
       "name": "llama_7b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 7.13,
       "beta": 0.38,
       "maxBatchSize": 51,
@@ -649,6 +687,7 @@
     {
       "name": "llama_7b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 5.85,
       "beta": 0.32,
       "maxBatchSize": 64,
@@ -657,6 +696,7 @@
     {
       "name": "llama_7b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 4.87,
       "beta": 0.26,
       "maxBatchSize": 76,
@@ -665,6 +705,7 @@
     {
       "name": "llama_7b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 3.65,
       "beta": 0.2,
       "maxBatchSize": 102,
@@ -673,6 +714,7 @@
     {
       "name": "llama_13b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 201.3,
       "beta": 8.7,
       "maxBatchSize": 51,
@@ -681,6 +723,7 @@
     {
       "name": "llama_13b",
       "acc": "L4",
+      "accCount": 2,
       "alpha": 134.2,
       "beta": 5.8,
       "maxBatchSize": 9,
@@ -689,6 +732,7 @@
     {
       "name": "llama_13b",
       "acc": "L40S",
+      "accCount": 1,
       "alpha": 46.81,
       "beta": 2.02,
       "maxBatchSize": 19,
@@ -697,6 +741,7 @@
     {
       "name": "llama_13b",
       "acc": "MI210",
+      "accCount": 1,
       "alpha": 24.55,
       "beta": 1.06,
       "maxBatchSize": 25,
@@ -705,6 +750,7 @@
     {
       "name": "llama_13b",
       "acc": "A100",
+      "accCount": 1,
       "alpha": 20.13,
       "beta": 0.87,
       "maxBatchSize": 32,
@@ -713,6 +759,7 @@
     {
       "name": "llama_13b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 16.78,
       "beta": 0.73,
       "maxBatchSize": 38,
@@ -721,6 +768,7 @@
     {
       "name": "llama_13b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 12.58,
       "beta": 0.54,
       "maxBatchSize": 51,
@@ -729,6 +777,7 @@
     {
       "name": "llama_13b",
       "acc": "H100",
+      "accCount": 1,
       "alpha": 11.98,
       "beta": 0.52,
       "maxBatchSize": 32,
@@ -737,6 +786,7 @@
     {
       "name": "llama_13b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 7.6,
       "beta": 0.33,
       "maxBatchSize": 76,
@@ -745,6 +795,7 @@
     {
       "name": "llama_13b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 143.79,
       "beta": 6.21,
       "maxBatchSize": 51,
@@ -753,6 +804,7 @@
     {
       "name": "llama_13b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 17.35,
       "beta": 0.75,
       "maxBatchSize": 25,
@@ -761,6 +813,7 @@
     {
       "name": "llama_13b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 14.28,
       "beta": 0.62,
       "maxBatchSize": 32,
@@ -769,6 +822,7 @@
     {
       "name": "llama_13b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 11.84,
       "beta": 0.51,
       "maxBatchSize": 38,
@@ -777,6 +831,7 @@
     {
       "name": "llama_13b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 8.91,
       "beta": 0.38,
       "maxBatchSize": 51,
@@ -785,6 +840,7 @@
     {
       "name": "llama_13b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 8.46,
       "beta": 0.37,
       "maxBatchSize": 32,
@@ -793,6 +849,7 @@
     {
       "name": "llama_13b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 5.37,
       "beta": 0.23,
       "maxBatchSize": 76,
@@ -801,6 +858,7 @@
     {
       "name": "llama_13b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 100.65,
       "beta": 4.35,
       "maxBatchSize": 51,
@@ -809,6 +867,7 @@
     {
       "name": "llama_13b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 12.27,
       "beta": 0.53,
       "maxBatchSize": 25,
@@ -817,6 +876,7 @@
     {
       "name": "llama_13b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 10.07,
       "beta": 0.44,
       "maxBatchSize": 32,
@@ -825,6 +885,7 @@
     {
       "name": "llama_13b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 8.39,
       "beta": 0.36,
       "maxBatchSize": 38,
@@ -833,6 +894,7 @@
     {
       "name": "llama_13b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 6.29,
       "beta": 0.27,
       "maxBatchSize": 51,
@@ -841,6 +903,7 @@
     {
       "name": "llama3_8b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 129.3,
       "beta": 5.9,
       "maxBatchSize": 25,
@@ -849,6 +912,7 @@
     {
       "name": "llama3_8b",
       "acc": "L4",
+      "accCount": 4,
       "alpha": 86.2,
       "beta": 3.93,
       "maxBatchSize": 4,
@@ -857,6 +921,7 @@
     {
       "name": "llama3_8b",
       "acc": "L40S",
+      "accCount": 2,
       "alpha": 30.07,
       "beta": 1.37,
       "maxBatchSize": 9,
@@ -865,6 +930,7 @@
     {
       "name": "llama3_8b",
       "acc": "A100",
+      "accCount": 1,
       "alpha": 12.93,
       "beta": 0.59,
       "maxBatchSize": 16,
@@ -873,6 +939,7 @@
     {
       "name": "llama3_8b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 10.78,
       "beta": 0.49,
       "maxBatchSize": 19,
@@ -881,6 +948,7 @@
     {
       "name": "llama3_8b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 8.08,
       "beta": 0.37,
       "maxBatchSize": 25,
@@ -889,6 +957,7 @@
     {
       "name": "llama3_8b",
       "acc": "H100",
+      "accCount": 1,
       "alpha": 7.7,
       "beta": 0.35,
       "maxBatchSize": 16,
@@ -897,6 +966,7 @@
     {
       "name": "llama3_8b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 4.88,
       "beta": 0.22,
       "maxBatchSize": 38,
@@ -905,6 +975,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 92.36,
       "beta": 4.21,
       "maxBatchSize": 25,
@@ -913,6 +984,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 15.77,
       "beta": 0.72,
       "maxBatchSize": 12,
@@ -921,6 +993,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 9.17,
       "beta": 0.42,
       "maxBatchSize": 16,
@@ -929,6 +1002,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 7.61,
       "beta": 0.35,
       "maxBatchSize": 19,
@@ -937,6 +1011,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 5.72,
       "beta": 0.26,
       "maxBatchSize": 25,
@@ -945,6 +1020,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 5.43,
       "beta": 0.25,
       "maxBatchSize": 16,
@@ -953,6 +1029,7 @@
     {
       "name": "llama3_8b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 3.45,
       "beta": 0.16,
       "maxBatchSize": 38,
@@ -961,6 +1038,7 @@
     {
       "name": "llama3_8b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 64.65,
       "beta": 2.95,
       "maxBatchSize": 25,
@@ -969,6 +1047,7 @@
     {
       "name": "llama3_8b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 11.15,
       "beta": 0.51,
       "maxBatchSize": 12,
@@ -977,6 +1056,7 @@
     {
       "name": "llama3_8b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 6.47,
       "beta": 0.3,
       "maxBatchSize": 16,
@@ -985,6 +1065,7 @@
     {
       "name": "llama3_8b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 5.39,
       "beta": 0.25,
       "maxBatchSize": 19,
@@ -993,6 +1074,7 @@
     {
       "name": "llama3_8b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 4.04,
       "beta": 0.18,
       "maxBatchSize": 25,
@@ -1001,6 +1083,7 @@
     {
       "name": "llama_70b",
       "acc": "L4",
+      "accCount": 8,
       "alpha": 182.73,
       "beta": 47.13,
       "maxBatchSize": 1,
@@ -1009,6 +1092,7 @@
     {
       "name": "llama_70b",
       "acc": "L40S",
+      "accCount": 4,
       "alpha": 63.74,
       "beta": 16.44,
       "maxBatchSize": 3,
@@ -1017,6 +1101,7 @@
     {
       "name": "llama_70b",
       "acc": "G2",
+      "accCount": 4,
       "alpha": 22.84,
       "beta": 5.89,
       "maxBatchSize": 6,
@@ -1025,6 +1110,7 @@
     {
       "name": "llama_70b",
       "acc": "H100",
+      "accCount": 4,
       "alpha": 16.32,
       "beta": 4.21,
       "maxBatchSize": 5,
@@ -1033,6 +1119,7 @@
     {
       "name": "llama_70b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 274.1,
       "beta": 70.7,
       "maxBatchSize": 8,
@@ -1041,6 +1128,7 @@
     {
       "name": "llama_70b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 17.13,
       "beta": 4.42,
       "maxBatchSize": 8,
@@ -1049,6 +1137,7 @@
     {
       "name": "llama_70b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 10.34,
       "beta": 2.67,
       "maxBatchSize": 12,
@@ -1057,6 +1146,7 @@
     {
       "name": "llama_70b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 195.79,
       "beta": 50.5,
       "maxBatchSize": 8,
@@ -1065,6 +1155,7 @@
     {
       "name": "llama_70b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 33.43,
       "beta": 8.62,
       "maxBatchSize": 4,
@@ -1073,6 +1164,7 @@
     {
       "name": "llama_70b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 27.41,
       "beta": 7.07,
       "maxBatchSize": 5,
@@ -1081,6 +1173,7 @@
     {
       "name": "llama_70b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 16.12,
       "beta": 4.16,
       "maxBatchSize": 6,
@@ -1089,6 +1182,7 @@
     {
       "name": "llama_70b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 8.57,
       "beta": 2.21,
       "maxBatchSize": 32,
@@ -1097,6 +1191,7 @@
     {
       "name": "mistral_7b",
       "acc": "AIU2",
+      "accCount": 1,
       "alpha": 123.2,
       "beta": 4.1,
       "maxBatchSize": 102,
@@ -1105,6 +1200,7 @@
     {
       "name": "mistral_7b",
       "acc": "L4",
+      "accCount": 1,
       "alpha": 82.13,
       "beta": 2.73,
       "maxBatchSize": 19,
@@ -1113,6 +1209,7 @@
     {
       "name": "mistral_7b",
       "acc": "L40S",
+      "accCount": 1,
       "alpha": 28.65,
       "beta": 0.95,
       "maxBatchSize": 38,
@@ -1121,6 +1218,7 @@
     {
       "name": "mistral_7b",
       "acc": "MI210",
+      "accCount": 1,
       "alpha": 15.02,
       "beta": 0.5,
       "maxBatchSize": 51,
@@ -1129,6 +1227,7 @@
     {
       "name": "mistral_7b",
       "acc": "A100",
+      "accCount": 1,
       "alpha": 12.32,
       "beta": 0.41,
       "maxBatchSize": 64,
@@ -1137,6 +1236,7 @@
     {
       "name": "mistral_7b",
       "acc": "G2",
+      "accCount": 1,
       "alpha": 10.27,
       "beta": 0.34,
       "maxBatchSize": 76,
@@ -1145,6 +1245,7 @@
     {
       "name": "mistral_7b",
       "acc": "MI250",
+      "accCount": 1,
       "alpha": 7.7,
       "beta": 0.26,
       "maxBatchSize": 102,
@@ -1153,6 +1254,7 @@
     {
       "name": "mistral_7b",
       "acc": "H100",
+      "accCount": 1,
       "alpha": 7.33,
       "beta": 0.24,
       "maxBatchSize": 64,
@@ -1161,6 +1263,7 @@
     {
       "name": "mistral_7b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 4.65,
       "beta": 0.15,
       "maxBatchSize": 153,
@@ -1169,6 +1272,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 88,
       "beta": 2.93,
       "maxBatchSize": 102,
@@ -1177,6 +1281,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xMI210",
+      "accCount": 1,
       "alpha": 10.62,
       "beta": 0.35,
       "maxBatchSize": 51,
@@ -1185,6 +1290,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xA100",
+      "accCount": 1,
       "alpha": 8.74,
       "beta": 0.29,
       "maxBatchSize": 64,
@@ -1193,6 +1299,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 7.25,
       "beta": 0.24,
       "maxBatchSize": 76,
@@ -1201,6 +1308,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 5.45,
       "beta": 0.18,
       "maxBatchSize": 102,
@@ -1209,6 +1317,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xH100",
+      "accCount": 1,
       "alpha": 5.18,
       "beta": 0.17,
       "maxBatchSize": 64,
@@ -1217,6 +1326,7 @@
     {
       "name": "mistral_7b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 3.29,
       "beta": 0.11,
       "maxBatchSize": 153,
@@ -1225,6 +1335,7 @@
     {
       "name": "mistral_7b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 61.6,
       "beta": 2.05,
       "maxBatchSize": 102,
@@ -1233,6 +1344,7 @@
     {
       "name": "mistral_7b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 7.51,
       "beta": 0.25,
       "maxBatchSize": 51,
@@ -1241,6 +1353,7 @@
     {
       "name": "mistral_7b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 6.16,
       "beta": 0.21,
       "maxBatchSize": 64,
@@ -1249,6 +1362,7 @@
     {
       "name": "mistral_7b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 5.13,
       "beta": 0.17,
       "maxBatchSize": 76,
@@ -1257,6 +1371,7 @@
     {
       "name": "mistral_7b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 3.85,
       "beta": 0.13,
       "maxBatchSize": 102,
@@ -1265,6 +1380,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "L4",
+      "accCount": 8,
       "alpha": 197.53,
       "beta": 40.07,
       "maxBatchSize": 2,
@@ -1273,6 +1389,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "L40S",
+      "accCount": 4,
       "alpha": 68.91,
       "beta": 13.98,
       "maxBatchSize": 4,
@@ -1281,6 +1398,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "MI210",
+      "accCount": 4,
       "alpha": 36.13,
       "beta": 7.33,
       "maxBatchSize": 6,
@@ -1289,6 +1407,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "A100",
+      "accCount": 4,
       "alpha": 29.63,
       "beta": 6.01,
       "maxBatchSize": 8,
@@ -1297,6 +1416,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "H100",
+      "accCount": 4,
       "alpha": 17.64,
       "beta": 3.58,
       "maxBatchSize": 8,
@@ -1305,6 +1425,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "MI300X",
+      "accCount": 1,
       "alpha": 11.18,
       "beta": 2.27,
       "maxBatchSize": 19,
@@ -1313,6 +1434,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xAIU2",
+      "accCount": 1,
       "alpha": 296.3,
       "beta": 60.1,
       "maxBatchSize": 12,
@@ -1321,6 +1443,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xA100",
+      "accCount": 2,
       "alpha": 21.01,
       "beta": 4.26,
       "maxBatchSize": 8,
@@ -1329,6 +1452,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xG2",
+      "accCount": 1,
       "alpha": 24.69,
       "beta": 5.01,
       "maxBatchSize": 9,
@@ -1337,6 +1461,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xMI250",
+      "accCount": 1,
       "alpha": 18.52,
       "beta": 3.76,
       "maxBatchSize": 12,
@@ -1345,6 +1470,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xH100",
+      "accCount": 2,
       "alpha": 12.45,
       "beta": 2.53,
       "maxBatchSize": 8,
@@ -1353,6 +1479,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "2xMI300X",
+      "accCount": 1,
       "alpha": 7.9,
       "beta": 1.6,
       "maxBatchSize": 19,
@@ -1361,6 +1488,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "4xAIU2",
+      "accCount": 1,
       "alpha": 211.64,
       "beta": 42.93,
       "maxBatchSize": 12,
@@ -1369,6 +1497,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "4xMI210",
+      "accCount": 1,
       "alpha": 18.07,
       "beta": 3.66,
       "maxBatchSize": 25,
@@ -1377,6 +1506,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "4xA100",
+      "accCount": 1,
       "alpha": 14.82,
       "beta": 3.01,
       "maxBatchSize": 8,
@@ -1385,6 +1515,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "4xG2",
+      "accCount": 1,
       "alpha": 17.43,
       "beta": 3.54,
       "maxBatchSize": 9,
@@ -1393,6 +1524,7 @@
     {
       "name": "mixtral_8_7b",
       "acc": "4xMI250",
+      "accCount": 1,
       "alpha": 13.11,
       "beta": 2.66,
       "maxBatchSize": 12,

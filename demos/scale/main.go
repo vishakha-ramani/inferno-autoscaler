@@ -5,9 +5,10 @@ import (
 	"os"
 
 	"github.ibm.com/tantawi/inferno/pkg/config"
-	core "github.ibm.com/tantawi/inferno/pkg/core"
+	"github.ibm.com/tantawi/inferno/pkg/core"
 	"github.ibm.com/tantawi/inferno/pkg/manager"
 	"github.ibm.com/tantawi/inferno/pkg/solver"
+	"github.ibm.com/tantawi/inferno/pkg/utils"
 )
 
 func main() {
@@ -28,33 +29,56 @@ func main() {
 	if err_acc != nil {
 		fmt.Println(err_acc)
 	}
-	system.SetAcceleratorsFromData(bytes_acc)
+	if d, err := utils.FromDataToSpec(bytes_acc, config.AcceleratorData{}); err == nil {
+		system.SetAcceleratorsFromSpec(d)
+	} else {
+		fmt.Println(err)
+		return
+	}
 
 	bytes_mod, err_mod := os.ReadFile(fn_mod)
 	if err_mod != nil {
 		fmt.Println(err_mod)
 	}
-	system.SetModelsFromData(bytes_mod)
+	if d, err := utils.FromDataToSpec(bytes_mod, config.ModelData{}); err == nil {
+		system.SetModelsFromSpec(d)
+	} else {
+		fmt.Println(err)
+		return
+	}
 
 	bytes_svc, err_svc := os.ReadFile(fn_svc)
 	if err_svc != nil {
 		fmt.Println(err_svc)
 	}
-	system.SetServiceClassesFromData(bytes_svc)
+	if d, err := utils.FromDataToSpec(bytes_svc, config.ServiceClassData{}); err == nil {
+		system.SetServiceClassesFromSpec(d)
+	} else {
+		fmt.Println(err)
+		return
+	}
 
 	bytes_srv, err_srv := os.ReadFile(fn_srv)
 	if err_srv != nil {
 		fmt.Println(err_srv)
 	}
-	system.SetServersFromData(bytes_srv)
+	if d, err := utils.FromDataToSpec(bytes_srv, config.ServerData{}); err == nil {
+		system.SetServersFromSpec(d)
+	} else {
+		fmt.Println(err)
+		return
+	}
 
+	var optimizer *solver.Optimizer
 	bytes_opt, err_opt := os.ReadFile(fn_opt)
 	if err_opt != nil {
 		fmt.Println(err_acc)
 	}
-	optimizer, err_opt := solver.NewOptimizerFromData(bytes_opt)
-	if err_opt != nil {
-		fmt.Println(err_acc)
+	if d, err := utils.FromDataToSpec(bytes_opt, config.OptimizerData{}); err == nil {
+		optimizer = solver.NewOptimizerFromSpec(&d.Spec)
+	} else {
+		fmt.Println(err)
+		return
 	}
 
 	manager := manager.NewManager(system, optimizer)

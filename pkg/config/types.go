@@ -1,22 +1,23 @@
 package config
 
-// Data related to Optimizer
-type OptimizerData struct {
-	Spec OptimizerSpec `json:"spec"`
+// All data related to the system (accelerators, models, service classes, ...)
+type SystemData struct {
+	Spec SystemSpec `json:"system"`
 }
 
-// Specifications for optimizer data
-type OptimizerSpec struct {
-	Unlimited     bool `json:"unlimited"`     // unlimited number of accelerator types (for capacity planning and/or cloud)
-	Heterogeneous bool `json:"heterogeneous"` // heterogeneous accelerators assigned to same inference server
-	MILPSolver    bool `json:"milpSolver"`    // use MILP solver to optimize
-	UseCplex      bool `json:"useCplex"`      // use CPLEX solver for MILP problem
+// Specifications for system data
+type SystemSpec struct {
+	Accelerators   AcceleratorData  `json:"acceleratorData"`  // accelerator data
+	Models         ModelData        `json:"modelData"`        // model data
+	ServiceClasses ServiceClassData `json:"serviceClassData"` // service class data
+	Servers        ServerData       `json:"serverData"`       // server data
+	Optimizer      OptimizerData    `json:"optimizerData"`    // optimizer data
 }
 
 // Data related to an Accelerator
 type AcceleratorData struct {
-	Spec  []AcceleratorSpec  `json:"spec"`  // accelerator specs
-	Count []AcceleratorCount `json:"count"` // count of accelerator types
+	Spec  []AcceleratorSpec  `json:"accelerators"` // accelerator specs
+	Count []AcceleratorCount `json:"count"`        // count of accelerator types
 }
 
 // Specifications for accelerator data
@@ -46,7 +47,7 @@ type AcceleratorCount struct {
 
 // Data related to a Model
 type ModelData struct {
-	PerfData []ModelAcceleratorPerfData `json:"perfData"` // performance data for model on accelerators
+	PerfData []ModelAcceleratorPerfData `json:"models"` // performance data for model on accelerators
 }
 
 // Specifications for a combination of a model and accelerator data
@@ -60,9 +61,22 @@ type ModelAcceleratorPerfData struct {
 	AtTokens     int     `json:"atTokens"`     // average number of tokens per request assumed in max batch size calculation
 }
 
+// Data related to a service class SLOs
+type ServiceClassData struct {
+	Spec []ServiceClassSpec `json:"serviceClasses"`
+}
+
+// Specifications of SLO data for a combination of a service class and a model
+type ServiceClassSpec struct {
+	Name    string  `json:"name"`    // service class name
+	Model   string  `json:"model"`   // model name
+	SLO_ITL float32 `json:"slo-itl"` // msec
+	SLO_TTW float32 `json:"slo-ttw"` // msec
+}
+
 // Data related to a Server
 type ServerData struct {
-	Spec []ServerSpec `json:"spec"`
+	Spec []ServerSpec `json:"servers"`
 }
 
 // Specifications of a server
@@ -82,21 +96,21 @@ type ServerLoadSpec struct {
 	ServiceCOV  float32 `json:"serviceCOV"`  // coefficient of variation of request service time
 }
 
-// Data related to a service class SLOs
-type ServiceClassData struct {
-	Spec []ServiceClassSpec `json:"spec"`
+// Data related to Optimizer
+type OptimizerData struct {
+	Spec OptimizerSpec `json:"optimizer"`
 }
 
-// Specifications of SLO data for a combination of a service class and a model
-type ServiceClassSpec struct {
-	Name    string  `json:"name"`    // service class name
-	Model   string  `json:"model"`   // model name
-	SLO_ITL float32 `json:"slo-itl"` // msec
-	SLO_TTW float32 `json:"slo-ttw"` // msec
+// Specifications for optimizer data
+type OptimizerSpec struct {
+	Unlimited     bool `json:"unlimited"`     // unlimited number of accelerator types (for capacity planning and/or cloud)
+	Heterogeneous bool `json:"heterogeneous"` // heterogeneous accelerators assigned to same inference server
+	MILPSolver    bool `json:"milpSolver"`    // use MILP solver to optimize
+	UseCplex      bool `json:"useCplex"`      // use CPLEX solver for MILP problem
 }
 
 type AllocationSolution struct {
-	Spec map[string]AllocationData `json:"spec"` // map of server names to allocation data
+	Spec map[string]AllocationData `json:"allocations"` // map of server names to allocation data
 }
 
 // Data about a server allocation

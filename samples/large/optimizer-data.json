@@ -1,5 +1,5 @@
 {
-    "spec": {
+    "optimizer": {
         "unlimited": true,
         "heterogeneous": false,
         "milpsolver" : false,

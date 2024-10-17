@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 
 	"github.ibm.com/tantawi/inferno/pkg/config"
@@ -74,24 +73,28 @@ func NewSystem() *System {
 		servers:        make(map[string]*Server),
 
 		capacity:           make(map[string]int),
-		allocationByType:   map[string]*AllocationByType{},
+		allocationByType:   make(map[string]*AllocationByType),
 		allocationSolution: nil,
 	}
 }
 
-// Set accelerators from data
-func (s *System) SetAcceleratorsFromData(byteValue []byte) error {
-	var d config.AcceleratorData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return err
-	}
+// Set system from spec
+func (s *System) SetFromSpec(d *config.SystemSpec) *config.OptimizerSpec {
+	s.SetAcceleratorsFromSpec(&d.Accelerators)
+	s.SetModelsFromSpec(&d.Models)
+	s.SetServiceClassesFromSpec(&d.ServiceClasses)
+	s.SetServersFromSpec(&d.Servers)
+	return &d.Optimizer.Spec
+}
+
+// Set accelerators from spec
+func (s *System) SetAcceleratorsFromSpec(d *config.AcceleratorData) {
 	for _, v := range d.Spec {
 		s.AddAcceleratorFromSpec(v)
 	}
 	for _, v := range d.Count {
 		s.AddCapacityFromSpec(v)
 	}
-	return nil
 }
 
 // Add an accelerator (replace if already exists)
@@ -117,12 +120,8 @@ func (s *System) AddCapacityFromSpec(spec config.AcceleratorCount) {
 	}
 }
 
-// Set models from data
-func (s *System) SetModelsFromData(byteValue []byte) error {
-	var d config.ModelData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return err
-	}
+// Set models from spec
+func (s *System) SetModelsFromSpec(d *config.ModelData) {
 	for _, pd := range d.PerfData {
 		modelName := pd.Name
 		var model *Model
@@ -131,7 +130,6 @@ func (s *System) SetModelsFromData(byteValue []byte) error {
 		}
 		model.AddPerfDataFromSpec(&pd)
 	}
-	return nil
 }
 
 // Add a model (replace if already exists)
@@ -150,6 +148,13 @@ func (s *System) RemoveModel(name string) error {
 	return nil
 }
 
+// Set servers from spec
+func (s *System) SetServersFromSpec(d *config.ServerData) {
+	for _, v := range d.Spec {
+		s.servers[v.Name] = NewServerFromSpec(&v)
+	}
+}
+
 // Add a server (replace if already exists)
 func (s *System) AddServerFromSpec(spec config.ServerSpec) {
 	s.servers[spec.Name] = NewServerFromSpec(&spec)
@@ -164,12 +169,8 @@ func (s *System) RemoveServer(name string) error {
 	return nil
 }
 
-// Set service classes from data
-func (s *System) SetServiceClassesFromData(byteValue []byte) error {
-	var d config.ServiceClassData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return err
-	}
+// Set service classes from spec
+func (s *System) SetServiceClassesFromSpec(d *config.ServiceClassData) {
 	for _, t := range d.Spec {
 		name := t.Name
 		if _, exists := s.serviceClasses[name]; !exists {
@@ -178,7 +179,6 @@ func (s *System) SetServiceClassesFromData(byteValue []byte) error {
 		svc := s.serviceClasses[name]
 		svc.SetTargetFromSpec(&t)
 	}
-	return nil
 }
 
 // Add a service class (replace if already exists)
@@ -192,18 +192,6 @@ func (s *System) RemoveServiceClass(name string) error {
 		return fmt.Errorf("service class %s not found", name)
 	}
 	delete(s.serviceClasses, name)
-	return nil
-}
-
-// Set servers from data
-func (s *System) SetServersFromData(byteValue []byte) error {
-	var d config.ServerData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return err
-	}
-	for _, v := range d.Spec {
-		s.servers[v.Name] = NewServerFromSpec(&v)
-	}
 	return nil
 }
 
@@ -366,7 +354,7 @@ func (s *System) String() string {
 		srvClassName := server.ServiceClassName()
 		modelName := server.ModelName()
 		load := server.Load()
-		svc := GetServiceClass(srvClassName)
+		svc := s.serviceClasses[srvClassName]
 		if load == nil || svc == nil {
 			continue
 		}

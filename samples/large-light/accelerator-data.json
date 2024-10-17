@@ -1,5 +1,5 @@
 {
-    "spec": [
+    "accelerators": [
         {
             "name": "L4",
             "type": "L4",

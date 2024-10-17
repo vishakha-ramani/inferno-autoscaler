@@ -1,5 +1,5 @@
 {
-    "spec": [
+    "servers": [
         {
             "name": "Premium-llama_13b",
             "class": "Premium",

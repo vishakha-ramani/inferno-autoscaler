@@ -1,5 +1,5 @@
 {
-    "spec": [
+    "serviceClasses": [
         {
             "name": "Premium",
             "model": "llama_13b",

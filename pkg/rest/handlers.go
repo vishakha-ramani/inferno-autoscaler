@@ -1,0 +1,394 @@
+package rest
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/tantawi/inferno/pkg/manager"
+	"github.ibm.com/tantawi/inferno/pkg/solver"
+)
+
+// Handlers for REST API calls
+
+func setAccelerators(c *gin.Context) {
+	var acceleratorData config.AcceleratorData
+	if err := c.BindJSON(&acceleratorData); err != nil {
+		return
+	}
+	system.SetAcceleratorsFromSpec(&acceleratorData)
+	c.IndentedJSON(http.StatusOK, acceleratorData)
+}
+
+func getAccelerators(c *gin.Context) {
+	accMap := system.Accelerators()
+	gpus := make([]config.AcceleratorSpec, len(accMap))
+	i := 0
+	for _, acc := range accMap {
+		gpus[i] = *acc.Spec()
+		i++
+	}
+	c.IndentedJSON(http.StatusOK, gpus)
+}
+
+func getAccelerator(c *gin.Context) {
+	name := c.Param("name")
+	acc := system.Accelerator(name)
+	if acc == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, acc.Spec())
+}
+
+func addAccelerator(c *gin.Context) {
+	var acc config.AcceleratorSpec
+	if err := c.BindJSON(&acc); err != nil {
+		return
+	}
+	system.AddAcceleratorFromSpec(acc)
+	c.IndentedJSON(http.StatusOK, acc)
+}
+
+func removeAccelerator(c *gin.Context) {
+	name := c.Param("name")
+	acc := system.Accelerator(name)
+	if err := system.RemoveAccelerator(name); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, acc.Spec())
+}
+
+func getCapacities(c *gin.Context) {
+	capMap := system.Capacities()
+	capacities := make([]config.AcceleratorCount, len(capMap))
+	i := 0
+	for k, v := range capMap {
+		capacities[i] = config.AcceleratorCount{
+			Type:  k,
+			Count: v,
+		}
+		i++
+	}
+	c.IndentedJSON(http.StatusOK, capacities)
+}
+
+func getCapacity(c *gin.Context) {
+	t := c.Param("type")
+	cap, exists := system.Capacity(t)
+	if !exists {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "capacity for " + t + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, config.AcceleratorCount{
+		Type:  t,
+		Count: cap,
+	})
+}
+
+func addCapacity(c *gin.Context) {
+	var count config.AcceleratorCount
+	if err := c.BindJSON(&count); err != nil {
+		return
+	}
+	system.AddCapacityFromSpec(count)
+	cap, _ := system.Capacity(count.Type)
+	c.IndentedJSON(http.StatusOK, config.AcceleratorCount{
+		Type:  count.Type,
+		Count: cap,
+	})
+}
+
+func removeCapacity(c *gin.Context) {
+	t := c.Param("type")
+	cap, _ := system.Capacity(t)
+	if !system.RemoveCapacity(t) {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator type " + t + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, config.AcceleratorCount{
+		Type:  t,
+		Count: cap,
+	})
+}
+
+func setModels(c *gin.Context) {
+	var modelData config.ModelData
+	if err := c.BindJSON(&modelData); err != nil {
+		return
+	}
+	system.SetModelsFromSpec(&modelData)
+	c.IndentedJSON(http.StatusOK, modelData)
+}
+
+func getModels(c *gin.Context) {
+	modelMap := system.Models()
+	modelNames := make([]string, len(modelMap))
+	i := 0
+	for _, model := range modelMap {
+		modelNames[i] = model.Name()
+		i++
+	}
+	c.IndentedJSON(http.StatusOK, modelNames)
+}
+
+func getModel(c *gin.Context) {
+	name := c.Param("name")
+	model := system.Model(name)
+	if model == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, model.Spec())
+}
+
+func addModel(c *gin.Context) {
+	name := c.Param("name")
+	system.AddModel(name)
+	c.IndentedJSON(http.StatusOK, name)
+}
+
+func removeModel(c *gin.Context) {
+	name := c.Param("name")
+	if err := system.RemoveModel(name); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, name)
+}
+
+func setServiceClasses(c *gin.Context) {
+	var serviceClassData config.ServiceClassData
+	if err := c.BindJSON(&serviceClassData); err != nil {
+		return
+	}
+	system.SetServiceClassesFromSpec(&serviceClassData)
+	c.IndentedJSON(http.StatusOK, serviceClassData)
+}
+
+func getServiceClasses(c *gin.Context) {
+	svcMap := system.ServiceClasses()
+	svcs := make([]config.ServiceClassData, len(svcMap))
+	i := 0
+	for _, svc := range svcMap {
+		svcs[i] = *svc.Spec()
+		i++
+	}
+	c.IndentedJSON(http.StatusOK, svcs)
+}
+
+func getServiceClass(c *gin.Context) {
+	name := c.Param("name")
+	svc := system.ServiceClass(name)
+	if svc == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, svc.Spec())
+}
+
+func addServiceClass(c *gin.Context) {
+	name := c.Param("name")
+	system.AddServiceClass(name)
+	svc := system.ServiceClass(name)
+	c.IndentedJSON(http.StatusOK, svc.Spec())
+}
+
+func removeServiceClass(c *gin.Context) {
+	name := c.Param("name")
+	svc := system.ServiceClass(name)
+	if err := system.RemoveServiceClass(name); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, svc.Spec())
+}
+
+func getServiceClassModelTarget(c *gin.Context) {
+	name := c.Param("name")
+	model := c.Param("model")
+	svc := system.ServiceClass(name)
+	if svc == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
+		return
+	}
+	target := svc.ModelTarget(model)
+	if target == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + model + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, config.ServiceClassSpec{
+		Name:    name,
+		Model:   model,
+		SLO_ITL: target.ITL,
+		SLO_TTW: target.TTW,
+	})
+}
+
+func addServiceClassModelTarget(c *gin.Context) {
+	var targetSpec config.ServiceClassSpec
+	if err := c.BindJSON(&targetSpec); err != nil {
+		return
+	}
+	svcName := targetSpec.Name
+	if system.ServiceClass(svcName) == nil {
+		system.AddServiceClass(svcName)
+	}
+	svc := system.ServiceClass(svcName)
+	svc.SetTargetFromSpec(&targetSpec)
+	c.IndentedJSON(http.StatusOK, targetSpec)
+}
+
+func removeServiceClassModelTarget(c *gin.Context) {
+	name := c.Param("name")
+	model := c.Param("model")
+	svc := system.ServiceClass(name)
+	if svc == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "service class " + name + " not found"})
+		return
+	}
+	target := svc.ModelTarget(model)
+	if target == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + model + " not found"})
+		return
+	}
+	svc.RemoveModelTarget(model)
+	c.IndentedJSON(http.StatusOK, config.ServiceClassSpec{
+		Name:    name,
+		Model:   model,
+		SLO_ITL: target.ITL,
+		SLO_TTW: target.TTW,
+	})
+}
+
+func setServers(c *gin.Context) {
+	var serverData config.ServerData
+	if err := c.BindJSON(&serverData); err != nil {
+		return
+	}
+	system.SetServersFromSpec(&serverData)
+	c.IndentedJSON(http.StatusOK, serverData)
+}
+
+func getServers(c *gin.Context) {
+	srvMap := system.Servers()
+	servers := make([]config.ServerSpec, len(srvMap))
+	i := 0
+	for _, server := range srvMap {
+		servers[i] = *server.Spec()
+		i++
+	}
+	c.IndentedJSON(http.StatusOK, servers)
+}
+
+func getServer(c *gin.Context) {
+	name := c.Param("name")
+	server := system.Server(name)
+	if server == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "server " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, server.Spec())
+}
+
+func addServer(c *gin.Context) {
+	var server config.ServerSpec
+	if err := c.BindJSON(&server); err != nil {
+		return
+	}
+	system.AddServerFromSpec(server)
+	c.IndentedJSON(http.StatusOK, server)
+}
+
+func removeServer(c *gin.Context) {
+	name := c.Param("name")
+	server := system.Server(name)
+	if err := system.RemoveServer(name); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "server " + name + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, server.Spec())
+}
+
+func getModelAcceleratorPerf(c *gin.Context) {
+	name := c.Param("name")
+	acc := c.Param("acc")
+	model := system.Model(name)
+	if model == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
+		return
+	}
+	perfData := model.PerfData(acc)
+	if perfData == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + acc + " not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, perfData)
+}
+
+func addModelAcceleratorPerf(c *gin.Context) {
+	var perfData config.ModelAcceleratorPerfData
+	if err := c.BindJSON(&perfData); err != nil {
+		return
+	}
+	modelName := perfData.Name
+	model := system.Model(modelName)
+	if model == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + modelName + " not found"})
+		return
+	}
+	model.AddPerfDataFromSpec(&perfData)
+	c.IndentedJSON(http.StatusOK, perfData)
+}
+
+func removeModelAcceleratorPerf(c *gin.Context) {
+	name := c.Param("name")
+	acc := c.Param("acc")
+	model := system.Model(name)
+	if model == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "model " + name + " not found"})
+		return
+	}
+	perfData := model.PerfData(acc)
+	if perfData == nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "accelerator " + acc + " not found"})
+		return
+	}
+	model.RemovePerfData(acc)
+	c.IndentedJSON(http.StatusOK, perfData)
+}
+
+func optimize(c *gin.Context) {
+	var optimizerSpec config.OptimizerSpec
+	if err := c.BindJSON(&optimizerSpec); err != nil {
+		return
+	}
+	optimizer := solver.NewOptimizerFromSpec(&optimizerSpec)
+	manager := manager.NewManager(system, optimizer)
+	system.Calculate()
+	manager.Optimize()
+	solution := system.GenerateSolution()
+	c.IndentedJSON(http.StatusOK, solution)
+}
+
+func optimizeOne(c *gin.Context) {
+	var systemData config.SystemData
+	if err := c.BindJSON(&systemData); err != nil {
+		return
+	}
+	optimizerSpec := system.SetFromSpec(&systemData.Spec)
+	optimizer := solver.NewOptimizerFromSpec(optimizerSpec)
+	manager := manager.NewManager(system, optimizer)
+	system.Calculate()
+	manager.Optimize()
+	solution := system.GenerateSolution()
+	c.IndentedJSON(http.StatusOK, solution)
+}
+
+func applyAllocation(c *gin.Context) {
+	for _, server := range system.Servers() {
+		server.ApplyDesiredAlloc()
+	}
+	c.IndentedJSON(http.StatusOK, "Done")
+}

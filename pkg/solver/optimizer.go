@@ -2,7 +2,6 @@ package solver
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,15 +12,6 @@ type Optimizer struct {
 	spec             *config.OptimizerSpec
 	solver           *Solver
 	solutionTimeMsec int64
-}
-
-// Create optimizer from data
-func NewOptimizerFromData(byteValue []byte) (*Optimizer, error) {
-	var d config.OptimizerData
-	if err := json.Unmarshal(byteValue, &d); err != nil {
-		return nil, err
-	}
-	return NewOptimizerFromSpec(&d.Spec), nil
 }
 
 // Create optimizer from spec

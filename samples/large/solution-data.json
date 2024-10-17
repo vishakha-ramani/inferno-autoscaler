@@ -1,5 +1,5 @@
 {
-    "spec": {
+    "allocations": {
         "Bronze-granite_13b": {
             "accelerator": "MI300X",
             "numReplicas": 2,

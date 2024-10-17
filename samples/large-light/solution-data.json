@@ -1,5 +1,5 @@
 {
-    "spec": {
+    "allocations": {
         "Bronze-granite_13b": {
             "accelerator": "G2",
             "numReplicas": 1,

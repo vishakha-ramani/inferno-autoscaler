@@ -84,7 +84,10 @@ func main() {
 	manager := manager.NewManager(system, optimizer)
 
 	system.Calculate()
-	manager.Optimize()
+	if err := manager.Optimize(); err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	serverName := "Premium-llama3_8b"
 

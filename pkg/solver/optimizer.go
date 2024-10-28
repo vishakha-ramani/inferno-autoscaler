@@ -21,16 +21,17 @@ func NewOptimizerFromSpec(spec *config.OptimizerSpec) *Optimizer {
 	}
 }
 
-func (o *Optimizer) Optimize() {
+func (o *Optimizer) Optimize() error {
 	if o.spec == nil {
-		return
+		return fmt.Errorf("missing optimizer spec")
 	}
 	o.solver = NewSolver(o.spec)
 
 	startTime := time.Now()
-	o.solver.Solve()
+	err := o.solver.Solve()
 	endTime := time.Now()
 	o.solutionTimeMsec = endTime.Sub(startTime).Milliseconds()
+	return err
 }
 
 func (o *Optimizer) SolutionTimeMsec() int64 {

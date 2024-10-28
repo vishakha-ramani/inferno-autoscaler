@@ -86,7 +86,10 @@ func main() {
 	manager := manager.NewManager(system, optimizer)
 
 	system.Calculate()
-	manager.Optimize()
+	if err := manager.Optimize(); err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	fmt.Printf("%v", system)
 	fmt.Printf("%v", optimizer)
@@ -127,7 +130,10 @@ func main() {
 	}
 
 	system.Calculate()
-	manager.Optimize()
+	if err := manager.Optimize(); err != nil {
+		fmt.Println(err)
+		return
+	}
 	fmt.Printf("%v", system)
 	fmt.Printf("%v", optimizer)
 }

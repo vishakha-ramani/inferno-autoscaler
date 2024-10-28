@@ -18,7 +18,10 @@ func NewManager(system *core.System, optimizer *solver.Optimizer) *Manager {
 	}
 }
 
-func (m *Manager) Optimize() {
-	m.optimizer.Optimize()
+func (m *Manager) Optimize() error {
+	if err := m.optimizer.Optimize(); err != nil {
+		return err
+	}
 	m.system.AllocateByType()
+	return nil
 }

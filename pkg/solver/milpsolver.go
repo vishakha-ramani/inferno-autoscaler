@@ -42,15 +42,18 @@ func NewMILPSolver(optimizerSpec *config.OptimizerSpec) *MILPSolver {
 	}
 }
 
-func (v *MILPSolver) Solve() {
+func (v *MILPSolver) Solve() error {
 	v.preProcess()
 
 	isLimited := !v.optimizerSpec.Unlimited
 	isMulti := v.optimizerSpec.Heterogeneous
 	useCplex := v.optimizerSpec.UseCplex
-	v.optimize(isLimited, isMulti, useCplex)
+	if err := v.optimize(isLimited, isMulti, useCplex); err != nil {
+		return err
+	}
 
 	v.postProcess()
+	return nil
 }
 
 // prepare input date for MILP solver
@@ -157,16 +160,20 @@ func (v *MILPSolver) preProcess() {
 }
 
 // call MILP solver to optimize problem
-func (v *MILPSolver) optimize(isLimited bool, isMulti bool, useCplex bool) {
+func (v *MILPSolver) optimize(isLimited bool, isMulti bool, useCplex bool) error {
 	problemType := lpsolveConfig.SINGLE
 	if isMulti {
 		problemType = lpsolveConfig.MULTI
 	}
-	if p, err := v.createProblem(problemType, isLimited, useCplex); err != nil || p.Solve() != nil {
-		fmt.Println(err)
-	} else {
-		v.printResults(problemType, p)
+	p, err := v.createProblem(problemType, isLimited, useCplex)
+	if err != nil {
+		return err
 	}
+	if err := p.Solve(); err != nil {
+		return err
+	}
+	v.printResults(problemType, p)
+	return nil
 }
 
 func (v *MILPSolver) createProblem(problemType lpsolveConfig.ProblemType, isLimited bool, useCplex bool) (lpsolve.Problem, error) {

@@ -46,7 +46,7 @@ func (e *entry) String() string {
 }
 
 // Find optimal allocation for all service classes
-func (s *Solver) Solve() {
+func (s *Solver) Solve() error {
 	// take snapshot of current allocations
 	s.currentAllocation = make(map[string]*core.Allocation)
 	for serverName, server := range core.GetServers() {
@@ -57,7 +57,9 @@ func (s *Solver) Solve() {
 
 	// find solution
 	if s.optimizerSpec.MILPSolver {
-		s.SolveMILP()
+		if err := s.SolveMILP(); err != nil {
+			return err
+		}
 	} else if s.optimizerSpec.Unlimited {
 		s.SolveUnlimited()
 	} else {
@@ -75,7 +77,7 @@ func (s *Solver) Solve() {
 			s.diffAllocation[serverName] = allocDiff
 		}
 	}
-
+	return nil
 }
 
 // Find optimal allocations assuming unlimited accelerator capacity
@@ -185,9 +187,9 @@ func (s *Solver) SolveLimited() {
 	}
 }
 
-func (s *Solver) SolveMILP() {
+func (s *Solver) SolveMILP() error {
 	mip := NewMILPSolver(s.optimizerSpec)
-	mip.Solve()
+	return mip.Solve()
 }
 
 func (s *Solver) AllocationDiff() map[string]*core.AllocationDiff {

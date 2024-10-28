@@ -54,13 +54,11 @@ func (c *ServiceClass) RemoveModelTarget(modelName string) {
 	delete(c.targets, modelName)
 }
 
-func (c *ServiceClass) Spec() *config.ServiceClassData {
-	specs := &config.ServiceClassData{
-		Spec: make([]config.ServiceClassSpec, len(c.targets)),
-	}
+func (c *ServiceClass) Spec() []config.ServiceClassSpec {
+	specs := make([]config.ServiceClassSpec, len(c.targets))
 	i := 0
 	for modelName, target := range c.targets {
-		specs.Spec[i] = config.ServiceClassSpec{
+		specs[i] = config.ServiceClassSpec{
 			Name:    c.name,
 			Model:   modelName,
 			SLO_ITL: target.ITL,

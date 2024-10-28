@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/tantawi/inferno/pkg/core"
 	"github.ibm.com/tantawi/inferno/pkg/manager"
 	"github.ibm.com/tantawi/inferno/pkg/solver"
 )
@@ -169,11 +170,11 @@ func setServiceClasses(c *gin.Context) {
 
 func getServiceClasses(c *gin.Context) {
 	svcMap := system.ServiceClasses()
-	svcs := make([]config.ServiceClassData, len(svcMap))
-	i := 0
+	svcs := &config.ServiceClassData{
+		Spec: []config.ServiceClassSpec{},
+	}
 	for _, svc := range svcMap {
-		svcs[i] = *svc.Spec()
-		i++
+		svcs.Spec = append(svcs.Spec, svc.Spec()...)
 	}
 	c.IndentedJSON(http.StatusOK, svcs)
 }
@@ -279,7 +280,10 @@ func getServers(c *gin.Context) {
 		servers[i] = *server.Spec()
 		i++
 	}
-	c.IndentedJSON(http.StatusOK, servers)
+	serverData := &config.ServerData{
+		Spec: servers,
+	}
+	c.IndentedJSON(http.StatusOK, serverData)
 }
 
 func getServer(c *gin.Context) {
@@ -367,7 +371,10 @@ func optimize(c *gin.Context) {
 	optimizer := solver.NewOptimizerFromSpec(&optimizerSpec)
 	manager := manager.NewManager(system, optimizer)
 	system.Calculate()
-	manager.Optimize()
+	if err := manager.Optimize(); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "optimization error: " + err.Error()})
+		return
+	}
 	solution := system.GenerateSolution()
 	c.IndentedJSON(http.StatusOK, solution)
 }
@@ -377,11 +384,16 @@ func optimizeOne(c *gin.Context) {
 	if err := c.BindJSON(&systemData); err != nil {
 		return
 	}
+	// start with fresh system
+	system = core.NewSystem()
 	optimizerSpec := system.SetFromSpec(&systemData.Spec)
 	optimizer := solver.NewOptimizerFromSpec(optimizerSpec)
 	manager := manager.NewManager(system, optimizer)
 	system.Calculate()
-	manager.Optimize()
+	if err := manager.Optimize(); err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "optimization error: " + err.Error()})
+		return
+	}
 	solution := system.GenerateSolution()
 	c.IndentedJSON(http.StatusOK, solution)
 }

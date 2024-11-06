@@ -48,12 +48,13 @@ func (a *Controller) Init() error {
 	defer state.Unlock()
 
 	// set URL to Optimizer REST server
-	var host, port string
-	if host = os.Getenv(rest.RestHostEnvName); host == "" {
-		host = rest.DefaultRestHost
+	host := "localhost"
+	port := "8080"
+	if h := os.Getenv(rest.RestHostEnvName); h != "" {
+		host = h
 	}
-	if port = os.Getenv(rest.RestPortEnvName); port == "" {
-		port = rest.DefaultRestPort
+	if p := os.Getenv(rest.RestPortEnvName); p != "" {
+		port = p
 	}
 	OptimizerURL = "http://" + host + ":" + port
 

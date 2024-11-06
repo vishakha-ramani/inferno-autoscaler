@@ -26,12 +26,13 @@ func (server *BaseServer) Run() {
 	// instantiate a clean system
 	system = core.NewSystem()
 
-	var host, port string
-	if host = os.Getenv(RestHostEnvName); host == "" {
-		host = DefaultRestHost
+	host := ""
+	port := "8080"
+	if h := os.Getenv(RestHostEnvName); h != "" {
+		host = h
 	}
-	if port = os.Getenv(RestPortEnvName); port == "" {
-		port = DefaultRestPort
+	if p := os.Getenv(RestPortEnvName); p != "" {
+		port = p
 	}
 	server.router.Run(host + ":" + port)
 }

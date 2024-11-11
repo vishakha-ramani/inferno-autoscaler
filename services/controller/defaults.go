@@ -1,0 +1,72 @@
+package controller
+
+import "os"
+
+// Environment names for hosts and ports
+const (
+	CollectorHostEnvName = "COLLECTOR_HOST"
+	CollectorPortEnvName = "COLLECTOR_PORT"
+
+	ActuatorHostEnvName = "ACTUATOR_HOST"
+	ActuatorPortEnvName = "ACTUATOR_PORT"
+
+	DataPathEnvName      = "INFERNO_DATA_PATH"
+	ControlPeriodEnvName = "INFERNO_CONTROL_PERIOD"
+)
+
+const (
+	// path to static data json files (ends with /)
+	DefaultDataPath = "./"
+
+	// static data file names
+	AcceleratorFileName  = "accelerator-data.json"
+	ModelFileName        = "model-data.json"
+	ServiceClassFileName = "serviceclass-data.json"
+	OptimizerFileName    = "optimizer-data.json"
+
+	// API settings
+	OptimizeVerb = "optimizeOne"
+	ServersVerb  = "getServers"
+	CollectVerb  = "collect"
+	ActuatorVerb = "update"
+
+	// others
+	DefaultControlPeriodSeconds int = 60
+)
+
+// Kube config
+const (
+	KubeConfigEnvName = "KUBECONFIG"
+	DefaulKubeConfig  = "$HOME/.kube/config"
+)
+
+// Key labels
+const (
+	KeyPrefix           = "inferno."
+	KeyServerPrefix     = KeyPrefix + "server."
+	KeyAllocationPrefix = KeyServerPrefix + "allocation."
+	KeyLoadPrefix       = KeyServerPrefix + "load."
+
+	KeyManaged     = KeyServerPrefix + "managed"
+	KeyServerName  = KeyServerPrefix + "name"
+	KeyServerModel = KeyServerPrefix + "model"
+	KeyServerClass = KeyServerPrefix + "class"
+
+	KeyAccelerator  = KeyAllocationPrefix + "accelerator"
+	KeyMaxBatchSize = KeyAllocationPrefix + "maxbatchsize"
+
+	KeyArrivalRate = KeyLoadPrefix + "rpm"
+	KeyNumTokens   = KeyLoadPrefix + "numtokens"
+)
+
+// TODO: remove load data from labels, get from Prometheus
+
+var (
+	ControlPeriodSeconds = os.Getenv(ControlPeriodEnvName)
+
+	CollectorURL string
+	OptimizerURL string
+	ActuatorURL  string
+
+	DataPath string
+)

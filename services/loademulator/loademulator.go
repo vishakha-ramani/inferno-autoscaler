@@ -13,6 +13,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var (
+	ArvRateRange   = [2]float32{6.0, 240.0}
+	NumTokensRange = [2]int{100, 10000}
+)
+
 // Load emulator
 type LoadEmulator struct {
 	kubeClient *kubernetes.Clientset
@@ -72,15 +77,21 @@ func (lg *LoadEmulator) perturbLoad(rpm *float32, num *int) {
 	// generate random values in [alpha, 2 - alpha), where 0 < alpha < 1
 	factorA := 2 * (rand.Float32() - 0.5) * (1 - lg.alpha)
 	newArv := *rpm * (1 + factorA)
-	if newArv <= 0 {
-		newArv = 1
+	if newArv < ArvRateRange[0] {
+		newArv = ArvRateRange[0]
+	}
+	if newArv > ArvRateRange[1] {
+		newArv = ArvRateRange[1]
 	}
 	*rpm = newArv
 
 	factorB := 2 * (rand.Float32() - 0.5) * (1 - lg.alpha)
 	newLength := int(math.Ceil(float64(float32(*num) * (1 + factorB))))
-	if newLength <= 0 {
-		newLength = 1
+	if newLength < NumTokensRange[0] {
+		newLength = NumTokensRange[0]
+	}
+	if newLength > NumTokensRange[1] {
+		newLength = NumTokensRange[1]
 	}
 	*num = newLength
 }

@@ -23,13 +23,24 @@ func main() {
 	// get args
 	interval := DefaultIntervalSec
 	alpha := DefaultAlpha
+	var err error
 	switch len(os.Args) {
 	case 2:
-		interval, _ = strconv.Atoi(os.Args[1])
+		if interval, err = strconv.Atoi(os.Args[1]); err != nil {
+			fmt.Println(err)
+			return
+		}
 	case 3:
-		interval, _ = strconv.Atoi(os.Args[1])
-		alpha64, _ := strconv.ParseFloat(os.Args[2], 32)
-		alpha = float32(alpha64)
+		if interval, err = strconv.Atoi(os.Args[1]); err != nil {
+			fmt.Println(err)
+			return
+		}
+		if alpha64, err := strconv.ParseFloat(os.Args[2], 32); err != nil {
+			fmt.Println(err)
+			return
+		} else {
+			alpha = float32(alpha64)
+		}
 	}
 	fmt.Println("Running with interval=" + strconv.Itoa(interval) + "(sec) and alpha=" + strconv.FormatFloat(float64(alpha), 'f', 3, 32))
 

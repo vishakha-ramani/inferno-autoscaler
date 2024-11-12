@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -114,13 +113,7 @@ func (a *Controller) Init() error {
 }
 
 // periodically run the controller
-func (a *Controller) Run() {
-	var controlPeriod int
-	var err error
-	if controlPeriod, err = strconv.Atoi(ControlPeriodSeconds); err != nil || controlPeriod <= 0 {
-		controlPeriod = DefaultControlPeriodSeconds
-	}
-
+func (a *Controller) Run(controlPeriod int) {
 	// start periodic process
 	Wg.Add(1)
 	go func() {
@@ -128,7 +121,7 @@ func (a *Controller) Run() {
 		agentTicker := time.NewTicker(time.Second * time.Duration(controlPeriod))
 		for range agentTicker.C {
 			if err := a.Optimize(); err != nil {
-				fmt.Printf("%v: %s\n", time.Now().Format("15:04:05.000"), err.Error())
+				fmt.Printf("%v: skipping cycle ... reason=%s\n", time.Now().Format("15:04:05.000"), err.Error())
 			}
 		}
 	}()

@@ -1,7 +1,5 @@
 package controller
 
-import "os"
-
 // Environment names for hosts and ports
 const (
 	CollectorHostEnvName = "COLLECTOR_HOST"
@@ -41,6 +39,7 @@ const (
 )
 
 // Key labels
+// TODO: remove load data from labels, get from Prometheus
 const (
 	KeyPrefix           = "inferno."
 	KeyServerPrefix     = KeyPrefix + "server."
@@ -59,11 +58,7 @@ const (
 	KeyNumTokens   = KeyLoadPrefix + "numtokens"
 )
 
-// TODO: remove load data from labels, get from Prometheus
-
 var (
-	ControlPeriodSeconds = os.Getenv(ControlPeriodEnvName)
-
 	CollectorURL string
 	OptimizerURL string
 	ActuatorURL  string

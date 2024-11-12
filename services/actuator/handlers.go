@@ -2,7 +2,6 @@ package actuator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -55,13 +54,11 @@ func update(c *gin.Context) {
 		for _, d := range deps.Items {
 			if string(d.UID) == deployUID {
 
-				// update numReplicas
-				replicas := []patchStringValue{{
-					Op:    "replace",
-					Path:  "/spec/replicas",
-					Value: numReplicas,
-				}}
-				replicasBytes, _ := json.Marshal(replicas)
+				// patch numReplicas and labels
+				patchAcc := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%s"}`, ctrl.KeyAccelerator, acceleratorName)
+				patchBatch := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%d"}`, ctrl.KeyMaxBatchSize, maxBatchSize)
+				patchRep := fmt.Sprintf(`{"op": "replace", "path": "/spec/replicas", "value": %d}`, numReplicas)
+				patchAll := []byte(`[` + patchAcc + `,` + patchBatch + `,` + patchRep + `]`)
 
 				// TODO: fix this
 				// print change - for testing
@@ -74,17 +71,9 @@ func update(c *gin.Context) {
 					d.Labels[ctrl.KeyAccelerator], acceleratorName,
 					*d.Spec.Replicas, numReplicas, curMaxBatchSize, maxBatchSize)
 
-				// update labels
-				d.Labels[ctrl.KeyAccelerator] = acceleratorName
-				d.Labels[ctrl.KeyMaxBatchSize] = fmt.Sprintf("%d", maxBatchSize)
-
-				if _, err := KubeClient.AppsV1().Deployments(nameSpace).Update(context.TODO(), &d, metav1.UpdateOptions{}); err != nil {
-					c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "kube client: " + err.Error()})
-					return
-				}
-
+				// update deployment
 				if _, err := KubeClient.AppsV1().Deployments(nameSpace).Patch(context.Background(), deployName,
-					types.JSONPatchType, replicasBytes, metav1.PatchOptions{}); err != nil {
+					types.JSONPatchType, patchAll, metav1.PatchOptions{}); err != nil {
 
 					c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "kube client: " + err.Error()})
 					return
@@ -94,10 +83,4 @@ func update(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, "Done")
-}
-
-type patchStringValue struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value int32  `json:"value"`
 }

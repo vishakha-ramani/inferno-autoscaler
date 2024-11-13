@@ -20,19 +20,27 @@ var (
 
 // Load emulator
 type LoadEmulator struct {
-	kubeClient *kubernetes.Clientset
-	interval   time.Duration
-	alpha      float32
+	kubeClient     *kubernetes.Clientset
+	interval       time.Duration
+	alpha          float32
+	arvRateSigma   map[string]float32
+	numTokensSigma map[string]float32
 }
 
 // create a new load emulator
 func NewLoadEmulator(intervalSec int, alpha float32) (loadEmulator *LoadEmulator, err error) {
+	if intervalSec <= 0 || alpha < 0 || alpha > 1 {
+		return nil, fmt.Errorf("invalid input: interval=" + strconv.Itoa(intervalSec) +
+			", alpha=" + strconv.FormatFloat(float64(alpha), 'f', 3, 32))
+	}
 	var kubeClient *kubernetes.Clientset
 	if kubeClient, err = ctrl.GetKubeClient(); err == nil {
 		return &LoadEmulator{
-			kubeClient: kubeClient,
-			interval:   time.Duration(intervalSec) * time.Second,
-			alpha:      alpha,
+			kubeClient:     kubeClient,
+			interval:       time.Duration(intervalSec) * time.Second,
+			alpha:          alpha,
+			arvRateSigma:   map[string]float32{},
+			numTokensSigma: map[string]float32{},
 		}, nil
 	}
 	return nil, err
@@ -58,7 +66,9 @@ func (lg *LoadEmulator) Run() {
 			curRPM64, _ := strconv.ParseFloat(d.Labels[ctrl.KeyArrivalRate], 32)
 			curRPM := float32(curRPM64)
 			curNumTokens, _ := strconv.Atoi(d.Labels[ctrl.KeyNumTokens])
-			lg.perturbLoad(&curRPM, &curNumTokens)
+
+			// perturb arrival rates and number of tokens randomly
+			lg.perturbLoad(string(d.GetUID()), &curRPM, &curNumTokens)
 
 			// update labels
 			d.Labels[ctrl.KeyArrivalRate] = fmt.Sprintf("%.4f", curRPM)
@@ -72,11 +82,27 @@ func (lg *LoadEmulator) Run() {
 	}
 }
 
-// randomly modify dynamic server data (testing only)
-func (lg *LoadEmulator) perturbLoad(rpm *float32, num *int) {
-	// generate random values in [alpha, 2 - alpha), where 0 < alpha < 1
-	factorA := 2 * (rand.Float32() - 0.5) * (1 - lg.alpha)
-	newArv := *rpm * (1 + factorA)
+/*
+ * randomly modify dynamic server data (testing only)
+ */
+
+// generate: nextValue = currentValue + normal(0, sigma),
+// where sigma = alpha * originalValue and 0 <= alpha <= 1
+func (lg *LoadEmulator) perturbLoad(uid string, rpm *float32, num *int) {
+	// store original values if new entry
+	if _, exists := lg.arvRateSigma[uid]; !exists {
+		lg.arvRateSigma[uid] = (*rpm) * lg.alpha
+	}
+	if _, exists := lg.numTokensSigma[uid]; !exists {
+		lg.numTokensSigma[uid] = float32(*num) * lg.alpha
+	}
+
+	// generate a random number from a standard normal distribution
+	// TODO: should use two random number generators
+	sampleRPM := float32(rand.NormFloat64())
+	sampleTokens := float32(rand.NormFloat64())
+
+	newArv := sampleRPM*lg.arvRateSigma[uid] + *rpm
 	if newArv < ArvRateRange[0] {
 		newArv = ArvRateRange[0]
 	}
@@ -85,8 +111,7 @@ func (lg *LoadEmulator) perturbLoad(rpm *float32, num *int) {
 	}
 	*rpm = newArv
 
-	factorB := 2 * (rand.Float32() - 0.5) * (1 - lg.alpha)
-	newLength := int(math.Ceil(float64(float32(*num) * (1 + factorB))))
+	newLength := int(int(math.Ceil(float64(sampleTokens*lg.numTokensSigma[uid] + float32(*num)))))
 	if newLength < NumTokensRange[0] {
 		newLength = NumTokensRange[0]
 	}

@@ -10,8 +10,8 @@ metadata:
     inferno.server.class: Premium
     inferno.server.allocation.accelerator: MI250
     inferno.server.allocation.maxbatchsize: "8"
-    inferno.server.load.rpm: "30.2"
-    inferno.server.load.numtokens: "1560"
+    inferno.server.load.rpm: "30"
+    inferno.server.load.numtokens: "2048"
 spec:
   replicas: 4
   selector:

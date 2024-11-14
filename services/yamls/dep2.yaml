@@ -10,8 +10,8 @@ metadata:
     inferno.server.class: Bronze
     inferno.server.allocation.accelerator: H100
     inferno.server.allocation.maxbatchsize: "16"
-    inferno.server.load.rpm: "160.54"
-    inferno.server.load.numtokens: "2160"
+    inferno.server.load.rpm: "60"
+    inferno.server.load.numtokens: "1024"
 spec:
   replicas: 3
   selector:

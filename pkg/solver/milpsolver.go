@@ -265,7 +265,7 @@ func (v *MILPSolver) printResults(problemType lpsolveConfig.ProblemType, p lpsol
 	fmt.Println()
 }
 
-// process output date from MILP solver
+// process output data from MILP solver
 func (v *MILPSolver) postProcess() {
 	for i := 0; i < v.numServers; i++ {
 		for j := 0; j < v.numAccelerators; j++ {

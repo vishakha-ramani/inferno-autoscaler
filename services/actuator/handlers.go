@@ -7,7 +7,9 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.ibm.com/tantawi/inferno/pkg/config"
 	ctrl "github.ibm.com/tantawi/inferno/services/controller"
+	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -32,7 +34,9 @@ func update(c *gin.Context) {
 		return
 	}
 
-	// update deployments
+	updatedDeployments := map[string]bool{}
+
+	//update deployments
 	for serverName, allocData := range allocMap {
 
 		var dep ctrl.ServerKubeInfo
@@ -40,10 +44,6 @@ func update(c *gin.Context) {
 		if dep, exists = serverMap[serverName]; !exists {
 			continue
 		}
-
-		acceleratorName := allocData.Accelerator
-		numReplicas := int32(allocData.NumReplicas)
-		maxBatchSize := allocData.MaxBatch
 
 		deployUID := dep.UID
 		deployName := dep.Name
@@ -53,34 +53,70 @@ func update(c *gin.Context) {
 		// find deployment by name
 		for _, d := range deps.Items {
 			if string(d.UID) == deployUID {
-
-				// patch numReplicas and labels
-				patchAcc := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%s"}`, ctrl.KeyAccelerator, acceleratorName)
-				patchBatch := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%d"}`, ctrl.KeyMaxBatchSize, maxBatchSize)
-				patchRep := fmt.Sprintf(`{"op": "replace", "path": "/spec/replicas", "value": %d}`, numReplicas)
-				patchAll := []byte(`[` + patchAcc + `,` + patchBatch + `,` + patchRep + `]`)
-
-				// TODO: fix this
-				// print change - for testing
-				curMaxBatchSize, _ := strconv.Atoi(d.Labels[ctrl.KeyMaxBatchSize])
-				curRPM, _ := strconv.ParseFloat(d.Labels[ctrl.KeyArrivalRate], 32)
-				curNumTokens, _ := strconv.Atoi(d.Labels[ctrl.KeyNumTokens])
-				fmt.Printf("srv=[%s/%s/%s]: rpm=%.2f; tok=%d; acc=%s->%s; num=%d->%d; batch=%d->%d \n",
-					serverName, d.Labels[ctrl.KeyServerClass], d.Labels[ctrl.KeyServerModel],
-					curRPM, curNumTokens,
-					d.Labels[ctrl.KeyAccelerator], acceleratorName,
-					*d.Spec.Replicas, numReplicas, curMaxBatchSize, maxBatchSize)
-
-				// update deployment
-				if _, err := KubeClient.AppsV1().Deployments(nameSpace).Patch(context.Background(), deployName,
-					types.JSONPatchType, patchAll, metav1.PatchOptions{}); err != nil {
-
+				if err := patchDeployment(d, serverName, deployName, nameSpace, &allocData); err != nil {
 					c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "kube client: " + err.Error()})
 					return
 				}
+				updatedDeployments[deployUID] = true
 			}
 		}
 	}
 
+	for _, d := range deps.Items {
+		deployUID := string(d.UID)
+		if updatedDeployments[deployUID] {
+			continue
+		}
+
+		serverName := d.Labels[ctrl.KeyServerName]
+		deployName := d.Name
+		nameSpace := d.Namespace
+
+		allocData := &config.AllocationData{
+			Accelerator: "",
+			NumReplicas: 0,
+			MaxBatch:    0,
+			Load: config.ServerLoadSpec{
+				ArrivalRate: 0,
+				AvgLength:   0,
+			},
+		}
+
+		if err := patchDeployment(d, serverName, deployName, nameSpace, allocData); err != nil {
+			c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "kube client: " + err.Error()})
+			return
+		}
+	}
+
 	c.IndentedJSON(http.StatusOK, "Done")
+}
+
+func patchDeployment(d v1.Deployment, serverName, deployName, nameSpace string, allocData *config.AllocationData) error {
+	acceleratorName := allocData.Accelerator
+	numReplicas := int32(allocData.NumReplicas)
+	maxBatchSize := allocData.MaxBatch
+
+	// patch numReplicas and labels
+	patchAcc := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%s"}`, ctrl.KeyAccelerator, acceleratorName)
+	patchBatch := fmt.Sprintf(`{"op": "replace", "path": "/metadata/labels/%s", "value": "%d"}`, ctrl.KeyMaxBatchSize, maxBatchSize)
+	patchRep := fmt.Sprintf(`{"op": "replace", "path": "/spec/replicas", "value": %d}`, numReplicas)
+	patchAll := []byte(`[` + patchAcc + `,` + patchBatch + `,` + patchRep + `]`)
+
+	// TODO: fix this
+	// print change - for testing
+	curMaxBatchSize, _ := strconv.Atoi(d.Labels[ctrl.KeyMaxBatchSize])
+	curRPM := allocData.Load.ArrivalRate
+	curNumTokens := allocData.Load.AvgLength
+	fmt.Printf("srv=[%s/%s/%s]: rpm=%.2f; tok=%d; acc=%s->%s; num=%d->%d; batch=%d->%d \n",
+		serverName, d.Labels[ctrl.KeyServerClass], d.Labels[ctrl.KeyServerModel],
+		curRPM, curNumTokens,
+		d.Labels[ctrl.KeyAccelerator], acceleratorName,
+		*d.Spec.Replicas, numReplicas, curMaxBatchSize, maxBatchSize)
+
+	// update deployment
+	if _, err := KubeClient.AppsV1().Deployments(nameSpace).Patch(context.Background(), deployName,
+		types.JSONPatchType, patchAll, metav1.PatchOptions{}); err != nil {
+		return err
+	}
+	return nil
 }

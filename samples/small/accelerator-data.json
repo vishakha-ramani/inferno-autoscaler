@@ -89,19 +89,19 @@
     "count": [
         {
             "type": "L4",
-            "count": 512
+            "count": 32
         },
         {
             "type": "A100",
-            "count": 2048
+            "count": 16
         },
         {
             "type": "AIU2",
-            "count": 2048
+            "count": 128
         },
         {
             "type": "G2",
-            "count": 1536
+            "count": 24
         }
     ]
 }

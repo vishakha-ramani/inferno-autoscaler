@@ -174,7 +174,7 @@ func (s *System) SetServiceClassesFromSpec(d *config.ServiceClassData) {
 	for _, t := range d.Spec {
 		name := t.Name
 		if _, exists := s.serviceClasses[name]; !exists {
-			s.serviceClasses[name] = NewServiceClass(name)
+			s.serviceClasses[name] = NewServiceClass(name, t.Priority)
 		}
 		svc := s.serviceClasses[name]
 		svc.SetTargetFromSpec(&t)
@@ -182,8 +182,8 @@ func (s *System) SetServiceClassesFromSpec(d *config.ServiceClassData) {
 }
 
 // Add a service class (replace if already exists)
-func (s *System) AddServiceClass(name string) {
-	s.serviceClasses[name] = NewServiceClass(name)
+func (s *System) AddServiceClass(name string, priority int) {
+	s.serviceClasses[name] = NewServiceClass(name, priority)
 }
 
 // Remove a service class

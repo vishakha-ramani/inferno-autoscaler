@@ -33,6 +33,7 @@ func NewSolver(optimizerSpec *config.OptimizerSpec) *Solver {
 // Entry in the solution space for a service class and model pair
 type entry struct {
 	serverName  string             // server name
+	priority    int                // priority of service class for server
 	curIndex    int                // current index in allocation list
 	allocations []*core.Allocation // ordered list of allocations
 	delta       float32            // delta penalty if current allocation not allowed and next allocation is allowed
@@ -40,8 +41,8 @@ type entry struct {
 
 func (e *entry) String() string {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "sName=%s, curIndex=%d, delta=%v, allocations=%v \n",
-		e.serverName, e.curIndex, e.delta, e.allocations)
+	fmt.Fprintf(&b, "sName=%s, prio=%d, curIndex=%d, delta=%v, allocations=%v \n",
+		e.serverName, e.priority, e.curIndex, e.delta, e.allocations)
 	return b.String()
 }
 
@@ -83,6 +84,7 @@ func (s *Solver) Solve() error {
 // Find optimal allocations assuming unlimited accelerator capacity
 func (s *Solver) SolveUnlimited() {
 	for _, server := range core.GetServers() {
+		server.RemoveAllocation()
 		// select allocation with minimum value
 		minVal := float32(math.MaxFloat32)
 		var minAlloc *core.Allocation
@@ -94,8 +96,6 @@ func (s *Solver) SolveUnlimited() {
 		}
 		if minAlloc != nil {
 			server.SetAllocation(minAlloc)
-		} else {
-			server.RemoveAllocation()
 		}
 	}
 }
@@ -110,9 +110,11 @@ func (s *Solver) SolveLimited() {
 	// for all servers, sort allocations
 	var entries []*entry = make([]*entry, 0)
 	for serverName, server := range core.GetServers() {
+		server.RemoveAllocation()
 		allAllocs := server.AllAllocations()
 		e := &entry{
 			serverName:  serverName,
+			priority:    server.Priority(),
 			curIndex:    0,
 			allocations: make([]*core.Allocation, len(allAllocs)),
 			delta:       0,
@@ -136,11 +138,32 @@ func (s *Solver) SolveLimited() {
 	}
 	// sort all entries
 	orderFunc := func(a, b *entry) int {
-		if a.delta == b.delta {
-			return cmp.Compare(b.allocations[b.curIndex].Value(), a.allocations[a.curIndex].Value())
+		aPrio := (1 + config.PriorityWeightFactor/float32(1+a.priority))
+		bPrio := (1 + config.PriorityWeightFactor/float32(1+b.priority))
+
+		aDelta := a.delta * aPrio
+		bDelta := b.delta * bPrio
+
+		if aDelta == bDelta {
+			aVal := a.allocations[a.curIndex].Value() * aPrio
+			bVal := b.allocations[b.curIndex].Value() * bPrio
+			return cmp.Compare(bVal, aVal)
 		}
-		return cmp.Compare(b.delta, a.delta)
+		return cmp.Compare(bDelta, aDelta)
 	}
+
+	// straight priorities
+	// orderFunc := func(a, b *entry) int {
+	// 	if a.priority == b.priority {
+	// 		if a.delta == b.delta {
+	// 			return cmp.Compare(b.allocations[b.curIndex].Value(), a.allocations[a.curIndex].Value())
+	// 		}
+	// 		return cmp.Compare(b.delta, a.delta)
+	// 	} else {
+	// 		return cmp.Compare(a.priority, b.priority)
+	// 	}
+	// }
+
 	slices.SortFunc(entries, orderFunc)
 	// start assignment greedily
 	for len(entries) > 0 {

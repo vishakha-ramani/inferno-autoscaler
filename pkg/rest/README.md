@@ -104,7 +104,7 @@ The following data is needed by the Optimizer (Declarations described [here](../
    - `maxBatchSize`: maximum batch size to use, beyond which performance deteriorates
    - `atTokens`: average number of tokens used when determining the `maxBatchSize`
 
-1. **Service class data**: For all service classes, the specification, such as name and SLO targets  for a service class. An example follows.
+1. **Service class data**: For all service classes, the specification, such as name, priority, and SLO targets for a service class. An example follows.
 
     ```json
     {
@@ -112,18 +112,21 @@ The following data is needed by the Optimizer (Declarations described [here](../
             {
                 "name": "Premium",
                 "model": "granite_13b",
+                "priority": 1,
                 "slo-itl": 40,
                 "slo-ttw": 500
             },
             {
                 "name": "Premium",
                 "model": "llama_70b",
+                "priority": 1,
                 "slo-itl": 80,
                 "slo-ttw": 500
             },
             {
                 "name": "Bronze",
                 "model": "granite_13b",
+                "priority": 2,
                 "slo-itl": 80,
                 "slo-ttw": 1000
             },
@@ -245,11 +248,11 @@ The output of the Optimizer is an Allocation Solution, in addition to updating t
 | /getModel | GET | name | ModelData | get data for a model |
 | /addModel | GET | name |  | add a model by name |
 | /removeModel | GET | name |  | remove the data of a model |
-| **Service class data** |
+| **Service class data** | | | | |
 | /setServiceClasses | POST | ServiceClassData |  | set data for service classes |
 | /getServiceClasses | GET |  | ServiceClassData | get data for all service classes |
 | /getServiceClass | GET | name | ServiceClassData | get data for a service class |
-| /addServiceClass | GET | name |  | add a service class by name |
+| /addServiceClass | GET | name/priority |  | add a service class by name |
 | /removeServiceClass | GET | name |  | remove the data of a service class |
 | **Service class targets** | | | | |
 | /getServiceClassModelTarget | GET |  service class name / model name | ServiceClassSpec | get the SLO targets for a service class and model pair |

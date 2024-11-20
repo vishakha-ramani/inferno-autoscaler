@@ -31,7 +31,7 @@ func NewStateFullServer() *StateFullServer {
 	server.router.POST("/setServiceClasses", setServiceClasses)
 	server.router.GET("/getServiceClasses", getServiceClasses)
 	server.router.GET("/getServiceClass/:name", getServiceClass)
-	server.router.GET("/addServiceClass/:name", addServiceClass)
+	server.router.GET("/addServiceClass/:name/:priority", addServiceClass)
 	server.router.GET("/removeServiceClass/:name", removeServiceClass)
 
 	server.router.GET("/getServiceClassModelTarget/:name/:model", getServiceClassModelTarget)

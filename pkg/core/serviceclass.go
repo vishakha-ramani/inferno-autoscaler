@@ -8,10 +8,9 @@ import (
 
 // A service class
 type ServiceClass struct {
-	name string
-
-	// target SLOs for each model
-	targets map[string]*Target
+	name     string             // unique name
+	priority int                // non-negative priority (smaller values for higher priority)
+	targets  map[string]*Target // target SLOs for each model
 }
 
 // target SLOs for service class
@@ -25,10 +24,14 @@ func (t *Target) String() string {
 		t.ITL, t.TTW)
 }
 
-func NewServiceClass(name string) *ServiceClass {
+func NewServiceClass(name string, priority int) *ServiceClass {
+	if priority < 0 {
+		priority = config.DefaultServiceClassPriority
+	}
 	return &ServiceClass{
-		name:    name,
-		targets: map[string]*Target{},
+		name:     name,
+		priority: priority,
+		targets:  map[string]*Target{},
 	}
 }
 
@@ -46,6 +49,10 @@ func (c *ServiceClass) Name() string {
 	return c.name
 }
 
+func (c *ServiceClass) Priority() int {
+	return c.priority
+}
+
 func (c *ServiceClass) ModelTarget(modelName string) *Target {
 	return c.targets[modelName]
 }
@@ -59,10 +66,11 @@ func (c *ServiceClass) Spec() []config.ServiceClassSpec {
 	i := 0
 	for modelName, target := range c.targets {
 		specs[i] = config.ServiceClassSpec{
-			Name:    c.name,
-			Model:   modelName,
-			SLO_ITL: target.ITL,
-			SLO_TTW: target.TTW,
+			Name:     c.name,
+			Priority: c.priority,
+			Model:    modelName,
+			SLO_ITL:  target.ITL,
+			SLO_TTW:  target.TTW,
 		}
 		i++
 	}
@@ -70,6 +78,6 @@ func (c *ServiceClass) Spec() []config.ServiceClassSpec {
 }
 
 func (c *ServiceClass) String() string {
-	return fmt.Sprintf("ServiceClass: name=%s; targets=%v",
-		c.name, c.targets)
+	return fmt.Sprintf("ServiceClass: name=%s; priority=%d; targets=%v",
+		c.name, c.priority, c.targets)
 }

@@ -148,9 +148,6 @@ func (a *Controller) Optimize() error {
 	if postErr != nil {
 		return postErr
 	}
-	if len(allocSolution.Spec) == 0 {
-		return fmt.Errorf("optimizer returned empty solution")
-	}
 	optimizeTime := time.Since(startTime) - collectTime
 
 	// call Actuator to realize desired state

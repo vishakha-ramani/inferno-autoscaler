@@ -20,3 +20,9 @@ var MaxQueueToBatchRatio = 10
 
 // accelerator transition penalty factor
 var AccelPenaltyFactor = float32(0.1)
+
+// default priority of a service class
+const DefaultServiceClassPriority int = 0
+
+// weight factor for class priority used in greedy limited solver
+var PriorityWeightFactor float32 = 1.0

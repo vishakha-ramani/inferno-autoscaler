@@ -1,7 +1,9 @@
 package rest
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.ibm.com/tantawi/inferno/pkg/config"
@@ -191,7 +193,16 @@ func getServiceClass(c *gin.Context) {
 
 func addServiceClass(c *gin.Context) {
 	name := c.Param("name")
-	system.AddServiceClass(name)
+	priority := config.DefaultServiceClassPriority
+	if prioStr := c.Param("priority"); prioStr != "" {
+		if prioInt, err := strconv.Atoi(prioStr); err != nil {
+			c.IndentedJSON(http.StatusBadRequest, gin.H{"message": "service class priority " + prioStr + " invalid"})
+			return
+		} else {
+			priority = prioInt
+		}
+	}
+	system.AddServiceClass(name, priority)
 	svc := system.ServiceClass(name)
 	c.IndentedJSON(http.StatusOK, svc.Spec())
 }
@@ -234,7 +245,7 @@ func addServiceClassModelTarget(c *gin.Context) {
 	}
 	svcName := targetSpec.Name
 	if system.ServiceClass(svcName) == nil {
-		system.AddServiceClass(svcName)
+		system.AddServiceClass(svcName, targetSpec.Priority)
 	}
 	svc := system.ServiceClass(svcName)
 	svc.SetTargetFromSpec(&targetSpec)
@@ -395,6 +406,7 @@ func optimizeOne(c *gin.Context) {
 		return
 	}
 	solution := system.GenerateSolution()
+	fmt.Println(system)
 	c.IndentedJSON(http.StatusOK, solution)
 }
 

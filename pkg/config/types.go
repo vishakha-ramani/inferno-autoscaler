@@ -68,10 +68,11 @@ type ServiceClassData struct {
 
 // Specifications of SLO data for a combination of a service class and a model
 type ServiceClassSpec struct {
-	Name    string  `json:"name"`    // service class name
-	Model   string  `json:"model"`   // model name
-	SLO_ITL float32 `json:"slo-itl"` // msec
-	SLO_TTW float32 `json:"slo-ttw"` // msec
+	Name     string  `json:"name"`     // service class name
+	Model    string  `json:"model"`    // model name
+	Priority int     `json:"priority"` // (non-negative) priority (lower value is higher priority)
+	SLO_ITL  float32 `json:"slo-itl"`  // msec
+	SLO_TTW  float32 `json:"slo-ttw"`  // msec
 }
 
 // Data related to a Server

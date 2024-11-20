@@ -62,6 +62,13 @@ func (s *Server) ServiceClassName() string {
 	return s.serviceClassName
 }
 
+func (s *Server) Priority() int {
+	if svc := GetServiceClass(s.serviceClassName); svc != nil {
+		return svc.Priority()
+	}
+	return config.DefaultServiceClassPriority
+}
+
 func (s *Server) ModelName() string {
 	return s.modelName
 }

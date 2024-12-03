@@ -78,7 +78,7 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	if N < 1 {
 		N = 1
 	}
-	maxQueue := perf.MaxBatchSize * config.MaxQueueToBatchRatio
+	maxQueue := N * config.MaxQueueToBatchRatio
 
 	// distribution of token time assumed deterministic
 	tokenTimeLimit := target.ITL

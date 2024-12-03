@@ -5,7 +5,7 @@ metadata:
   namespace: infer
   labels:
     inferno.server.managed: "true"
-    inferno.server.name: vllm-001
+    inferno.server.name: vllm-002
     inferno.server.model: granite_13b
     inferno.server.class: Bronze
     inferno.server.allocation.accelerator: H100

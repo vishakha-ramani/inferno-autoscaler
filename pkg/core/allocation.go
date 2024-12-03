@@ -51,7 +51,7 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	if server = GetServer(serverName); server == nil {
 		return nil
 	}
-	if load = server.Load(); load == nil {
+	if load = server.Load(); load == nil || load.ArrivalRate <= 0 || load.AvgLength <= 0 {
 		return nil
 	}
 

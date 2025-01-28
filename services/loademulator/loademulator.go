@@ -30,8 +30,8 @@ type LoadEmulator struct {
 // create a new load emulator
 func NewLoadEmulator(intervalSec int, alpha float32) (loadEmulator *LoadEmulator, err error) {
 	if intervalSec <= 0 || alpha < 0 || alpha > 1 {
-		return nil, fmt.Errorf("invalid input: interval=" + strconv.Itoa(intervalSec) +
-			", alpha=" + strconv.FormatFloat(float64(alpha), 'f', 3, 32))
+		return nil, fmt.Errorf("%s", "invalid input: interval="+strconv.Itoa(intervalSec)+
+			", alpha="+strconv.FormatFloat(float64(alpha), 'f', 3, 32))
 	}
 	var kubeClient *kubernetes.Clientset
 	if kubeClient, err = ctrl.GetKubeClient(); err == nil {

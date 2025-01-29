@@ -6,12 +6,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.ibm.com/tantawi/inferno/pkg/config"
 	"github.ibm.com/tantawi/inferno/pkg/rest"
 	"github.ibm.com/tantawi/inferno/pkg/utils"
 )
 
 var Wg sync.WaitGroup
+var mutex sync.Mutex
+
+var controller *Controller
 
 // Controller is the main client user of the Optimizer:
 //   - keeps static data about accelerators, models, and service classes
@@ -19,7 +23,8 @@ var Wg sync.WaitGroup
 //   - periodically calls the Optimizer to get servers desired state
 //   - implements desired state through an Actuator
 type Controller struct {
-	State *State
+	State  *State
+	router *gin.Engine
 }
 
 // State consists of static (read from files) and dynamic data
@@ -35,12 +40,15 @@ type State struct {
 }
 
 func NewController() (*Controller, error) {
-	return &Controller{
+	controller = &Controller{
 		State: &State{
 			SystemData: &config.SystemData{},
 			ServerMap:  map[string]ServerKubeInfo{},
 		},
-	}, nil
+		router: gin.Default(),
+	}
+	controller.router.GET("/invoke", invoke)
+	return controller, nil
 }
 
 // initialize
@@ -114,21 +122,40 @@ func (a *Controller) Init() error {
 
 // periodically run the controller
 func (a *Controller) Run(controlPeriod int) {
-	// start periodic process
+	// start server
 	Wg.Add(1)
 	go func() {
 		defer Wg.Done()
-		agentTicker := time.NewTicker(time.Second * time.Duration(controlPeriod))
-		for range agentTicker.C {
-			if err := a.Optimize(); err != nil {
-				fmt.Printf("%v: skipping cycle ... reason=%s\n", time.Now().Format("15:04:05.000"), err.Error())
-			}
+		host := ""
+		port := "8080"
+		if h := os.Getenv(ControllerHostEnvName); h != "" {
+			host = h
 		}
+		if p := os.Getenv(ControllerPortEnvName); p != "" {
+			port = p
+		}
+		a.router.Run(host + ":" + port)
 	}()
+
+	// start periodic process
+	if controlPeriod > 0 {
+		Wg.Add(1)
+		go func() {
+			defer Wg.Done()
+			agentTicker := time.NewTicker(time.Second * time.Duration(controlPeriod))
+			for range agentTicker.C {
+				if err := a.Optimize(); err != nil {
+					fmt.Printf("%v: skipping cycle ... reason=%s\n", time.Now().Format("15:04:05.000"), err.Error())
+				}
+			}
+		}()
+	}
 }
 
 // run an optimization loop: collect data, call optimizer, and actuate decisions
 func (a *Controller) Optimize() error {
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	// call Collector to get updated server data
 	startTime := time.Now()

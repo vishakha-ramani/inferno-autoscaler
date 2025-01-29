@@ -6,6 +6,9 @@
 # set if external cluster mode
 export KUBECONFIG=$HOME/.kube/config
 
+export CONTROLLER_HOST=localhost
+export CONTROLLER_PORT=3300
+
 export COLLECTOR_HOST=localhost
 export COLLECTOR_PORT=3301
 

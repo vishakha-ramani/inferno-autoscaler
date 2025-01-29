@@ -19,7 +19,7 @@ func main() {
 	// get args
 	period := ctrl.DefaultControlPeriodSeconds
 	if len(os.Args) > 1 {
-		if periodArg, err := strconv.Atoi(os.Args[1]); err == nil && periodArg > 0 {
+		if periodArg, err := strconv.Atoi(os.Args[1]); err == nil && periodArg >= 0 {
 			period = periodArg
 		} else {
 			fmt.Println("bad argument for control period " + os.Args[1])
@@ -27,7 +27,7 @@ func main() {
 		}
 	} else {
 		if periodEnvStr := os.Getenv(ctrl.ControlPeriodEnvName); periodEnvStr != "" {
-			if periodEnv, err := strconv.Atoi(periodEnvStr); err == nil && periodEnv > 0 {
+			if periodEnv, err := strconv.Atoi(periodEnvStr); err == nil && periodEnv >= 0 {
 				period = periodEnv
 			} else {
 				fmt.Println("bad env variable for control period " + periodEnvStr)

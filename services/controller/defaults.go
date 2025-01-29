@@ -2,6 +2,9 @@ package controller
 
 // Environment names for hosts and ports
 const (
+	ControllerHostEnvName = "CONTROLLER_HOST"
+	ControllerPortEnvName = "CONTROLLER_PORT"
+
 	CollectorHostEnvName = "COLLECTOR_HOST"
 	CollectorPortEnvName = "COLLECTOR_PORT"
 
@@ -29,7 +32,7 @@ const (
 	ActuatorVerb = "update"
 
 	// others
-	DefaultControlPeriodSeconds int = 60
+	DefaultControlPeriodSeconds int = 60 // periodicity of control (zero means aperiodic)
 )
 
 // Kube config

@@ -23,6 +23,8 @@ spec:
         app: example
     spec:
       containers:
-      - name: example-container
-        image: queue
+      - name: main
+        image: nginx
         imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80

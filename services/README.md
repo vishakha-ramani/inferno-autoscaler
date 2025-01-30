@@ -4,40 +4,81 @@
 
 ## Demo
 
-Steps to run a demo of the control loop:
+### Steps to run a demo of the control loop
 
 - Create a Kubernetes cluster and make sure `$HOME/.kube/config` points to it.
 - Run script to create terminals for the various components. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
 
     ```bash
-    cd scripts
+    cd $INFERNO_REPO/scripts
     ./launch-terms.sh
     ```
 
+    where `$INFERNO_REPO` is the path to this repository.
+
     ![snapshot](../docs/arch/snapshot.png)
 
-    There are five components: Collector, Optimizer, Actuator, Controller, and Load Generator.
-    Terminals for the Collector, Optimizer, Actuator, and Controller are (light) green, red, blue, and red, repectively.
-    The Load Generator is orange.
-    The green terminal is for kubectl commands.
-    And, the beige terminal to show the currently runnning pods.
+    In this demo there are five components: Collector, Optimizer, Actuator, Controller, and Load Emulator.
+    Terminals for the Collector, Optimizer, Actuator, and Controller are (light) green, red, blue, and yellow, repectively.
+    The Load Emulator is orange.
+    The green terminal is for interaction with the cluster through kubectl commands.
+    And, the beige terminal to observe the currently running pods.
 
-- Set the environment in the component terminals by running
-
-    ```bash
-    . $INFERNO_REPO/services/scripts/setenv.sh
-    ```
-
-    where `$INFERNO_REPO` is the path to the repository.
-
-- Deploy sample deplyments (green terminal)
+- Set the data path to the static data for the Controller (yellow).
 
     ```bash
-    kubectl deploy -f ns.yaml
-    kubectl deploy -f dep1.yaml,dep2.yaml,dep3.yaml
+    export INFERNO_DATA_PATH=$INFERNO_REPO/samples/large/
     ```
 
-    Three deployments will be created in the namespace `infer`.
+- Set the environment in all of the (five) component terminals.
 
-- Start the components.
+    ```bash
+    . $INFERNO_REPO/services/scripts/setparms.sh
+    ```
+
+- Deploy sample deployments (green terminal) in namespace `infer`, representing three inference servers.
+
+    ```bash
+    kubectl apply -f ns.yaml
+    kubectl apply -f dep1.yaml,dep2.yaml,dep3.yaml
+    ```
+
+- Observe (beige) changes in the number of pods (replicas) for all inference servers (deployments).
+
+    ```bash
+    watch kubectl get pods -n infer
+    ```
+
+- Run the components.
+
+  - Collector (light green), Optimizer (red), and Actuator (blue)
   
+    ```bash
+    go run main.go
+    ```
+
+  - Controller (yellow)
+  
+    ```bash
+    go run main.go <controlPeriodInSec>
+    ```
+
+    The control period dictates the frequency with which the Controler goes through a control loop (default 60).
+    In addition, the Controler runs as a REST server with an endpoint `/invoke` for on-demand activation of the control loop. Hence, **periodic** as well as **aperiodic** modes are supported simultaneously. Setting `controlPeriodInSec` to zero makes the Controller run in the **aperiodic** mode only.
+
+    ```bash
+    curl http://$CONTROLLER_HOST:$CONTROLLER_PORT/invoke
+    ```
+
+    (Default is localhost:3300)
+
+  - Load Emulator (orange)
+  
+    ```bash
+    go run main.go <intervalInSec> <alpha (0,1)>
+    ```
+
+    The Load Emulator periodically, given by the argument `intervalInSec`, pertubs the values of request rate and average number of tokens per request for all inference servers (deployments) in the cluster. The disturbance amount is normally distributed with zero mean and `sigma` standard deviation, where `sigma = alpha * originalUndisturbedValue`.
+    (Default arguments are 60 and 0.5, respectively.)
+
+Ctrl-c to stop all components.

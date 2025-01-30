@@ -88,7 +88,7 @@ func POSTOptimize(systemData *config.SystemData) (*config.AllocationSolution, er
 		}
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("optimize failed to find solution: " + res.Status)
+			return nil, fmt.Errorf("%s", "optimize failed to find solution: "+res.Status)
 		}
 		solution := config.AllocationSolution{}
 		derr := json.NewDecoder(res.Body).Decode(&solution)
@@ -136,7 +136,7 @@ func POSTActuator(actuatorInfo *ServerActuatorInfo) error {
 		}
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusOK {
-			return fmt.Errorf("actuator failed: " + res.Status)
+			return fmt.Errorf("%s", "actuator failed: "+res.Status)
 		}
 		return nil
 	}

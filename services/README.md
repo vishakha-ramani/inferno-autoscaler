@@ -7,7 +7,7 @@
 ### Steps to run a demo of the control loop
 
 - Create a Kubernetes cluster and make sure `$HOME/.kube/config` points to it.
-- Run script to create terminals for the various components. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
+- Run script to create terminals for the various components. You may need to `brew install term` and add terminal coloring support. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
 
     ```bash
     cd $INFERNO_REPO/scripts

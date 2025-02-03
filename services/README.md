@@ -4,10 +4,20 @@
 
 ## Demo
 
+### Prerequisites
+
+- lp_solve Mixed Integer Linear Programming (MILP) solver
+
+  Installation instructions and code in [lpsolve repository](https://github.ibm.com/tantawi/lpsolve)
+
+- IBM CPLEX (optional)
+
+  Information and instructions [IBM CPLEX as a solver](https://github.ibm.com/tantawi/lpsolve/tree/main/cplex)
+
 ### Steps to run a demo of the control loop
 
 - Create a Kubernetes cluster and make sure `$HOME/.kube/config` points to it.
-- Run script to create terminals for the various components. You may need to `brew install term` and add terminal coloring support. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
+- Run script to create terminals for the various components. You may need to install [term](https://github.com/liyanage/macosx-shell-scripts/blob/master/term) and add terminal coloring support. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
 
     ```bash
     cd $INFERNO_REPO/scripts

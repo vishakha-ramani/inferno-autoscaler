@@ -1,4 +1,4 @@
-module github.ibm.com/tantawi/inferno
+module github.ibm.com/ai-platform-optimization/inferno
 
 go 1.23.0
 

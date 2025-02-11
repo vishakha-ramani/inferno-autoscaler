@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	ctrl "github.ibm.com/tantawi/inferno/services/controller"
+	ctrl "github.ibm.com/ai-platform-optimization/inferno/services/controller"
 )
 
 // create and run a Controller

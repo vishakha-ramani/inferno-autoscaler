@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
 	"github.ibm.com/tantawi/queue-analysis/pkg/queue"
 	"github.ibm.com/tantawi/queue-analysis/pkg/utils"
 )

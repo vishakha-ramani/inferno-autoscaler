@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
 )
 
 type Optimizer struct {

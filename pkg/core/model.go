@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.ibm.com/tantawi/inferno/pkg/config"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
 )
 
 // An inference model

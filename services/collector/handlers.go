@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.ibm.com/tantawi/inferno/pkg/config"
-	ctrl "github.ibm.com/tantawi/inferno/services/controller"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+	ctrl "github.ibm.com/ai-platform-optimization/inferno/services/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

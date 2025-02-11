@@ -6,11 +6,11 @@ import (
 	"math/rand/v2"
 	"os"
 
-	"github.ibm.com/tantawi/inferno/pkg/config"
-	"github.ibm.com/tantawi/inferno/pkg/core"
-	"github.ibm.com/tantawi/inferno/pkg/manager"
-	"github.ibm.com/tantawi/inferno/pkg/solver"
-	"github.ibm.com/tantawi/inferno/pkg/utils"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/manager"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/solver"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/utils"
 )
 
 func main() {

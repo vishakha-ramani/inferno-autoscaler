@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.ibm.com/tantawi/inferno/pkg/rest"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/rest"
 )
 
 // create and run a REST API server

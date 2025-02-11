@@ -3,8 +3,8 @@ package solver
 import (
 	"fmt"
 
-	"github.ibm.com/tantawi/inferno/pkg/config"
-	"github.ibm.com/tantawi/inferno/pkg/core"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
 	lpsolveConfig "github.ibm.com/tantawi/lpsolve/pkg/config"
 	lpsolve "github.ibm.com/tantawi/lpsolve/pkg/core"
 	lpsolveUtils "github.ibm.com/tantawi/lpsolve/pkg/utils"

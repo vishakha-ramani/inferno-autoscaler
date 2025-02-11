@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.ibm.com/tantawi/inferno/services/loademulator"
+	"github.ibm.com/ai-platform-optimization/inferno/services/loademulator"
 )
 
 var (

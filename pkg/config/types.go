@@ -1,5 +1,7 @@
 package config
 
+// TODO: add json validation and default values
+
 // All data related to the system (accelerators, models, service classes, ...)
 type SystemData struct {
 	Spec SystemSpec `json:"system"`

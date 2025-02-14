@@ -7,6 +7,7 @@ import (
 )
 
 // create and run a REST API server
+//   - stateless (default) or statefull (with -F argument)
 func main() {
 	var server rest.RESTServer
 	statefull := len(os.Args) > 1 && os.Args[1] == rest.DefaultStatefull

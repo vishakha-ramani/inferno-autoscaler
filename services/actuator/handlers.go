@@ -72,6 +72,7 @@ func update(c *gin.Context) {
 		deployName := d.Name
 		nameSpace := d.Namespace
 
+		// set allocation to none (no feasible allocation was found by the optimizer)
 		allocData := &config.AllocationData{
 			Accelerator: "",
 			NumReplicas: 0,

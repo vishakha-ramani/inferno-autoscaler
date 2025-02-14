@@ -7,7 +7,7 @@ import (
 )
 
 // An accelerator used in an inference server
-//   - full or multiple GPU units
+//   - full or multiple GPU units (cards)
 type Accelerator struct {
 	name string
 	spec *config.AcceleratorSpec

@@ -112,6 +112,9 @@ func (s *Solver) SolveLimited() {
 	for serverName, server := range core.GetServers() {
 		server.RemoveAllocation()
 		allAllocs := server.AllAllocations()
+		if len(allAllocs) == 0 {
+			continue
+		}
 		e := &entry{
 			serverName:  serverName,
 			priority:    server.Priority(),

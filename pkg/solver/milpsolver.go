@@ -5,9 +5,9 @@ import (
 
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
-	lpsolveConfig "github.ibm.com/tantawi/lpsolve/pkg/config"
-	lpsolve "github.ibm.com/tantawi/lpsolve/pkg/core"
-	lpsolveUtils "github.ibm.com/tantawi/lpsolve/pkg/utils"
+	lpsolveConfig "github.ibm.com/modeling-analysis/lpsolve/pkg/config"
+	lpsolve "github.ibm.com/modeling-analysis/lpsolve/pkg/core"
+	lpsolveUtils "github.ibm.com/modeling-analysis/lpsolve/pkg/utils"
 )
 
 type MILPSolver struct {

@@ -70,17 +70,24 @@
   - Controller (yellow)
   
     ```bash
-    go run main.go <controlPeriodInSec>
+    go run main.go <controlPeriodInSec> <isDynamicMode>
     ```
 
     The control period dictates the frequency with which the Controler goes through a control loop (default 60).
-    In addition, the Controler runs as a REST server with an endpoint `/invoke` for on-demand activation of the control loop. Hence, **periodic** as well as **aperiodic** modes are supported simultaneously. Setting `controlPeriodInSec` to zero makes the Controller run in the **aperiodic** mode only.
+    In addition, the Controler runs as a REST server with an endpoint `/invoke` for on-demand activation of the control loop.
+    Hence, **periodic** as well as **aperiodic** modes are supported simultaneously.
+    Setting `controlPeriodInSec` to zero makes the Controller run in the **aperiodic** mode only.
 
     ```bash
     curl http://$CONTROLLER_HOST:$CONTROLLER_PORT/invoke
     ```
 
     (Default is localhost:3300)
+
+    Further, there is an option for running the Controller in dynamic mode.
+    This means that, at the beginning of every control cycle, the (static) data files are read (default false).
+    The arguments for the Controller may also be set through the environment variables `INFERNO_CONTROL_PERIOD` and `INFERNO_CONTROL_DYNAMIC`, respectively.
+    The command line arguments override the values of the environment variables.
 
   - Load Emulator (orange)
   

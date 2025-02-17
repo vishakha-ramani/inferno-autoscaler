@@ -23,8 +23,9 @@ var controller *Controller
 //   - periodically calls the Optimizer to get servers desired state
 //   - implements desired state through an Actuator
 type Controller struct {
-	State  *State
-	router *gin.Engine
+	State         *State
+	router        *gin.Engine
+	isDynamicMode bool
 }
 
 // State consists of static (read from files) and dynamic data
@@ -39,13 +40,14 @@ type State struct {
 	ServerMap map[string]ServerKubeInfo
 }
 
-func NewController() (*Controller, error) {
+func NewController(isDynamicMode bool) (*Controller, error) {
 	controller = &Controller{
 		State: &State{
 			SystemData: &config.SystemData{},
 			ServerMap:  map[string]ServerKubeInfo{},
 		},
-		router: gin.Default(),
+		router:        gin.Default(),
+		isDynamicMode: isDynamicMode,
 	}
 	controller.router.GET("/invoke", invoke)
 	return controller, nil
@@ -156,6 +158,12 @@ func (a *Controller) Run(controlPeriod int) {
 func (a *Controller) Optimize() error {
 	mutex.Lock()
 	defer mutex.Unlock()
+
+	if a.isDynamicMode {
+		if err := controller.Init(); err != nil {
+			return err
+		}
+	}
 
 	// call Collector to get updated server data
 	startTime := time.Now()

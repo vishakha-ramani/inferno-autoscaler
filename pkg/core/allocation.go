@@ -6,8 +6,8 @@ import (
 	"math"
 
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/tantawi/queue-analysis/pkg/queue"
-	"github.ibm.com/tantawi/queue-analysis/pkg/utils"
+	"github.ibm.com/modeling-analysis/queue-analysis/pkg/queue"
+	"github.ibm.com/modeling-analysis/queue-analysis/pkg/utils"
 )
 
 // Allocation details of an accelerator to a server

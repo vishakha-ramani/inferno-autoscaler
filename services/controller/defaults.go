@@ -11,8 +11,9 @@ const (
 	ActuatorHostEnvName = "ACTUATOR_HOST"
 	ActuatorPortEnvName = "ACTUATOR_PORT"
 
-	DataPathEnvName      = "INFERNO_DATA_PATH"
-	ControlPeriodEnvName = "INFERNO_CONTROL_PERIOD"
+	DataPathEnvName       = "INFERNO_DATA_PATH"
+	ControlPeriodEnvName  = "INFERNO_CONTROL_PERIOD"
+	ControlDynamicEnvName = "INFERNO_CONTROL_DYNAMIC"
 )
 
 const (
@@ -32,7 +33,8 @@ const (
 	ActuatorVerb = "update"
 
 	// others
-	DefaultControlPeriodSeconds int = 60 // periodicity of control (zero means aperiodic)
+	DefaultControlPeriodSeconds int  = 60 // periodicity of control (zero means aperiodic)
+	DefaultControlDynamicMode   bool = false
 )
 
 // Kube config

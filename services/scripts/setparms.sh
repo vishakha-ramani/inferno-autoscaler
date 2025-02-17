@@ -19,5 +19,6 @@ export ACTUATOR_HOST=localhost
 export ACTUATOR_PORT=3303
 
 export INFERNO_CONTROL_PERIOD=60
+export INFERNO_CONTROL_DYNAMIC=false
 
 echo "==> parameters set"

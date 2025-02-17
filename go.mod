@@ -6,8 +6,8 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.55.0
+	github.ibm.com/modeling-analysis/lpsolve v0.0.0-20250217213101-ededdbe6ced5
 	github.ibm.com/modeling-analysis/queue-analysis v0.0.0-20250217195721-7914f62c1d96
-	github.ibm.com/tantawi/lpsolve v0.0.0-20241003145736-6cb93d3132df
 	k8s.io/api v0.31.2
 	k8s.io/apimachinery v0.31.2
 	k8s.io/client-go v0.31.2

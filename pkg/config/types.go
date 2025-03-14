@@ -73,8 +73,9 @@ type ServiceClassSpec struct {
 	Name     string  `json:"name"`     // service class name
 	Model    string  `json:"model"`    // model name
 	Priority int     `json:"priority"` // (non-negative) priority (lower value is higher priority)
-	SLO_ITL  float32 `json:"slo-itl"`  // msec
-	SLO_TTW  float32 `json:"slo-ttw"`  // msec
+	SLO_ITL  float32 `json:"slo-itl"`  // inter-token latency (msec)
+	SLO_TTW  float32 `json:"slo-ttw"`  // request waiting time (msec)
+	SLO_TPS  float32 `json:"slo-tps"`  // throughput (tokens/sec)
 }
 
 // Data related to a Server

@@ -235,6 +235,7 @@ func getServiceClassModelTarget(c *gin.Context) {
 		Model:   model,
 		SLO_ITL: target.ITL,
 		SLO_TTW: target.TTW,
+		SLO_TPS: target.TPS,
 	})
 }
 
@@ -271,6 +272,7 @@ func removeServiceClassModelTarget(c *gin.Context) {
 		Model:   model,
 		SLO_ITL: target.ITL,
 		SLO_TTW: target.TTW,
+		SLO_TPS: target.TPS,
 	})
 }
 

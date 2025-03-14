@@ -17,11 +17,12 @@ type ServiceClass struct {
 type Target struct {
 	ITL float32
 	TTW float32
+	TPS float32
 }
 
 func (t *Target) String() string {
-	return fmt.Sprintf("[ITL=%v, TTW=%v]",
-		t.ITL, t.TTW)
+	return fmt.Sprintf("[ITL=%v, TTW=%v, TPS=%v]",
+		t.ITL, t.TTW, t.TPS)
 }
 
 func NewServiceClass(name string, priority int) *ServiceClass {
@@ -41,6 +42,7 @@ func (c *ServiceClass) SetTargetFromSpec(spec *config.ServiceClassSpec) {
 		c.targets[spec.Model] = &Target{
 			ITL: spec.SLO_ITL,
 			TTW: spec.SLO_TTW,
+			TPS: spec.SLO_TPS,
 		}
 	}
 }
@@ -71,6 +73,7 @@ func (c *ServiceClass) Spec() []config.ServiceClassSpec {
 			Model:    modelName,
 			SLO_ITL:  target.ITL,
 			SLO_TTW:  target.TTW,
+			SLO_TPS:  target.TPS,
 		}
 		i++
 	}

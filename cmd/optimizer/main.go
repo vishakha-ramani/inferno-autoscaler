@@ -6,7 +6,7 @@ import (
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/rest"
 )
 
-// create and run a REST API server
+// create and run a REST API Optimizer server
 //   - stateless (default) or statefull (with -F argument)
 func main() {
 	var server rest.RESTServer

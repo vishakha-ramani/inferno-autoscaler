@@ -18,7 +18,7 @@ echo "==> setting up environment"
 export SCRIPTS_DIR=.
 export BASE_DIR=../..
 export PKG_DIR=$BASE_DIR/pkg
-export DEMOS_DIR=$BASE_DIR/demos
+export CMD_DIR=$BASE_DIR/cmd
 export SAMPLES_DIR=$BASE_DIR/samples
 export SERVICES_DIR=$BASE_DIR/services
 export YAMLS_DIR=$SERVICES_DIR/yamls

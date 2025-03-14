@@ -3,23 +3,23 @@
 echo "Launching terminals ..."
 
 # load
-term -p 50,50 -s 400,300 $DEMOS_DIR/loademulator set_theme black orange
+term -p 50,50 -s 400,300 $CMD_DIR/loademulator set_theme black orange
 sleep 1
 
 # collector
-term -p 50,200 -s 800,300 $DEMOS_DIR/collector set_theme black green1
+term -p 50,200 -s 800,300 $CMD_DIR/collector set_theme black green1
 sleep 1
 
 # optimizer
-term -p 50,550 -s 800,300 $PKG_DIR set_theme black red
+term -p 50,550 -s 800,300 $CMD_DIR/optimizer set_theme black red
 sleep 1
 
 # actuator
-term -p 50,900 -s 800,300 $DEMOS_DIR/actuator set_theme aquamarine blue
+term -p 50,900 -s 800,300 $CMD_DIR/actuator set_theme aquamarine blue
 sleep 1
 
 # controller
-term -p 1200,50 -s 800,300 $DEMOS_DIR/controller set_theme black yellow
+term -p 1200,50 -s 800,300 $CMD_DIR/controller set_theme black yellow
 sleep 1
 
 # watch

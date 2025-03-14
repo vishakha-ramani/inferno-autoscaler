@@ -26,3 +26,6 @@ const DefaultServiceClassPriority int = 0
 
 // weight factor for class priority used in greedy limited solver
 var PriorityWeightFactor float32 = 1.0
+
+// fraction of maximum server throughput to provide stability (running this fraction below the maximum)
+var StabilitySafetyFraction float32 = 0.1

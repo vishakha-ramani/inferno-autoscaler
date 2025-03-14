@@ -188,6 +188,36 @@
             "priority": 3,
             "slo-itl": 320,
             "slo-ttw": 2000
+        },
+        {
+            "name": "Batch2K",
+            "model": "llama_13b",
+            "priority": 4,
+            "slo-tps": 2000
+        },
+        {
+            "name": "Batch2K",
+            "model": "llama_70b",
+            "priority": 4,
+            "slo-tps": 2000
+        },
+        {
+            "name": "Batch2K",
+            "model": "granite_13b",
+            "priority": 4,
+            "slo-tps": 2000
+        },
+        {
+            "name": "Batch2K",
+            "model": "granite_34b",
+            "priority": 4,
+            "slo-tps": 2000
+        },
+        {
+            "name": "Batch2K",
+            "model": "mixtral_8_7b",
+            "priority": 4,
+            "slo-tps": 2000
         }
     ]
 }

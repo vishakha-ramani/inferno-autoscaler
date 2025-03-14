@@ -371,7 +371,7 @@ func (s *System) String() string {
 		rate := load.ArrivalRate
 		tokens := load.AvgLength
 		fmt.Fprintf(&b, "c=%s; m=%s; rate=%v; tk=%d; sol=%d, alloc=%v; ", srvClassName, modelName, rate, tokens, len(server.allAllocations), alloc)
-		fmt.Fprintf(&b, "slo-itl=%v, slo-ttw=%v \n", target.ITL, target.TTW)
+		fmt.Fprintf(&b, "slo-itl=%v, slo-ttw=%v, slo-tps=%v \n", target.ITL, target.TTW, target.TPS)
 	}
 
 	b.WriteString("AllocationByType: \n")

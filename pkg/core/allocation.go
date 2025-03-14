@@ -74,17 +74,15 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 
 	// calculate max batch size (N) based on average request length (K)
 	K := load.AvgLength
-	N := perf.MaxBatchSize * perf.AtTokens / K
-	if N < 1 {
-		N = 1
-	}
+	N := max(perf.MaxBatchSize*perf.AtTokens/K, 1)
 	maxQueue := N * config.MaxQueueToBatchRatio
 
 	// distribution of token time assumed deterministic
-	tokenTimeLimit := target.ITL
-	servTimeLimit := float32(K) * tokenTimeLimit
+	servTimeLimit := float32(K) * target.ITL
 	// distribution of waiting time assumed exponential
 	waitTimeLimit := target.TTW / config.SLOMargin
+	// desired throughput (requests/msec)
+	throughputLimit := target.TPS / (1000 * float32(K))
 
 	// calculate state-dependent service rate for queueuing model
 	servRate := make([]float32, N)
@@ -99,31 +97,50 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	lambdaMax := servRate[N-1] * (1 - config.Delta)
 
 	// determine rate at which the average service time is below the service time limit
-	lambdaStarService, ind, err := utils.BinarySearch(lambdaMin, lambdaMax, servTimeLimit, EvalServTime)
-	if err != nil {
-		fmt.Println(err.Error())
-		return nil
-	}
-	if ind < 0 {
-		return nil // unattainable service time limit
+	lambdaStarService := lambdaMax
+	if target.ITL > 0 {
+		lambda, ind, err := utils.BinarySearch(lambdaMin, lambdaMax, servTimeLimit, EvalServTime)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil
+		}
+		if ind < 0 {
+			return nil // unattainable service time limit
+		}
+		lambdaStarService = lambda
 	}
 
 	// determine rate at which the average waiting time is below to the waiting time limit
-	var lambdaStarWait float32
-	lambdaStarWait, ind, err = utils.BinarySearch(lambdaMin, lambdaMax, waitTimeLimit, EvalWaitingTime)
-	if err != nil {
-		fmt.Println(err.Error())
-		return nil
-	}
-	if ind < 0 {
-		return nil // unattainable waiting time limit
+	lambdaStarWait := lambdaMax
+	if target.TTW > 0 {
+		lambda, ind, err := utils.BinarySearch(lambdaMin, lambdaMax, waitTimeLimit, EvalWaitingTime)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil
+		}
+		if ind < 0 {
+			return nil // unattainable waiting time limit
+		}
+		lambdaStarWait = lambda
 	}
 
-	// arrival rate satisfying both service and waiting time SLOs
+	// determine rate for max throughput
+	lambdaStarThroughput := lambdaMax
+	if target.TPS > 0 {
+		lambdaStarThroughput = lambdaMax * (1 - config.StabilitySafetyFraction)
+	}
+
+	// arrival rate satisfying all SLOs
 	lambdaStar := float32(math.Min(float64(lambdaStarService), float64(lambdaStarWait)))
+	lambdaStar = float32(math.Min(float64(lambdaStar), float64(lambdaStarThroughput)))
 
 	// calculate number of replicas
-	totalLambda := load.ArrivalRate / 60 / 1000
+	var totalLambda float32
+	if target.TPS == 0 {
+		totalLambda = load.ArrivalRate / 60 / 1000
+	} else {
+		totalLambda = throughputLimit
+	}
 	numReplicas := int(math.Ceil(float64(totalLambda) / float64(lambdaStar)))
 
 	// calculate cost
@@ -131,9 +148,9 @@ func CreateAllocation(serverName string, gName string) *Allocation {
 	cost := acc.Cost() * float32(totalNumInstances)
 
 	// queueModel.Solve(lambdaStar, 1)
-	// fmt.Printf("model=%s; accelerator=%s; lambdaMin=%v; lambdaMax=%v; servTimeLimit= %v; waitTimeLimit=%v; lambdaStarService=%v; lambdaStarWait=%v; lambdaStar=%v \n",
-	// 	model.spec.Name, gName,
-	// 	lambdaMin, lambdaMax, servTimeLimit, waitTimeLimit, lambdaStarService, lambdaStarWait, lambdaStar)
+	// fmt.Printf("model=%s; accelerator=%s; lambdaMin=%v; lambdaMax=%v; servTimeLimit= %v; waitTimeLimit=%v; lambdaStarService=%v; lambdaStarWait=%v; lambdaStarThroughput= %v, lambdaStar=%v \n",
+	// 	model.Name(), gName,
+	// 	lambdaMin, lambdaMax, servTimeLimit, waitTimeLimit, lambdaStarService, lambdaStarWait, lambdaStarThroughput, lambdaStar)
 	// fmt.Println(queueModel)
 
 	// calculate queue statistics
@@ -212,27 +229,37 @@ func CreateAllocationUsingGGm(serverName string, gName string) *Allocation {
 		return nil
 	}
 
-	gamma := ((load.ArrivalCOV * load.ArrivalCOV) + (load.ServiceCOV * load.ServiceCOV)) / 2
-
 	K := load.AvgLength
-	N := perf.MaxBatchSize * perf.AtTokens / K
-	if N < 1 {
-		N = 1
-	}
+	N := max(perf.MaxBatchSize*perf.AtTokens/K, 1)
 
 	servTime := perf.Alpha + perf.Beta*float32(N)
-	tokenTimeLimit := target.ITL
-	if servTime > tokenTimeLimit {
+	if target.ITL > 0 && servTime > target.ITL {
 		return nil
 	}
 
-	waitTimeLimit := target.TTW / config.SLOMargin
+	numReplicas := 0
+	gamma := ((load.ArrivalCOV * load.ArrivalCOV) + (load.ServiceCOV * load.ServiceCOV)) / 2
+	if target.ITL > 0 && target.TTW > 0 {
+		waitTimeLimit := target.TTW / config.SLOMargin
+		xStar := float32(perf.MaxBatchSize) * waitTimeLimit / (float32(K) * servTime * gamma)
+		rhoStar := xStar / (1 + xStar)
+		lambdaStar := rhoStar / (float32(K) * servTime)
+		numReplicas = int(math.Ceil(float64(load.ArrivalRate) / (float64(lambdaStar) * 60 * 1000)))
+	}
+	if target.TPS > 0 {
+		lambdaMax := float32(N) / (servTime * float32(K))
+		lambdaStarThroughput := lambdaMax * (1 - config.StabilitySafetyFraction)
+		throughputTarget := target.TPS / (1000 * float32(K))
+		n := int(math.Ceil(float64(throughputTarget) / float64(lambdaStarThroughput)))
+		numReplicas = max(numReplicas, n)
+	}
+	if numReplicas == 0 {
+		return nil
+	}
 
-	xStar := float32(perf.MaxBatchSize) * waitTimeLimit / (float32(K) * servTime * gamma)
-	rhoStar := xStar / (1 + xStar)
-	lambdaStar := rhoStar / (float32(K) * servTime)
-	numReplicas := int(math.Ceil(float64(load.ArrivalRate) / (float64(lambdaStar) * 60 * 1000)))
-	cost := acc.Cost() * float32(model.NumInstances(gName)*numReplicas*acc.Multiplicity())
+	// calculate cost
+	totalNumInstances := model.NumInstances(gName) * numReplicas
+	cost := acc.Cost() * float32(totalNumInstances)
 
 	rho := load.ArrivalRate * float32(K) * servTime / (float32(numReplicas) * 60 * 1000)
 	x := rho / (1 - rho)

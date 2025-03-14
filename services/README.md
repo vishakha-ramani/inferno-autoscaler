@@ -20,7 +20,7 @@
 - Run script to create terminals for the various components. You may need to install [term](https://github.com/liyanage/macosx-shell-scripts/blob/master/term) and add terminal coloring support. (Hint: [Change OSX Terminal Settings from Command Line](https://ict4g.net/adolfo/notes/admin/change-osx-terminal-settings-from-command-line.html))
 
     ```bash
-    cd $INFERNO_REPO/scripts
+    cd $INFERNO_REPO/services/scripts
     ./launch-terms.sh
     ```
 

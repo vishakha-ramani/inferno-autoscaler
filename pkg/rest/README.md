@@ -130,14 +130,21 @@ The following data is needed by the Optimizer (Declarations described [here](../
                 "slo-itl": 80,
                 "slo-ttw": 1000
             },
+            {
+                "name": "Batch2K",
+                "model": "mixtral_8_7b",
+                "priority": 4,
+                "slo-tps": 2000
+            },
         ]
     }
     ```
 
     The service class specification includes
 
-   - `slo-itl`: target SLO for ITL (im msec)
-   - `slo-ttw` target SLO for request waiting (queueing) time (im msec)
+   - `slo-itl`: target SLO for ITL (msec)
+   - `slo-ttw` target SLO for request waiting (queueing) time (msec)
+   - `slo-tps` target SLO for throughput (tokens/sec)
 
 1. **Server data**: For all inference servers, the name of the server, the model and service class it serves (currently, assuming a single model and service class per server), and current and desired allocations. The current allocation reflects the state of the server and the desired allocation is provided by the Optimizer (as a solution to an optimization problem). An allocation includes accelerator, number of replicas, maximum batch size, cost, and observed or anticipated average ITL and waiting time, as well as load data. The load data includes statistical metrics about request arrivals and message lengths (number of tokens). An example follows.
 

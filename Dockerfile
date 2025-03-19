@@ -1,10 +1,13 @@
 # Use a multi-stage build
-FROM golang:1.23-bookworm as builder
+FROM golang:1.23-bookworm AS builder
+
+# Install the lpsolve package
 RUN apt-get update && apt-get install -y liblpsolve55-dev
 
 WORKDIR /app
 COPY . .
 
+# Set CGO flags for lpsolve package
 ENV CGO_CFLAGS="-I/usr/include/lpsolve"
 ENV CGO_LDFLAGS="-llpsolve55 -lm -ldl -lcolamd"
 
@@ -19,4 +22,9 @@ RUN for file in $(find cmd -name "main.go"); do \
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y liblpsolve55-dev
 COPY --from=builder /app/bin /bin
-CMD ["/bin/optimizer"]
+
+# Expose the port the API will listen on
+EXPOSE 8080
+
+# Command to run the binary when the container starts
+CMD ["optimizer"]

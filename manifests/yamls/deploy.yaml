@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inferno
+  namespace: inferno
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inferno
+  template:
+    metadata:
+      labels:
+        app: inferno
+    spec:
+      serviceAccountName: inferno
+      volumes:
+        - name: static-data-volume
+          configMap:
+            name: inferno-static-data
+      containers:
+      - name: controller
+        image: inferno:latest
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: static-data-volume
+            mountPath: /etc/data
+        env:
+          - name: CONTROLLER_PORT
+            value: "3300"
+          - name: INFERNO_CONTROL_PERIOD
+            value: "30"
+          - name: INFERNO_CONTROL_DYNAMIC
+            value: "false"
+          - name: INFERNO_DATA_PATH
+            value: "/etc/data/"
+          - name: COLLECTOR_PORT
+            value: "3301"
+          - name: INFERNO_PORT
+            value: "3302"
+          - name: ACTUATOR_PORT
+            value: "3303"
+        ports:
+        - containerPort: 3300
+        command: ["controller"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+      - name: collector
+        image: inferno:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: COLLECTOR_PORT
+            value: "3301"
+          - name: KUBECONFIG
+            value: ""
+        ports:
+        - containerPort: 3301
+        command: ["collector"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+      - name: optimizer
+        image: inferno:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: INFERNO_PORT
+            value: "3302"
+        ports:
+        - containerPort: 3302
+        command: ["optimizer"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+      - name: actuator
+        image: inferno:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: ACTUATOR_PORT
+            value: "3303"
+          - name: KUBECONFIG
+            value: ""
+        ports:
+        - containerPort: 3303
+        command: ["actuator"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"  

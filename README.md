@@ -4,6 +4,8 @@ The inference system optimizer assigns GPU types to inference model servers and 
 
 ## Building
 
+Since a couple of module dependencies are hosted in intranet git repositories, and in order to avoid sharing ssh keys in the build VM, it is recommended to run `go mod vendor` before building the image. The resulting vendor directory may be deleted once the build step is completed.
+
 ```bash
 docker build -t  inferno . --load
 ```
@@ -35,7 +37,7 @@ docker build -t  inferno . --load
     kubectl create configmap inferno-static-data -n inferno --from-file=$INFERNO_REPO/samples/large/ 
     ```
 
-- Deploy inferno in cluster.
+- Deploy inferno in the cluster.
 
     ```bash
     kubectl apply -f sa.yaml
@@ -57,14 +59,14 @@ docker build -t  inferno . --load
     kubectl logs -f $POD -n inferno -c actuator
     ```
 
-- (optional) Start a load emulator to inference servers
+- (Optional) Start a load emulator to inference servers.
 
     ```bash
     kubectl apply -f load-emulator.yaml
     kubectl logs -f load-emulator -n inferno
     ```
 
-- Invoke an inferno control loop
+- Invoke an inferno control loop.
 
     ```bash
     kubectl port-forward deployment/inferno -n inferno 8080:3300

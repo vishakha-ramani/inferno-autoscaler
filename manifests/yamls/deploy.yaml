@@ -20,7 +20,7 @@ spec:
             name: inferno-static-data
       containers:
       - name: controller
-        image: inferno:latest
+        image: quay.io/atantawi/inferno:latest
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: static-data-volume
@@ -51,7 +51,7 @@ spec:
             memory: "1Gi"
             cpu: "1"
       - name: collector
-        image: inferno:latest
+        image: quay.io/atantawi/inferno:latest
         imagePullPolicy: IfNotPresent
         env:
           - name: COLLECTOR_PORT
@@ -69,7 +69,7 @@ spec:
             memory: "1Gi"
             cpu: "1"
       - name: optimizer
-        image: inferno:latest
+        image: quay.io/atantawi/inferno:latest
         imagePullPolicy: IfNotPresent
         env:
           - name: INFERNO_PORT
@@ -85,7 +85,7 @@ spec:
             memory: "2Gi"
             cpu: "1"
       - name: actuator
-        image: inferno:latest
+        image: quay.io/atantawi/inferno:latest
         imagePullPolicy: IfNotPresent
         env:
           - name: ACTUATOR_PORT

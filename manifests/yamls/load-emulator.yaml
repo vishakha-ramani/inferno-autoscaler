@@ -7,7 +7,7 @@ spec:
   serviceAccountName: inferno
   containers:
   - name: loademulator
-    image: inferno:latest
+    image: quay.io/atantawi/inferno:latest
     imagePullPolicy: IfNotPresent
     command: ["loademulator"]
     args: ["60", "0.2"]

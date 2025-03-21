@@ -1,0 +1,48 @@
+{
+    "servers": [
+        {
+            "name": "Premium-opt-125m",
+            "class": "Premium",
+            "model": "opt-125m",
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024
+                }
+            }
+        },
+        {
+            "name": "Premium-granite-3-0-2b",
+            "class": "Premium",
+            "model": "granite-3-0-2b",
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 120,
+                    "avgLength": 1024
+                }
+            }
+        },
+        {
+            "name": "Free-opt-125m",
+            "class": "Free",
+            "model": "opt-125m",
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 480,
+                    "avgLength": 1024
+                }
+            }
+        },
+        {
+            "name": "Free-granite-3-0-2b",
+            "class": "Free",
+            "model": "granite-3-0-2b",
+            "currentAlloc": {
+                "load": {
+                    "arrivalRate": 480,
+                    "avgLength": 1024
+                }
+            }
+        }
+    ]
+}

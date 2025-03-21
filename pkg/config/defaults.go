@@ -21,6 +21,9 @@ var MaxQueueToBatchRatio = 10
 // accelerator transition penalty factor
 var AccelPenaltyFactor = float32(0.1)
 
+// default name of a service class
+const DefaultServiceClassName string = "Free"
+
 // default priority of a service class
 const DefaultServiceClassPriority int = 0
 

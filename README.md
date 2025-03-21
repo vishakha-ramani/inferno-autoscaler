@@ -24,6 +24,26 @@ docker build -t  inferno . --load
     kubectl apply -f dep1.yaml,dep2.yaml,dep3.yaml
     ```
 
+    Note that the deployment should have the following labels set (a missing service class name defaults to *Free*)
+
+    ```bash
+    labels:
+        inferno.server.managed: "true"
+        inferno.server.name: vllm-001
+        inferno.server.model: llama_13b
+        inferno.server.class: Premium
+        inferno.server.allocation.accelerator: MI250
+    ```
+
+    and some optional labels (if metrics are not available from  Pometheus).
+
+    ```bash
+    labels:
+        inferno.server.allocation.maxbatchsize: "8"
+        inferno.server.load.rpm: "30"
+        inferno.server.load.numtokens: "2048"
+    ```
+
 - Create namespace *inferno*.
 
     ```bash

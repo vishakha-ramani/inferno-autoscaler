@@ -29,9 +29,13 @@ type Server struct {
 
 func NewServerFromSpec(spec *config.ServerSpec) *Server {
 	ld := spec.CurrentAlloc.Load
+	svcName := spec.Class
+	if svcName == "" {
+		svcName = config.DefaultServiceClassName
+	}
 	return &Server{
 		name:             spec.Name,
-		serviceClassName: spec.Class,
+		serviceClassName: svcName,
 		modelName:        spec.Model,
 		load:             &ld,
 		allAllocations:   map[string]*Allocation{},

@@ -1,0 +1,59 @@
+{
+    "accelerators": [
+        {
+            "name": "L4",
+            "type": "L4",
+            "multiplicity": 1,
+            "memSize": 24,
+            "memBW": 300,
+            "power" : {
+                "idle": 25,
+                "full": 75,
+                "midPower": 65,
+                "midUtil": 0.6
+            },
+            "cost": 6.00
+        },
+        {
+            "name": "L40S",
+            "type": "L40S",
+            "multiplicity": 1,
+            "memSize": 48,
+            "memBW": 864,
+            "power" : {
+                "idle": 100,
+                "full": 300,
+                "midPower": 250,
+                "midUtil": 0.6
+            },
+            "cost": 32.00
+        },
+        {
+            "name": "A100",
+            "type": "A100",
+            "multiplicity": 1,
+            "memSize": 80,
+            "memBW": 2000,
+            "power" : {
+                "idle": 150,
+                "full": 400,
+                "midPower": 320,
+                "midUtil": 0.6
+            },
+            "cost": 40.00
+        }
+    ],
+    "count": [
+        {
+            "type": "L4",
+            "count": 8
+        },{
+            "type": "L40S",
+            "count": 4
+        },
+        {
+            "type": "A100",
+            "count": 4
+        }
+    ]
+}

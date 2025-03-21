@@ -1,0 +1,32 @@
+{
+    "serviceClasses": [
+        {
+            "name": "Premium",
+            "model": "opt-125m",
+            "priority": 1,
+            "slo-itl": 40,
+            "slo-ttw": 500
+        },
+        {
+            "name": "Premium",
+            "model": "granite-3-0-2b",
+            "priority": 1,
+            "slo-itl": 40,
+            "slo-ttw": 500
+        },
+        {
+            "name": "Free",
+            "model": "opt-125m",
+            "priority": 3,
+            "slo-itl": 80,
+            "slo-ttw": 1000
+        },
+        {
+            "name": "Free",
+            "model": "granite-3-0-2b",
+            "priority": 3,
+            "slo-itl": 80,
+            "slo-ttw": 1000
+        }
+    ]
+}

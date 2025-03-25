@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inferno-optimizer
+  namespace: inferno
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inferno-optimizer
+  template:
+    metadata:
+      labels:
+        app: inferno-optimizer
+    spec:
+      serviceAccountName: inferno
+      containers:
+      - name: optimizer
+        image: quay.io/atantawi/inferno:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: INFERNO_PORT
+            value: "3302"
+        ports:
+        - containerPort: 3302
+        command: ["optimizer"]
+        args: ["-F"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"

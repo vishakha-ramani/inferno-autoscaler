@@ -6,7 +6,7 @@ The host name and port for the server are specified as environment variables `IN
 
 The following data is needed by the Optimizer (Declarations described [here](../config/types.go)).
 
-1. **Accelerator data**: For all accelerators, the specification, such as name, type, cost, and other attributes of an accelerator. And, for all accelerator types, a count of available units of that type. An example follows.
+1. **Accelerator data**: For all accelerators, the specification, such as name, type, cost, and other attributes of an accelerator. An example follows.
 
     ```json
     { 
@@ -47,7 +47,14 @@ The following data is needed by the Optimizer (Declarations described [here](../
                 },
                 "cost": 160.00
             }
-        ],
+        ]
+    }
+    ```
+
+1. **Capacity data**: For all accelerator types, a count of available units of that type. An example follows.
+
+    ```json
+    { 
         "count": [
             {
                 "type": "G2",
@@ -165,8 +172,8 @@ The following data is needed by the Optimizer (Declarations described [here](../
                     "load": {
                         "arrivalRate": 100,
                         "avgLength": 999,
-                        "arrivalCOV": 1.5,
-                        "serviceCOV": 1.5
+                        "arrivalCOV": 1.0,
+                        "serviceCOV": 1.0
                     }
                 },
                 "desiredAlloc": {
@@ -179,8 +186,8 @@ The following data is needed by the Optimizer (Declarations described [here](../
                     "load": {
                         "arrivalRate": 60,
                         "avgLength": 1024,
-                        "arrivalCOV": 1.5,
-                        "serviceCOV": 1.5
+                        "arrivalCOV": 1.0,
+                        "serviceCOV": 1.0
                     }
                 }
             }
@@ -225,8 +232,8 @@ The output of the Optimizer is an Allocation Solution, in addition to updating t
             "load": {
                 "arrivalRate": 60,
                 "avgLength": 1024,
-                "arrivalCOV": 1.5,
-                "serviceCOV": 1.5
+                "arrivalCOV": 1.0,
+                "serviceCOV": 1.0
             }
         }
     }
@@ -285,3 +292,50 @@ There are two types of servers.
 
 1. **Statefull**: All commands listed above are supported. The server keeps the state as data about various entities, allowing additions, updates, and deletions. Optimization is performed on the system as given by the state at the time `/optimize` is called.
 2. **Stateless**: Optimization is performed using the provided system data when `/optimizeOne` is called. Optionally, any command prefixed with `/get` may be called afterwards to get data about various entities.
+
+## Running the REST Optimizer Server
+
+Clone this repository and set environment variable `INFERNO_REPO` to the path to it.
+
+### Run externally
+
+```bash
+cd $INFERNO_REPO/cmd/optimizer
+go run main.go [-F]
+```
+
+The default is to run the server in **Stateless** mode. Use the optional `-F` argument to run in **Statefull** mode.
+
+### Run in cluster
+
+- Deploy optimizer server as a deployment in the cluster. The deployment yaml file starts the server in a container with the `-F` flag.
+
+    ```bash
+    cd $INFERNO_REPO/manifests/yamls
+    kubectl apply -f ns.yaml
+    kubectl apply -f sa.yaml
+    kubectl apply -f deploy-optimizer.yaml
+    ```
+
+- Forward port to local host.
+
+    ```bash
+    kubectl port-forward deployment/inferno-optimizer -n inferno 8080:3302
+    ```
+
+    You may then curl API commands (above) to `http://localhost:8080`.
+
+- (Optional) Inspect logs.
+
+    ```bash
+    POD=$(kubectl get pod -l app=inferno-optimizer -n inferno -o jsonpath="{.items[0].metadata.name}")
+    kubectl logs -f $POD -n inferno 
+    ```
+
+- Cleanup.
+
+    ```bash
+    kubectl delete -f deploy-optimizer.yaml 
+    kubectl delete -f sa.yaml
+    kubectl delete -f ns.yaml
+    ```

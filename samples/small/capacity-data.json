@@ -1,0 +1,20 @@
+{
+    "count": [
+        {
+            "type": "L4",
+            "count": 32
+        },
+        {
+            "type": "A100",
+            "count": 16
+        },
+        {
+            "type": "AIU2",
+            "count": 128
+        },
+        {
+            "type": "G2",
+            "count": 24
+        }
+    ]
+}

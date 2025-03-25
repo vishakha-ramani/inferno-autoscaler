@@ -15,15 +15,19 @@ spec:
     spec:
       serviceAccountName: inferno
       volumes:
-        - name: static-data-volume
-          configMap:
-            name: inferno-static-data
+      - name: all-data
+        projected:
+          sources:
+          - configMap:
+              name: inferno-static-data
+          - configMap:
+              name: inferno-dynamic-data
       containers:
       - name: controller
         image: quay.io/atantawi/inferno:latest
         imagePullPolicy: IfNotPresent
         volumeMounts:
-          - name: static-data-volume
+          - name: all-data
             mountPath: /etc/data
         env:
           - name: CONTROLLER_PORT

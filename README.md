@@ -44,17 +44,28 @@ docker build -t  inferno . --load
         inferno.server.load.numtokens: "2048"
     ```
 
-- Create namespace *inferno*.
+- Create namespace *inferno*, where all optimizer components will reside.
 
     ```bash
     cd $INFERNO_REPO/manifests/yamls
     kubectl apply -f ns.yaml
     ```
 
-- Create a configmap populated with inferno static data.
+- Create a configmap populated with inferno static data, e.g. samples taken from the *large* directory.
 
     ```bash
-    kubectl create configmap inferno-static-data -n inferno --from-file=$INFERNO_REPO/samples/large/ 
+    INFERNO_DATA_PATH=$INFERNO_REPO/samples/large
+    kubectl create configmap inferno-static-data -n inferno \
+    --from-file=/$INFERNO_DATA_PATH/accelerator-data.json \
+    --from-file=/$INFERNO_DATA_PATH/model-data.json \
+    --from-file=/$INFERNO_DATA_PATH/serviceclass-data.json \
+    --from-file=/$INFERNO_DATA_PATH/optimizer-data.json
+    ```
+
+- Create a configmap populated with inferno dynamic data (count of accelerator types).
+
+    ```bash
+    kubectl create configmap inferno-dynamic-data -n inferno --from-file=/$INFERNO_DATA_PATH/capacity-data.json 
     ```
 
 - Deploy inferno in the cluster.
@@ -64,7 +75,7 @@ docker build -t  inferno . --load
     kubectl apply -f deploy.yaml
     ```
 
-- Get the pod name.
+- Get the inferno pod name.
 
     ```bash
     POD=$(kubectl get pod -l app=inferno -n inferno -o jsonpath="{.items[0].metadata.name}")
@@ -100,7 +111,7 @@ docker build -t  inferno . --load
     kubectl delete -f load-emulator.yaml
     kubectl delete -f deploy.yaml 
     kubectl delete -f sa.yaml
-    kubectl delete configmap inferno-static-data -n inferno
+    kubectl delete configmap inferno-static-data inferno-dynamic-data -n inferno
     kubectl delete -f ns.yaml
 
     cd $INFERNO_REPO/services/yamls

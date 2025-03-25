@@ -1,0 +1,40 @@
+{
+    "count": [
+        {
+            "type": "L4",
+            "count": 16
+        },
+        {
+            "type": "L40S",
+            "count": 8
+        },
+        {
+            "type": "A100",
+            "count": 24
+        },
+        {
+            "type": "H100",
+            "count": 8
+        },
+        {
+            "type": "AIU2",
+            "count": 48
+        },
+        {
+            "type": "G2",
+            "count": 16
+        },
+        {
+            "type": "MI210",
+            "count": 24
+        },
+        {
+            "type": "MI250",
+            "count": 24
+        },
+        {
+            "type": "MI300X",
+            "count": 16
+        }
+    ]
+}

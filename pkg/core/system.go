@@ -84,6 +84,7 @@ func (s *System) SetFromSpec(d *config.SystemSpec) *config.OptimizerSpec {
 	s.SetModelsFromSpec(&d.Models)
 	s.SetServiceClassesFromSpec(&d.ServiceClasses)
 	s.SetServersFromSpec(&d.Servers)
+	s.SetCapacityFromSpec(&d.Capacity)
 	return &d.Optimizer.Spec
 }
 
@@ -91,9 +92,6 @@ func (s *System) SetFromSpec(d *config.SystemSpec) *config.OptimizerSpec {
 func (s *System) SetAcceleratorsFromSpec(d *config.AcceleratorData) {
 	for _, v := range d.Spec {
 		s.AddAcceleratorFromSpec(v)
-	}
-	for _, v := range d.Count {
-		s.AddCapacityFromSpec(v)
 	}
 }
 
@@ -111,13 +109,16 @@ func (s *System) RemoveAccelerator(name string) error {
 	return nil
 }
 
-// Add capacity for an accelerator type
-func (s *System) AddCapacityFromSpec(spec config.AcceleratorCount) {
-	if cap, exists := s.capacity[spec.Type]; exists {
-		s.capacity[spec.Type] = cap + spec.Count
-	} else {
-		s.capacity[spec.Type] = spec.Count
+// Set capacity count from spec
+func (s *System) SetCapacityFromSpec(d *config.CapacityData) {
+	for _, v := range d.Count {
+		s.SetCountFromSpec(v)
 	}
+}
+
+// Set capacity count for an accelerator type
+func (s *System) SetCountFromSpec(spec config.AcceleratorCount) {
+	s.capacity[spec.Type] = spec.Count
 }
 
 // Set models from spec

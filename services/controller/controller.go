@@ -55,16 +55,36 @@ func NewController(isDynamicMode bool) (*Controller, error) {
 
 // initialize
 func (a *Controller) Init() error {
-	state := a.State
 
 	CollectorURL = GetURL(CollectorHostEnvName, CollectorPortEnvName)
 	OptimizerURL = GetURL(rest.RestHostEnvName, rest.RestPortEnvName)
 	ActuatorURL = GetURL(ActuatorHostEnvName, ActuatorPortEnvName)
 
-	// read static data from files in data path
+	// read data from files in data path
 	if DataPath = os.Getenv(DataPathEnvName); DataPath == "" {
 		DataPath = DefaultDataPath
 	}
+
+	// read static data
+	if err := a.State.readStaticData(); err != nil {
+		return err
+	}
+
+	// read capacity data
+	if err := a.State.readCapacityData(); err != nil {
+		return err
+	}
+
+	// initialize dynamic server data
+	a.State.SystemData.Spec.Servers = config.ServerData{
+		Spec: make([]config.ServerSpec, 0),
+	}
+
+	return nil
+}
+
+// read static data
+func (state *State) readStaticData() error {
 
 	// read accelerator data
 	fn_acc := DataPath + AcceleratorFileName
@@ -114,12 +134,22 @@ func (a *Controller) Init() error {
 		return err
 	}
 
-	// initialize dynamic server data
-	state.SystemData.Spec.Servers = config.ServerData{
-		Spec: make([]config.ServerSpec, 0),
-	}
-
 	return nil
+}
+
+// read capacity data
+func (state *State) readCapacityData() error {
+	fn_cap := DataPath + CapacityFileName
+	bytes_cap, err_cap := os.ReadFile(fn_cap)
+	if err_cap != nil {
+		return err_cap
+	}
+	if d, err := utils.FromDataToSpec(bytes_cap, config.CapacityData{}); err == nil {
+		state.SystemData.Spec.Capacity = *d
+		return nil
+	} else {
+		return err
+	}
 }
 
 // periodically run the controller
@@ -159,8 +189,14 @@ func (a *Controller) Optimize() error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	// read capacity data
+	if err := a.State.readCapacityData(); err != nil {
+		return err
+	}
+
+	// read static data, if in dynamic mode
 	if a.isDynamicMode {
-		if err := controller.Init(); err != nil {
+		if err := a.State.readStaticData(); err != nil {
 			return err
 		}
 	}

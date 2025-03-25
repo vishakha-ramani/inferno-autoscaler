@@ -237,17 +237,17 @@ The output of the Optimizer is an Allocation Solution, in addition to updating t
 
 | Verb | Command | Parameters | Returns | Description |
 | --- | :---: | :---: | :---: | --- |
-| **Accelerator data** | | | | |
-| /setAccelerators | POST | AcceleratorData |  | set data (spec and count) for all accelerators and types |
 | **Accelerator specs** | | | | |
-| /getAccelerators | GET |  | []AcceleratorSpec | get specs for all accelerators |
+| /setAccelerators | POST | AcceleratorData |  | set specs for all accelerators |
+| /getAccelerators | GET |  | AcceleratorData | get specs for all accelerators |
 | /getAccelerator | GET | name | AcceleratorSpec | get specs for named accelerator |
 | /addAccelerator | POST | AcceleratorSpec |  | add spec for an accelerator |
 | /removeAccelerator | GET | name |  | remove the named accelerator |
 | **Accelerator type counts** | | | | |
-| /getCapacities | GET |  | []AcceleratorCount | get counts for all accelerator types |
+| /setCapacities | POST | CapacityData |  | set counts for all accelerator types |
+| /getCapacities | GET |  | CapacityData | get counts for all accelerator types |
 | /getCapacity | GET | name | AcceleratorCount | get count for an accelerator type |
-| /addCapacity | POST | AcceleratorCount |  | add (+/-) count to an accelerator type |
+| /setCapacity | POST | AcceleratorCount |  | set a count to an accelerator type |
 | /removeCapacity | GET | name |  | remove count of an accelerator type |
 | **Model data** | | | | |
 | /setModels | POST | ModelData |  | set data for models |

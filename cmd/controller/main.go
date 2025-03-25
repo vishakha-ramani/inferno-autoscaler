@@ -69,12 +69,12 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	if !isDynamicMode {
-		if err := controller.Init(); err != nil {
-			fmt.Println(err)
-			return
-		}
+
+	if err := controller.Init(); err != nil {
+		fmt.Println(err)
+		return
 	}
+
 	controller.Run(period)
 	ctrl.Wg.Wait()
 }

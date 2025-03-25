@@ -22,6 +22,7 @@ const (
 
 	// static data file names
 	AcceleratorFileName  = "accelerator-data.json"
+	CapacityFileName     = "capacity-data.json"
 	ModelFileName        = "model-data.json"
 	ServiceClassFileName = "serviceclass-data.json"
 	OptimizerFileName    = "optimizer-data.json"

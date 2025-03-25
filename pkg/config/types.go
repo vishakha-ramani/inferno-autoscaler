@@ -9,17 +9,20 @@ type SystemData struct {
 
 // Specifications for system data
 type SystemSpec struct {
+	// static data
 	Accelerators   AcceleratorData  `json:"acceleratorData"`  // accelerator data
 	Models         ModelData        `json:"modelData"`        // model data
 	ServiceClasses ServiceClassData `json:"serviceClassData"` // service class data
 	Servers        ServerData       `json:"serverData"`       // server data
 	Optimizer      OptimizerData    `json:"optimizerData"`    // optimizer data
+
+	// dynamic data
+	Capacity CapacityData `json:"capacityData"` // data about accelerator type availability
 }
 
 // Data related to an Accelerator
 type AcceleratorData struct {
-	Spec  []AcceleratorSpec  `json:"accelerators"` // accelerator specs
-	Count []AcceleratorCount `json:"count"`        // count of accelerator types
+	Spec []AcceleratorSpec `json:"accelerators"` // accelerator specs
 }
 
 // Specifications for accelerator data
@@ -39,6 +42,11 @@ type PowerSpec struct {
 	Full     int     `json:"full"`     // full utilization power
 	MidPower int     `json:"midPower"` // power at inflection point
 	MidUtil  float32 `json:"midUtil"`  // utilization at inflection point
+}
+
+// Data about accelerator type availability
+type CapacityData struct {
+	Count []AcceleratorCount `json:"count"` // count of accelerator types
 }
 
 // Count of accelerator types in the system

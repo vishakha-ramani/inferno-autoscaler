@@ -34,7 +34,7 @@
     The green terminal is for interaction with the cluster through kubectl commands.
     And, the beige terminal to observe the currently running pods.
 
-- Set the data path to the static data for the Controller (yellow).
+- Set the data path to the data (static+dynamic) for the Controller (yellow).
 
     ```bash
     export INFERNO_DATA_PATH=$INFERNO_REPO/samples/large/

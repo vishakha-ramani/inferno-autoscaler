@@ -17,9 +17,10 @@ func NewStateFullServer() *StateFullServer {
 	server.router.POST("/addAccelerator", addAccelerator)
 	server.router.GET("/removeAccelerator/:name", removeAccelerator)
 
+	server.router.GET("/setCapacities", setCapacities)
 	server.router.GET("/getCapacities", getCapacities)
 	server.router.GET("/getCapacity/:type", getCapacity)
-	server.router.POST("/addCapacity", addCapacity)
+	server.router.POST("/setCapacity", setCapacity)
 	server.router.GET("/removeCapacity/:type", removeCapacity)
 
 	server.router.POST("/setModels", setModels)

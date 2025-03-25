@@ -1,0 +1,15 @@
+{
+    "count": [
+        {
+            "type": "L4",
+            "count": 8
+        },{
+            "type": "L40S",
+            "count": 4
+        },
+        {
+            "type": "A100",
+            "count": 4
+        }
+    ]
+}

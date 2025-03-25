@@ -63,6 +63,15 @@ func removeAccelerator(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, acc.Spec())
 }
 
+func setCapacities(c *gin.Context) {
+	var capacityData config.CapacityData
+	if err := c.BindJSON(&capacityData); err != nil {
+		return
+	}
+	system.SetCapacityFromSpec(&capacityData)
+	c.IndentedJSON(http.StatusOK, capacityData)
+}
+
 func getCapacities(c *gin.Context) {
 	capMap := system.Capacities()
 	capacities := make([]config.AcceleratorCount, len(capMap))
@@ -74,7 +83,9 @@ func getCapacities(c *gin.Context) {
 		}
 		i++
 	}
-	c.IndentedJSON(http.StatusOK, capacities)
+	c.IndentedJSON(http.StatusOK, config.CapacityData{
+		Count: capacities,
+	})
 }
 
 func getCapacity(c *gin.Context) {
@@ -90,17 +101,13 @@ func getCapacity(c *gin.Context) {
 	})
 }
 
-func addCapacity(c *gin.Context) {
+func setCapacity(c *gin.Context) {
 	var count config.AcceleratorCount
 	if err := c.BindJSON(&count); err != nil {
 		return
 	}
-	system.AddCapacityFromSpec(count)
-	cap, _ := system.Capacity(count.Type)
-	c.IndentedJSON(http.StatusOK, config.AcceleratorCount{
-		Type:  count.Type,
-		Count: cap,
-	})
+	system.SetCountFromSpec(count)
+	c.IndentedJSON(http.StatusOK, count)
 }
 
 func removeCapacity(c *gin.Context) {

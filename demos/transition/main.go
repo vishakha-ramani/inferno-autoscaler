@@ -20,6 +20,7 @@ func main() {
 	}
 	prefix := "../../samples/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
+	fn_cap := prefix + "capacity-data.json"
 	fn_mod := prefix + "model-data.json"
 	fn_svc := prefix + "serviceclass-data.json"
 	fn_srv := prefix + "server-data.json"
@@ -33,6 +34,17 @@ func main() {
 	}
 	if d, err := utils.FromDataToSpec(bytes_acc, config.AcceleratorData{}); err == nil {
 		system.SetAcceleratorsFromSpec(d)
+	} else {
+		fmt.Println(err)
+		return
+	}
+
+	bytes_cap, err_cap := os.ReadFile(fn_cap)
+	if err_cap != nil {
+		fmt.Println(err_cap)
+	}
+	if d, err := utils.FromDataToSpec(bytes_cap, config.CapacityData{}); err == nil {
+		system.SetCapacityFromSpec(d)
 	} else {
 		fmt.Println(err)
 		return

@@ -119,6 +119,10 @@ docker build -t  inferno . --load
     kubectl delete -f ns.yaml
     ```
 
+## Running optimizer only
+
+[Instructions](./rest-server/README.md) to run the optimizer as a REST API server in or external to a cluster.
+
 ## Description
 
 ![problem-scope](docs/figs/Slide5.png)

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/rest"
+	rest "github.ibm.com/ai-platform-optimization/inferno/rest-server"
 )
 
 // create and run a REST API Optimizer server

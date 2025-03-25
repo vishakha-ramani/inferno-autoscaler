@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/rest"
 	"github.ibm.com/ai-platform-optimization/inferno/pkg/utils"
+	"github.ibm.com/ai-platform-optimization/inferno/rest-server"
 )
 
 var Wg sync.WaitGroup

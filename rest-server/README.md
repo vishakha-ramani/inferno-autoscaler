@@ -313,7 +313,6 @@ The default is to run the server in **Stateless** mode. Use the optional `-F` ar
     ```bash
     cd $INFERNO_REPO/manifests/yamls
     kubectl apply -f ns.yaml
-    kubectl apply -f sa.yaml
     kubectl apply -f deploy-optimizer.yaml
     ```
 
@@ -335,7 +334,6 @@ The default is to run the server in **Stateless** mode. Use the optional `-F` ar
 - Cleanup.
 
     ```bash
-    kubectl delete -f deploy-optimizer.yaml 
-    kubectl delete -f sa.yaml
+    kubectl delete -f deploy-optimizer.yaml
     kubectl delete -f ns.yaml
     ```

@@ -13,7 +13,6 @@ spec:
       labels:
         app: inferno-optimizer
     spec:
-      serviceAccountName: inferno
       containers:
       - name: optimizer
         image: quay.io/atantawi/inferno:latest

@@ -396,6 +396,7 @@ func optimize(c *gin.Context) {
 		return
 	}
 	solution := system.GenerateSolution()
+	fmt.Println(system)
 	c.IndentedJSON(http.StatusOK, solution)
 }
 

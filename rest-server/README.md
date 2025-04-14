@@ -316,10 +316,16 @@ The default is to run the server in **Stateless** mode. Use the optional `-F` ar
     kubectl apply -f deploy-optimizer.yaml
     ```
 
+- Expose a service.
+
+    ```bash
+    kubectl expose deploy/inferno-optimizer -n inferno
+    ```
+
 - Forward port to local host.
 
     ```bash
-    kubectl port-forward deployment/inferno-optimizer -n inferno 8080:3302
+    kubectl port-forward service/inferno-optimizer -n inferno 8080:3302
     ```
 
     You may then curl API commands (above) to `http://localhost:8080`.
@@ -334,6 +340,7 @@ The default is to run the server in **Stateless** mode. Use the optional `-F` ar
 - Cleanup.
 
     ```bash
+    kubectl delete service inferno-optimizer -n inferno
     kubectl delete -f deploy-optimizer.yaml
     kubectl delete -f ns.yaml
     ```

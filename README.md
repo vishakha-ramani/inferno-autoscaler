@@ -12,37 +12,28 @@ docker build -t  inferno . --load
 
 ## Running
 
+There are several ways to run the optimizer.
+
+1. **Direct function calls**: An example is provided in [main.go](demos/main/main.go).
+
+    ```bash
+    cd demos/main
+    go run main.go
+    ```
+
+1. **REST API server**: The optimizer may run as a REST API server ([instructions](rest-server/README.md)).
+
+1. **Kubernetes controller**: Running in a Kubernetes cluster and using custom resources and a Kubernetes runtime controller, the optimizer may be excercised in reconciliation to updates to the Optimizer custom resource ([reference](https://github.ibm.com/inferno/controller)).
+
+1. **Optimization control loop**: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments, and (4) a periodic Controller that has access to static and dynamic data. The control loop may run either externally ([instructions](services/README.md)) or in a Kubernetes cluster. Following are the steps to run the optimization control loop within a cluster.
+
+### In-cluster optimization control loop
+
 ![inferno-service](docs/slides/inferno-service.png)
 
 - Create or have access to a cluster.
+
 - Clone this repository and set environment variable `INFERNO_REPO` to the path to it.
-- Create deployments representing inference servers in namespace *infer*.
-
-    ```bash
-    cd $INFERNO_REPO/services/yamls
-    kubectl apply -f ns.yaml
-    kubectl apply -f dep1.yaml,dep2.yaml,dep3.yaml
-    ```
-
-    Note that the deployment should have the following labels set (a missing service class name defaults to *Free*)
-
-    ```bash
-    labels:
-        inferno.server.managed: "true"
-        inferno.server.name: vllm-001
-        inferno.server.model: llama_13b
-        inferno.server.class: Premium
-        inferno.server.allocation.accelerator: MI250
-    ```
-
-    and some optional labels (if metrics are not available from  Pometheus).
-
-    ```bash
-    labels:
-        inferno.server.allocation.maxbatchsize: "8"
-        inferno.server.load.rpm: "30"
-        inferno.server.load.numtokens: "2048"
-    ```
 
 - Create namespace *inferno*, where all optimizer components will reside.
 
@@ -71,8 +62,7 @@ docker build -t  inferno . --load
 - Deploy inferno in the cluster.
 
     ```bash
-    kubectl apply -f sa.yaml
-    kubectl apply -f deploy.yaml
+    kubectl apply -f deploy-loop.yaml
     ```
 
 - Get the inferno pod name.
@@ -90,9 +80,44 @@ docker build -t  inferno . --load
     kubectl logs -f $POD -n inferno -c actuator
     ```
 
+- Create deployments representing inference servers in namespace *infer*.
+
+    ```bash
+    cd $INFERNO_REPO/services/yamls
+    kubectl apply -f ns.yaml
+    kubectl apply -f dep1.yaml,dep2.yaml,dep3.yaml
+    ```
+
+    Note that the deployment should have the following labels set (a missing service class name defaults to *Free*)
+
+    ```bash
+    labels:
+        inferno.server.managed: "true"
+        inferno.server.name: vllm-001
+        inferno.server.model: llama_13b
+        inferno.server.class: Premium
+        inferno.server.allocation.accelerator: MI250
+    ```
+
+    and some optional labels (if metrics are not available from  Pometheus).
+
+    ```bash
+    labels:
+        inferno.server.allocation.maxbatchsize: "8"
+        inferno.server.load.rpm: "30"
+        inferno.server.load.numtokens: "2048"
+    ```
+
+- Observe changes in the number of pods (replicas) for all inference servers (deployments).
+
+    ```bash
+    watch kubectl get pods -n infer
+    ```
+
 - (Optional) Start a load emulator to inference servers.
 
     ```bash
+    cd $INFERNO_REPO/manifests/yamls
     kubectl apply -f load-emulator.yaml
     kubectl logs -f load-emulator -n inferno
     ```
@@ -100,7 +125,7 @@ docker build -t  inferno . --load
 - Invoke an inferno control loop.
 
     ```bash
-    kubectl port-forward deployment/inferno -n inferno 8080:3300
+    kubectl port-forward service/inferno -n inferno 8080:80
     curl http://localhost:8080/invoke
     ```
 
@@ -109,8 +134,7 @@ docker build -t  inferno . --load
     ```bash
     cd $INFERNO_REPO/manifests/yamls
     kubectl delete -f load-emulator.yaml
-    kubectl delete -f deploy.yaml 
-    kubectl delete -f sa.yaml
+    kubectl delete -f deploy-loop.yaml 
     kubectl delete configmap inferno-static-data inferno-dynamic-data -n inferno
     kubectl delete -f ns.yaml
 
@@ -118,10 +142,6 @@ docker build -t  inferno . --load
     kubectl delete -f dep1.yaml,dep2.yaml,dep3.yaml
     kubectl delete -f ns.yaml
     ```
-
-## Running optimizer only
-
-[Instructions](./rest-server/README.md) to run the optimizer as a REST API server in or external to a cluster.
 
 ## Description
 

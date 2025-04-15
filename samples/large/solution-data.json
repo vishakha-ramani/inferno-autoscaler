@@ -295,12 +295,12 @@
             }
         },
         "Premium-llama3_8b": {
-            "accelerator": "MI300X",
-            "numReplicas": 2,
+            "accelerator": "2xMI300X",
+            "numReplicas": 1,
             "maxBatch": 19,
             "cost": 130,
-            "itlAverage": 6.582818,
-            "waitAverage": 0.69091797,
+            "itlAverage": 5.357701,
+            "waitAverage": 57.560547,
             "load": {
                 "arrivalRate": 120,
                 "avgLength": 1024,
@@ -351,12 +351,12 @@
             }
         },
         "Premium-mistral_7b": {
-            "accelerator": "G2",
-            "numReplicas": 2,
-            "maxBatch": 38,
+            "accelerator": "MI250",
+            "numReplicas": 1,
+            "maxBatch": 51,
             "cost": 46,
-            "itlAverage": 16.276823,
-            "waitAverage": 0.57421875,
+            "itlAverage": 16.997248,
+            "waitAverage": 137.48047,
             "load": {
                 "arrivalRate": 120,
                 "avgLength": 1024,

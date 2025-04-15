@@ -306,26 +306,21 @@ go run main.go [-F]
 
 The default is to run the server in **Stateless** mode. Use the optional `-F` argument to run in **Statefull** mode.
 
+You may then curl API commands (above) to `http://localhost:8080`.
+
 ### Run in cluster
 
-- Deploy optimizer server as a deployment in the cluster. The deployment yaml file starts the server in a container with the `-F` flag.
+- Deploy optimizer as a deployment, along with a service on port `80`, in name space `inferno` in the cluster. (The deployment yaml file starts the server in a container with the `-F` flag.)
 
     ```bash
     cd $INFERNO_REPO/manifests/yamls
-    kubectl apply -f ns.yaml
     kubectl apply -f deploy-optimizer.yaml
-    ```
-
-- Expose a service.
-
-    ```bash
-    kubectl expose deploy/inferno-optimizer -n inferno
     ```
 
 - Forward port to local host.
 
     ```bash
-    kubectl port-forward service/inferno-optimizer -n inferno 8080:3302
+    kubectl port-forward service/inferno-optimizer -n inferno 8080:80
     ```
 
     You may then curl API commands (above) to `http://localhost:8080`.
@@ -340,7 +335,5 @@ The default is to run the server in **Stateless** mode. Use the optional `-F` ar
 - Cleanup.
 
     ```bash
-    kubectl delete service inferno-optimizer -n inferno
     kubectl delete -f deploy-optimizer.yaml
-    kubectl delete -f ns.yaml
     ```

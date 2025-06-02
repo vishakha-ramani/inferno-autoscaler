@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 )
 
 type Optimizer struct {

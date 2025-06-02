@@ -4,8 +4,6 @@ The inference system optimizer assigns GPU types to inference model servers and 
 
 ## Building
 
-Since a couple of module dependencies are hosted in intranet git repositories, and in order to avoid sharing ssh keys in the build VM, it is recommended to run `go mod vendor` before building the image. The resulting vendor directory may be deleted once the build step is completed.
-
 ```bash
 docker build -t  inferno . --load
 ```
@@ -23,7 +21,7 @@ There are several ways to run the optimizer.
 
 1. **REST API server**: The optimizer may run as a REST API server ([instructions](rest-server/README.md)).
 
-1. **Kubernetes controller**: Running in a Kubernetes cluster and using custom resources and a Kubernetes runtime controller, the optimizer may be excercised in reconciliation to updates to the Optimizer custom resource ([reference](https://github.ibm.com/inferno/controller)).
+1. **Kubernetes controller**: Running in a Kubernetes cluster and using custom resources and a Kubernetes runtime controller, the optimizer may be excercised in reconciliation to updates to the Optimizer custom resource ([reference](https://github.com/llm-inferno/controller)).
 
 1. **Optimization control loop**: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments, and (4) a periodic Controller that has access to static and dynamic data. The control loop may run either externally ([instructions](services/README.md)) or in a Kubernetes cluster. Following are the steps to run the optimization control loop within a cluster.
 

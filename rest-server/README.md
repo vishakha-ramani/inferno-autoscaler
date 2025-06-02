@@ -4,7 +4,7 @@ The host name and port for the server are specified as environment variables `IN
 
 ## Data Format
 
-The following data is needed by the Optimizer (Declarations described [here](../config/types.go)).
+The following data is needed by the Optimizer (Declarations described [types](../config/types.go)).
 
 1. **Accelerator data**: For all accelerators, the specification, such as name, type, cost, and other attributes of an accelerator. An example follows.
 

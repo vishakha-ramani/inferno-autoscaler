@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	ctrl "github.ibm.com/ai-platform-optimization/inferno/services/controller"
+	ctrl "github.com/llm-inferno/inferno/services/controller"
 	"k8s.io/client-go/kubernetes"
 )
 

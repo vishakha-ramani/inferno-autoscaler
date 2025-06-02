@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/modeling-analysis/queue-analysis/pkg/queue"
-	"github.ibm.com/modeling-analysis/queue-analysis/pkg/utils"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/queue-analysis/pkg/queue"
+	"github.com/llm-inferno/queue-analysis/pkg/utils"
 )
 
 // Allocation details of an accelerator to a server

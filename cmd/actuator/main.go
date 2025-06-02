@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.ibm.com/ai-platform-optimization/inferno/services/actuator"
+	"github.com/llm-inferno/inferno/services/actuator"
 )
 
 // create and run an Actuator server

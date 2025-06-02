@@ -7,8 +7,8 @@ import (
 	"math"
 	"slices"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
 )
 
 // Solver of allocation assignment problem

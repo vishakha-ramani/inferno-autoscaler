@@ -1,6 +1,6 @@
 package controller
 
-import "github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+import "github.com/llm-inferno/inferno/pkg/config"
 
 // Inference server information related to Kubernetes
 type ServerKubeInfo struct {

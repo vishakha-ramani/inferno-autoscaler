@@ -3,11 +3,11 @@ package solver
 import (
 	"fmt"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
-	lpsolveConfig "github.ibm.com/modeling-analysis/lpsolve/pkg/config"
-	lpsolve "github.ibm.com/modeling-analysis/lpsolve/pkg/core"
-	lpsolveUtils "github.ibm.com/modeling-analysis/lpsolve/pkg/utils"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
+	lpsolveConfig "github.com/llm-inferno/lpsolve/pkg/config"
+	lpsolve "github.com/llm-inferno/lpsolve/pkg/core"
+	lpsolveUtils "github.com/llm-inferno/lpsolve/pkg/utils"
 )
 
 type MILPSolver struct {

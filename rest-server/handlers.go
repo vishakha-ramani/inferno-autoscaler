@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/core"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/manager"
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/solver"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
+	"github.com/llm-inferno/inferno/pkg/manager"
+	"github.com/llm-inferno/inferno/pkg/solver"
 )
 
 // Handlers for REST API calls

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.ibm.com/ai-platform-optimization/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 )
 
 var (

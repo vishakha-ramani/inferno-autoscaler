@@ -1,13 +1,13 @@
-module github.ibm.com/ai-platform-optimization/inferno
+module github.com/llm-inferno/inferno
 
 go 1.23.0
 
 require (
 	github.com/gin-gonic/gin v1.10.0
+	github.com/llm-inferno/lpsolve v0.0.0-20250602153134-23b56773e87c
+	github.com/llm-inferno/queue-analysis v0.0.0-20250602150849-402e8a06efa7
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/common v0.63.0
-	github.ibm.com/modeling-analysis/lpsolve v0.0.0-20250314204353-3e2c6f4fab35
-	github.ibm.com/modeling-analysis/queue-analysis v0.0.0-20250217195721-7914f62c1d96
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3

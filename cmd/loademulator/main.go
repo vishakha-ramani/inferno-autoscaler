@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/llm-inferno/inferno/services/loademulator"
+	"inferno/services/loademulator"
 )
 
 var (

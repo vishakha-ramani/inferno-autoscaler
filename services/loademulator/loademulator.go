@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	ctrl "github.com/llm-inferno/inferno/services/controller"
+	ctrl "inferno/services/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )

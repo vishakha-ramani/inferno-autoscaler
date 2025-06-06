@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/llm-inferno/inferno/pkg/config"
-	"github.com/llm-inferno/inferno/pkg/utils"
-	"github.com/llm-inferno/inferno/rest-server"
+	"inferno/pkg/config"
+	"inferno/pkg/utils"
+	"inferno/rest-server"
 )
 
 var Wg sync.WaitGroup

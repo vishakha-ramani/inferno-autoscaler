@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/llm-inferno/inferno/pkg/config"
+	"inferno/pkg/config"
 )
 
 // An inference model

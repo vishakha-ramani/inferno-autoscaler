@@ -2,12 +2,15 @@ module github.com/llm-inferno/inferno
 
 go 1.23.0
 
+replace inferno => ./
+
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/llm-inferno/lpsolve v0.0.0-20250602153134-23b56773e87c
 	github.com/llm-inferno/queue-analysis v0.0.0-20250602150849-402e8a06efa7
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/common v0.63.0
+	inferno v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3

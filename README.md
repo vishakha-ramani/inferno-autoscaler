@@ -10,7 +10,7 @@ docker build -t  inferno . --load
 
 ## Running
 
-First, install [prerequisites](services/README.md#prerequisites).
+First, install [prerequisites](services/README.md#prerequisites) if running locally (not using an image).
 
 There are several ways to run the optimizer.
 

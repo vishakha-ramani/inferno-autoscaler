@@ -10,6 +10,8 @@ docker build -t  inferno . --load
 
 ## Running
 
+First, install [prerequisites](services/README.md#prerequisites).
+
 There are several ways to run the optimizer.
 
 1. **Direct function calls**: An example is provided in [main.go](demos/main/main.go).

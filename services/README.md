@@ -8,11 +8,11 @@
 
 - lp_solve Mixed Integer Linear Programming (MILP) solver
 
-  Installation instructions and code in [lpsolve repository](https://github.ibm.com/tantawi/lpsolve)
+  Installation instructions and code in [lpsolve repository](https://github.com/llm-inferno/lpsolve)
 
 - IBM CPLEX (optional)
 
-  Information and instructions [IBM CPLEX as a solver](https://github.ibm.com/tantawi/lpsolve/tree/main/cplex)
+  Information and instructions [IBM CPLEX as a solver](https://github.com/llm-inferno/lpsolve/tree/main/cplex)
 
 ### Steps to run a demo of the control loop
 

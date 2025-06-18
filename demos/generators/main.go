@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 )
 
 func main() {

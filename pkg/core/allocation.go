@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 	"github.com/llm-inferno/queue-analysis/pkg/queue"
 	"github.com/llm-inferno/queue-analysis/pkg/utils"
 )

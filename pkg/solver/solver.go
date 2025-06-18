@@ -7,8 +7,8 @@ import (
 	"math"
 	"slices"
 
-	"inferno/pkg/config"
-	"inferno/pkg/core"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
 )
 
 // Solver of allocation assignment problem

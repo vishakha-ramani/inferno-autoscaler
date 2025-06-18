@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"

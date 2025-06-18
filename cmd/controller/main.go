@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	ctrl "inferno/services/controller"
+	ctrl "github.com/llm-inferno/inferno/services/controller"
 )
 
 // create and run a Controller

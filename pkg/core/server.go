@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/config"
 )
 
 // A server for a service class and model

@@ -3,8 +3,8 @@ package solver
 import (
 	"fmt"
 
-	"inferno/pkg/config"
-	"inferno/pkg/core"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
 	lpsolveConfig "github.com/llm-inferno/lpsolve/pkg/config"
 	lpsolve "github.com/llm-inferno/lpsolve/pkg/core"
 	lpsolveUtils "github.com/llm-inferno/lpsolve/pkg/utils"

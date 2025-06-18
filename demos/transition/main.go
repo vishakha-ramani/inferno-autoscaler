@@ -6,11 +6,11 @@ import (
 	"math/rand/v2"
 	"os"
 
-	"inferno/pkg/config"
-	"inferno/pkg/core"
-	"inferno/pkg/manager"
-	"inferno/pkg/solver"
-	"inferno/pkg/utils"
+	"github.com/llm-inferno/inferno/pkg/config"
+	"github.com/llm-inferno/inferno/pkg/core"
+	"github.com/llm-inferno/inferno/pkg/manager"
+	"github.com/llm-inferno/inferno/pkg/solver"
+	"github.com/llm-inferno/inferno/pkg/utils"
 )
 
 func main() {

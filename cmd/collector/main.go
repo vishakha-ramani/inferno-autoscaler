@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"inferno/services/collector"
+	"github.com/llm-inferno/inferno/services/collector"
 )
 
 // create and run a Collector server

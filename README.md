@@ -8,11 +8,23 @@ The inference system optimizer assigns GPU types to inference model servers and 
 docker build -t  inferno . --load
 ```
 
+## Prerequisites
+
+- lp_solve Mixed Integer Linear Programming (MILP) solver
+
+  [Installation instructions and code](https://github.com/llm-inferno/lpsolve)
+  
+- IBM CPLEX (optional)
+
+  Information and instructions [IBM CPLEX as a solver](https://github.com/llm-inferno/lpsolve/tree/main/cplex)
+
 ## Running
 
-First, install [prerequisites](services/README.md#prerequisites) if running locally (not using an image).
+First, install [prerequisites](#prerequisites) if running locally (not using an image).
 
-There are several ways to run the optimizer.
+### I. Optimizer only
+
+There are two ways to run the optimizer.
 
 1. **Direct function calls**: An example is provided in [main.go](demos/main/main.go).
 
@@ -21,129 +33,64 @@ There are several ways to run the optimizer.
     go run main.go
     ```
 
-1. **REST API server**: The optimizer may run as a REST API server ([instructions](rest-server/README.md)).
+2. **REST API server**: The optimizer may run as a REST API server ([steps](#steps-to-run-the-optimizer-as-a-rest-api-server)).
+
+### II. Optimized auto-scaler
+
+One may run the optimizer as part of an auto-scaling control system, in one of two ways.
 
 1. **Kubernetes controller**: Running in a Kubernetes cluster and using custom resources and a Kubernetes runtime controller, the optimizer may be excercised in reconciliation to updates to the Optimizer custom resource ([reference](https://github.com/llm-inferno/controller)).
 
-1. **Optimization control loop**: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments, and (4) a periodic Controller that has access to static and dynamic data. The control loop may run either externally ([instructions](services/README.md)) or in a Kubernetes cluster. Following are the steps to run the optimization control loop within a cluster.
+2. **Optimization control loop**: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments, and (4) a periodic Controller that has access to static and dynamic data. The [control loop](https://github.com/llm-inferno/control-loop) may run either externally or in a Kubernetes cluster.
 
-### In-cluster optimization control loop
+### Steps to run the optimizer as a REST API server
 
-![inferno-service](docs/slides/inferno-service.png)
+The REST API specifications are [documented](rest-server/README.md).
 
-- Create or have access to a cluster.
+Clone this repository and set environment variable `INFERNO_REPO` to the path to it.
 
-- Clone this repository and set environment variable `INFERNO_REPO` to the path to it.
+#### Option A: Run externally
 
-- Create namespace *inferno*, where all optimizer components will reside.
+```bash
+cd $INFERNO_REPO/cmd/optimizer
+go run main.go [-F]
+```
 
-    ```bash
-    cd $INFERNO_REPO/manifests/yamls
-    kubectl apply -f ns.yaml
-    ```
+The default is to run the server in **Stateless** mode. Use the optional `-F` argument to run in **Statefull** mode. ([Description of modes](rest-server/README.md#rest-server-modes))
 
-- Create a configmap populated with inferno static data, e.g. samples taken from the *large* directory.
+You may then curl [API commands](rest-server/README.md#commands-list) to `http://localhost:8080`.
 
-    ```bash
-    INFERNO_DATA_PATH=$INFERNO_REPO/sample-data/large
-    kubectl create configmap inferno-static-data -n inferno \
-    --from-file=/$INFERNO_DATA_PATH/accelerator-data.json \
-    --from-file=/$INFERNO_DATA_PATH/model-data.json \
-    --from-file=/$INFERNO_DATA_PATH/serviceclass-data.json \
-    --from-file=/$INFERNO_DATA_PATH/optimizer-data.json
-    ```
+#### Option B: Run in cluster
 
-- Create a configmap populated with inferno dynamic data (count of accelerator types).
-
-    ```bash
-    kubectl create configmap inferno-dynamic-data -n inferno --from-file=/$INFERNO_DATA_PATH/capacity-data.json 
-    ```
-
-- Deploy inferno in the cluster.
-
-    ```bash
-    kubectl apply -f deploy-loop.yaml
-    ```
-
-- Get the inferno pod name.
-
-    ```bash
-    POD=$(kubectl get pod -l app=inferno -n inferno -o jsonpath="{.items[0].metadata.name}")
-    ```
-
-- Inspect logs.
-
-    ```bash
-    kubectl logs -f $POD -n inferno -c controller
-    kubectl logs -f $POD -n inferno -c collector
-    kubectl logs -f $POD -n inferno -c optimizer
-    kubectl logs -f $POD -n inferno -c actuator
-    ```
-
-- Create deployments representing inference servers in namespace *infer*.
-
-    ```bash
-    cd $INFERNO_REPO/services/yamls
-    kubectl apply -f ns.yaml
-    kubectl apply -f dep1.yaml,dep2.yaml,dep3.yaml
-    ```
-
-    Note that the deployment should have the following labels set (a missing service class name defaults to *Free*)
-
-    ```bash
-    labels:
-        inferno.server.managed: "true"
-        inferno.server.name: vllm-001
-        inferno.server.model: llama_13b
-        inferno.server.class: Premium
-        inferno.server.allocation.accelerator: MI250
-    ```
-
-    and some optional labels (if metrics are not available from  Pometheus).
-
-    ```bash
-    labels:
-        inferno.server.allocation.maxbatchsize: "8"
-        inferno.server.load.rpm: "30"
-        inferno.server.load.numtokens: "2048"
-    ```
-
-- Observe changes in the number of pods (replicas) for all inference servers (deployments).
-
-    ```bash
-    watch kubectl get pods -n infer
-    ```
-
-- (Optional) Start a load emulator to inference servers.
+- Deploy optimizer as a deployment, along with a service on port `80`, in name space `inferno` in the cluster. (The deployment yaml file starts the server in a container with the `-F` flag.)
 
     ```bash
     cd $INFERNO_REPO/manifests/yamls
-    kubectl apply -f load-emulator.yaml
-    kubectl logs -f load-emulator -n inferno
+    kubectl apply -f deploy-optimizer.yaml
     ```
 
-- Invoke an inferno control loop.
+- Forward port to local host.
 
     ```bash
-    kubectl port-forward service/inferno -n inferno 8080:80
-    curl http://localhost:8080/invoke
+    kubectl port-forward service/inferno-optimizer -n inferno 8080:80
     ```
 
-- Cleanup
+    You may then curl API commands (above) to `http://localhost:8080`.
+
+- (Optional) Inspect logs.
 
     ```bash
-    cd $INFERNO_REPO/manifests/yamls
-    kubectl delete -f load-emulator.yaml
-    kubectl delete -f deploy-loop.yaml 
-    kubectl delete configmap inferno-static-data inferno-dynamic-data -n inferno
-    kubectl delete -f ns.yaml
-
-    cd $INFERNO_REPO/services/yamls
-    kubectl delete -f dep1.yaml,dep2.yaml,dep3.yaml
-    kubectl delete -f ns.yaml
+    POD=$(kubectl get pod -l app=inferno-optimizer -n inferno -o jsonpath="{.items[0].metadata.name}")
+    kubectl logs -f $POD -n inferno 
     ```
 
-## Description
+- Cleanup.
+
+    ```bash
+    kubectl delete -f deploy-optimizer.yaml
+    ```
+
+## Detailed description of the optimizer
 
 ![problem-scope](docs/figs/Slide5.png)
 

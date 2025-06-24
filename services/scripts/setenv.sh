@@ -19,7 +19,7 @@ export SCRIPTS_DIR=.
 export BASE_DIR=../..
 export PKG_DIR=$BASE_DIR/pkg
 export CMD_DIR=$BASE_DIR/cmd
-export SAMPLES_DIR=$BASE_DIR/samples
+export SAMPLES_DIR=$BASE_DIR/sample-data
 export SERVICES_DIR=$BASE_DIR/services
 export YAMLS_DIR=$SERVICES_DIR/yamls
 

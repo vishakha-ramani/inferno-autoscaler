@@ -18,7 +18,7 @@ func main() {
 	if len(os.Args) > 1 {
 		size = os.Args[1]
 	}
-	prefix := "../../samples/" + size + "/"
+	prefix := "../../sample-data/" + size + "/"
 	fn_acc := prefix + "accelerator-data.json"
 	fn_cap := prefix + "capacity-data.json"
 	fn_mod := prefix + "model-data.json"

@@ -45,7 +45,7 @@ There are several ways to run the optimizer.
 - Create a configmap populated with inferno static data, e.g. samples taken from the *large* directory.
 
     ```bash
-    INFERNO_DATA_PATH=$INFERNO_REPO/samples/large
+    INFERNO_DATA_PATH=$INFERNO_REPO/sample-data/large
     kubectl create configmap inferno-static-data -n inferno \
     --from-file=/$INFERNO_DATA_PATH/accelerator-data.json \
     --from-file=/$INFERNO_DATA_PATH/model-data.json \

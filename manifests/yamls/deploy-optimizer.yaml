@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: optimizer
-          image: quay.io/atantawi/inferno:latest
+          image: quay.io/atantawi/inferno-optimizer:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: INFERNO_PORT

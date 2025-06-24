@@ -286,54 +286,9 @@ The output of the Optimizer is an Allocation Solution, in addition to updating t
 | /optimize | POST | OptimizerData | AllocationSolution | optimize given all system data provided and return optimal solution |
 | /optimizeOne | POST | SystemData | AllocationSolution | optimize for system data and return optimal solution (stateless, all system data provided with command) |
 
-## REST Server
+## REST Server modes
 
-There are two types of servers.
+There are two modes to run the server.
 
 1. **Statefull**: All commands listed above are supported. The server keeps the state as data about various entities, allowing additions, updates, and deletions. Optimization is performed on the system as given by the state at the time `/optimize` is called.
 2. **Stateless**: Optimization is performed using the provided system data when `/optimizeOne` is called. Optionally, any command prefixed with `/get` may be called afterwards to get data about various entities.
-
-## Running the REST Optimizer Server
-
-Clone this repository and set environment variable `INFERNO_REPO` to the path to it.
-
-### Run externally
-
-```bash
-cd $INFERNO_REPO/cmd/optimizer
-go run main.go [-F]
-```
-
-The default is to run the server in **Stateless** mode. Use the optional `-F` argument to run in **Statefull** mode.
-
-You may then curl API commands (above) to `http://localhost:8080`.
-
-### Run in cluster
-
-- Deploy optimizer as a deployment, along with a service on port `80`, in name space `inferno` in the cluster. (The deployment yaml file starts the server in a container with the `-F` flag.)
-
-    ```bash
-    cd $INFERNO_REPO/manifests/yamls
-    kubectl apply -f deploy-optimizer.yaml
-    ```
-
-- Forward port to local host.
-
-    ```bash
-    kubectl port-forward service/inferno-optimizer -n inferno 8080:80
-    ```
-
-    You may then curl API commands (above) to `http://localhost:8080`.
-
-- (Optional) Inspect logs.
-
-    ```bash
-    POD=$(kubectl get pod -l app=inferno-optimizer -n inferno -o jsonpath="{.items[0].metadata.name}")
-    kubectl logs -f $POD -n inferno 
-    ```
-
-- Cleanup.
-
-    ```bash
-    kubectl delete -f deploy-optimizer.yaml
-    ```

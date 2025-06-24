@@ -37,7 +37,7 @@
 - Set the data path to the data (static+dynamic) for the Controller (yellow).
 
     ```bash
-    export INFERNO_DATA_PATH=$INFERNO_REPO/samples/large/
+    export INFERNO_DATA_PATH=$INFERNO_REPO/sample-data/large/
     ```
 
 - Set the environment in all of the (five) component terminals.

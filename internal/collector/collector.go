@@ -112,17 +112,29 @@ func AddMetricsToOptStatus(ctx context.Context, opt *v1alpha1.VariantAutoscaling
 		avgLen = 0
 	}
 
-	waitQuery := fmt.Sprintf(`sum(rate(vllm:request_queue_time_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="%s",namespace="%s"}[1m]))`, modelName, deployNamespace, modelName, deployNamespace)
+	waitQuery := fmt.Sprintf(`sum(rate(vllm:request_queue_time_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
+		modelName, deployNamespace, modelName, deployNamespace)
 	waitAverageTime := 0.0
 	if val, _, err := promAPI.Query(ctx, waitQuery, time.Now()); err == nil && val.Type() == model.ValVector {
 		vec := val.(model.Vector)
 		if len(vec) > 0 {
-			waitAverageTime = float64(vec[0].Value)
+			waitAverageTime = float64(vec[0].Value) * 1000 //msec
 		}
 	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
 
+	itlQuery := fmt.Sprintf(`sum(rate(vllm:time_per_output_token_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
+		modelName, deployNamespace, modelName, deployNamespace)
+	itlAverage := 50.0
+	if val, _, err := promAPI.Query(ctx, itlQuery, time.Now()); err == nil && val.Type() == model.ValVector {
+		vec := val.(model.Vector)
+		if len(vec) > 0 {
+			itlAverage = float64(vec[0].Value) * 1000 //msec
+		}
+	} else {
+		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	}
 	currentAlloc.NumReplicas = int(*deployment.Spec.Replicas)
 	if acc, ok := opt.Labels["inference.optimization/acceleratorName"]; ok {
 		currentAlloc.Accelerator = acc
@@ -130,7 +142,7 @@ func AddMetricsToOptStatus(ctx context.Context, opt *v1alpha1.VariantAutoscaling
 		logger.Log.Info("acceleratorName label not found on deployment", "deployment", deployment.Name)
 	}
 	currentAlloc.WaitAverage = strconv.FormatFloat(float64(waitAverageTime), 'f', 2, 32)
-	opt.Status.CurrentAlloc.ITLAverage = "50"
+	currentAlloc.ITLAverage = strconv.FormatFloat(float64(itlAverage), 'f', 2, 32)
 	// TODO: extract max batch size from vllm config present
 	// present in the deployment
 	currentAlloc.MaxBatch = 256

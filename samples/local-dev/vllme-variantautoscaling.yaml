@@ -26,13 +26,19 @@ spec:
     accelerators:
       - acc: "A100"
         accCount: 1
-        alpha: "20.58"
-        beta: "0.41"
+        alpha: "20.13"
+        beta: "0.87"
         maxBatchSize: 32
-        atTokens: 512
-      - acc: "G2"
+        atTokens: 128
+      - acc: "H100"
         accCount: 1
-        alpha: "17.15"
-        beta: "0.34"
+        alpha: "12.98"
+        beta: "0.52"
         maxBatchSize: 38
-        atTokens: 512
+        atTokens: 128
+      - acc: "L40"
+        accCount: 2
+        alpha: "46.81"
+        beta: "2.02"
+        maxBatchSize: 20
+        atTokens: 128

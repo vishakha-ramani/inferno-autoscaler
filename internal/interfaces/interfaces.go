@@ -12,7 +12,7 @@ type VariantAutoscalingsEngine interface {
 		ctx context.Context,
 		va llmdOptv1alpha1.VariantAutoscalingList,
 		analysis map[string]*ModelAnalyzeResponse,
-		metrics MetricsSnapshot,
+		metrics map[string]*MetricsSnapshot,
 	) (map[string]llmdOptv1alpha1.OptimizedAlloc, error)
 }
 
@@ -21,7 +21,7 @@ type ModelAnalyzer interface {
 	AnalyzeModel(
 		ctx context.Context,
 		va llmdOptv1alpha1.VariantAutoscaling,
-		metrics MetricsSnapshot,
+		metrics *MetricsSnapshot,
 	) (*ModelAnalyzeResponse, error)
 }
 

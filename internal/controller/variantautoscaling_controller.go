@@ -40,6 +40,8 @@ import (
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 	analyzer "github.com/llm-d-incubation/inferno-autoscaler/internal/modelanalyzer"
+	variantAutoscalingOptimizer "github.com/llm-d-incubation/inferno-autoscaler/internal/optimizer"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
 	inferno "github.com/llm-inferno/optimizer/pkg/core"
 	infernoManager "github.com/llm-inferno/optimizer/pkg/manager"
 	infernoSolver "github.com/llm-inferno/optimizer/pkg/solver"
@@ -76,17 +78,17 @@ const (
 	configMapNamespace = "default"
 )
 
-type ServiceClassEntry struct {
-	Model  string `yaml:"model"`
-	SLOITL int    `yaml:"slo-itl"`
-	SLOTTW int    `yaml:"slo-ttw"`
-}
+// type ServiceClassEntry struct {
+// 	Model  string `yaml:"model"`
+// 	SLOITL int    `yaml:"slo-itl"`
+// 	SLOTTW int    `yaml:"slo-ttw"`
+// }
 
-type ServiceClass struct {
-	Name     string              `yaml:"name"`
-	Priority int                 `yaml:"priority"`
-	Data     []ServiceClassEntry `yaml:"data"`
-}
+// type ServiceClass struct {
+// 	Name     string              `yaml:"name"`
+// 	Priority int                 `yaml:"priority"`
+// 	Data     []ServiceClassEntry `yaml:"data"`
+// }
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
@@ -117,7 +119,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Error(err, "failed to get cluster inventory")
 	}
 
-	systemData := createSystemData(acceleratorUnitCostCm, serviceClassCm, newInventory)
+	systemData := utils.CreateSystemData(acceleratorUnitCostCm, serviceClassCm, newInventory)
 
 	for _, opt := range variantAutoscalingList.Items {
 		modelName := opt.Labels["inference.optimization/modelName"]
@@ -126,7 +128,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			return ctrl.Result{}, err
 		}
 		for _, modelAcceleratorProfile := range opt.Spec.ModelProfile.Accelerators {
-			if addModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
+			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
 				logger.Log.Info("variantAutoscaling bad model accelerator profile data, skipping optimization", "name", opt.Name)
 				return ctrl.Result{}, err
 			}
@@ -134,8 +136,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-	var allAnalyzerResponses = make(map[string]interfaces.ModelAnalyzeResponse)
-	var allMetrics = make(map[string]interfaces.MetricsSnapshot)
+	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
+	var allMetrics = make(map[string]*interfaces.MetricsSnapshot)
+	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 
 	for _, va := range variantAutoscalingList.Items {
 		modelName := va.Labels["inference.optimization/modelName"]
@@ -188,24 +191,29 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 		updateOpt.Status.CurrentAlloc = currentAllocation
 
-		if err := addServerInfoToSystemData(systemData, &updateOpt, className); err != nil {
+		if err := utils.AddServerInfoToSystemData(systemData, &updateOpt, className); err != nil {
 			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "name", updateOpt.Name)
 			return ctrl.Result{}, err
 		}
 
-		dummyQps := 50.0
+		var qps float64
+		if arrivalRate, err := strconv.ParseFloat(currentAllocation.Load.ArrivalRate, 32); err != nil {
+			qps = arrivalRate / 60
+		}
 		metrics := interfaces.MetricsSnapshot{
-			ActualQPS: dummyQps,
+			ActualQPS: qps,
 		}
-		dummyAnalyzer := analyzer.NewSimplePrefillDecodeAnalyzer()
-		dummyModelAnalyzerResponse, err := dummyAnalyzer.AnalyzeModel(ctx, updateOpt, metrics)
-		if err != nil {
-			logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
-			return ctrl.Result{}, nil
-		}
-		allMetrics[va.Name] = metrics
-		allAnalyzerResponses[va.Name] = dummyModelAnalyzerResponse
+		// dummyAnalyzer := analyzer.NewSimplePrefillDecodeAnalyzer()
+		// dummyModelAnalyzerResponse, err := dummyAnalyzer.AnalyzeModel(ctx, updateOpt, &metrics)
+		// if err != nil {
+		// 	logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
+		// 	return ctrl.Result{}, nil
+		// }
+		vaFullName := va.Name + ":" + va.Namespace
+		allMetrics[vaFullName] = &metrics
+		// allAnalyzerResponses[vaFullName] = &dummyModelAnalyzerResponse
 		updateList.Items = append(updateList.Items, updateOpt)
+		vaMap[vaFullName] = &va
 	}
 
 	// analyze
@@ -217,11 +225,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	modelanalyzer := analyzer.NewModelAnalyzer(system)
 	for _, s := range system.Servers() {
 		allAllocations := make(map[string]*inferno.Allocation)
-		allocations, err := modelanalyzer.AnalyzeModel(ctx, s.Name())
+		modelAnalyzeResponse, err := modelanalyzer.AnalyzeModel(ctx, *vaMap[s.Name()], allMetrics[s.Name()])
 		if err != nil {
 			logger.Log.Error(err, "failed to analyze")
 			return ctrl.Result{}, err
 		}
+		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
+		allocations := analyzer.CreateAllocationsFromModelAnalyzeResponse(modelAnalyzeResponse)
 		for acceleratorName, alloc := range allocations {
 			if s.CurAllocation() != nil {
 				penalty := s.CurAllocation().TransitionPenalty(alloc)
@@ -233,19 +243,14 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 	logger.Log.Info("inferno data", "systemData", systemData)
 
-	// optimize
-	if err := manager.Optimize(); err != nil {
-		logger.Log.Error(err, "failed to optimize")
-		return ctrl.Result{}, err
-	}
-	allocationSolution := system.GenerateSolution()
-	if allocationSolution == nil || len(allocationSolution.Spec) == 0 {
+	// Call Optimize ONCE across all variants
+	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
+	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses, allMetrics)
+	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
 		return ctrl.Result{}, nil
 	}
-	logger.Log.Info("inferno data", "allocationSolution", allocationSolution)
 
-	// Call Optimize ONCE across all variants
 	// dummyvariantAutoscaling := variantAutoscalingOptimizer.NewDummyVariantAutoscalingsEngine()
 	// optimizedAllocation, err := dummyvariantAutoscaling.Optimize(ctx, updateList, allAnalyzerResponses, allMetrics)
 	// if err != nil {
@@ -298,16 +303,15 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		}
 
+		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
+		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
+		updateVa.Status.Actuation.Applied = true
+
 		act := actuator.NewDummyActuator(r.Client)
 		if err := act.ApplyReplicaTargets(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to apply replicas")
 		}
-		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
-		// updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
-		updateVa.Status.Actuation.Applied = true
 
-		optimizedAllocation, _ := setDesiredAllocation(va.Name, va.Namespace, allocationSolution)
-		updateVa.Status.DesiredOptimizedAlloc = *optimizedAllocation
 		if err := r.Client.Status().Update(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to patch status", "name", updateVa.Name)
 			continue

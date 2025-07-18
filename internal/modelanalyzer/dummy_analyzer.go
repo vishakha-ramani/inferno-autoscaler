@@ -6,27 +6,7 @@ import (
 
 	llmdOptv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
-	inferno "github.com/llm-inferno/optimizer/pkg/core"
 )
-
-type ModelAnalyzer struct {
-	system *inferno.System
-}
-
-func NewModelAnalyzer(system *inferno.System) *ModelAnalyzer {
-	return &ModelAnalyzer{system: system}
-}
-
-func (ma *ModelAnalyzer) AnalyzeModel(ctx context.Context, variantID string) (map[string]*inferno.Allocation, error) {
-	result := make(map[string]*inferno.Allocation)
-	for _, accelerator := range ma.system.Accelerators() {
-		acceleratorName := accelerator.Name()
-		if alloc := inferno.CreateAllocation(variantID, acceleratorName); alloc != nil {
-			result[acceleratorName] = alloc
-		}
-	}
-	return result, nil
-}
 
 // SimplePrefillDecodeAnalyzer just returns prefill/decode demand.
 type SimplePrefillDecodeAnalyzer struct{}
@@ -40,7 +20,7 @@ func NewSimplePrefillDecodeAnalyzer() *SimplePrefillDecodeAnalyzer {
 func (a *SimplePrefillDecodeAnalyzer) AnalyzeModel(
 	ctx context.Context,
 	spec llmdOptv1alpha1.VariantAutoscaling,
-	metrics interfaces.MetricsSnapshot,
+	metrics *interfaces.MetricsSnapshot,
 ) (interfaces.ModelAnalyzeResponse, error) {
 	// dummy traffic shape: 40% prefill, 60% decode
 	prefillRatio := 0.4
@@ -55,9 +35,16 @@ func (a *SimplePrefillDecodeAnalyzer) AnalyzeModel(
 		prefillRatio*100, decodeRatio*100,
 	)
 
+	allocations := make(map[string]*interfaces.ModelAcceleratorAllocation)
+	for _, v := range spec.Spec.ModelProfile.Accelerators {
+		allocations[v.Acc] = &interfaces.ModelAcceleratorAllocation{
+			RequiredPrefillQPS: requiredPrefill,
+			RequiredDecodeQPS:  requiredDecode,
+			Reason:             reason,
+		}
+	}
+
 	return interfaces.ModelAnalyzeResponse{
-		RequiredPrefillQPS: requiredPrefill,
-		RequiredDecodeQPS:  requiredDecode,
-		Reason:             reason,
+		Allocations: allocations,
 	}, nil
 }

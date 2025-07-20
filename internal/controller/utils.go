@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Helper to find SLOs for a model variant
 func findModelSLO(cmData map[string]string, targetModel string) (*interfaces.ServiceClassEntry, string /* class name */, error) {
 	for key, val := range cmData {
 		var sc interfaces.ServiceClass

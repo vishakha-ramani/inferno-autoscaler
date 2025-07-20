@@ -5,6 +5,7 @@ import (
 
 	llmdOptv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
 	inferno "github.com/llm-inferno/optimizer/pkg/core"
 )
 
@@ -15,6 +16,7 @@ type ModelAnalyzer struct {
 	system *inferno.System
 }
 
+// Create a new instance of a model analyzer
 func NewModelAnalyzer(system *inferno.System) *ModelAnalyzer {
 	return &ModelAnalyzer{system: system}
 }
@@ -24,7 +26,7 @@ func (ma *ModelAnalyzer) AnalyzeModel(ctx context.Context,
 	va llmdOptv1alpha1.VariantAutoscaling,
 	metrics *interfaces.MetricsSnapshot) (*interfaces.ModelAnalyzeResponse, error) {
 
-	serverName := va.Name + ":" + va.Namespace
+	serverName := utils.FullName(va.Name, va.Namespace)
 	allocations := make(map[string]*inferno.Allocation)
 	for _, accelerator := range ma.system.Accelerators() {
 		acceleratorName := accelerator.Name()

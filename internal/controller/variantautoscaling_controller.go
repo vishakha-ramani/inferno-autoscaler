@@ -121,20 +121,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	systemData := utils.CreateSystemData(acceleratorUnitCostCm, serviceClassCm, newInventory)
 
-	for _, opt := range variantAutoscalingList.Items {
-		modelName := opt.Labels["inference.optimization/modelName"]
-		if modelName == "" {
-			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization", "name", opt.Name)
-			return ctrl.Result{}, err
-		}
-		for _, modelAcceleratorProfile := range opt.Spec.ModelProfile.Accelerators {
-			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
-				logger.Log.Info("variantAutoscaling bad model accelerator profile data, skipping optimization", "name", opt.Name)
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
 	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
 	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
 	var allMetrics = make(map[string]*interfaces.MetricsSnapshot)
@@ -152,8 +138,14 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "failed to locate SLO for model")
 			return ctrl.Result{}, nil
 		}
-
 		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
+
+		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
+			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
+				logger.Log.Info("variantAutoscaling bad model accelerator profile data, skipping optimization", "name", va.Name)
+				return ctrl.Result{}, err
+			}
+		}
 
 		acceleratorCostVal, ok := acceleratorUnitCostCm["A100"]
 		if !ok {
@@ -163,6 +155,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if err != nil {
 			logger.Log.Info("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "name", va.Name)
 		}
+
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
@@ -188,7 +181,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
 			return ctrl.Result{}, nil
 		}
-
 		updateOpt.Status.CurrentAlloc = currentAllocation
 
 		if err := utils.AddServerInfoToSystemData(systemData, &updateOpt, className); err != nil {
@@ -209,7 +201,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		// 	logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
 		// 	return ctrl.Result{}, nil
 		// }
-		vaFullName := va.Name + ":" + va.Namespace
+		vaFullName := utils.FullName(va.Name, va.Namespace)
 		allMetrics[vaFullName] = &metrics
 		// allAnalyzerResponses[vaFullName] = &dummyModelAnalyzerResponse
 		updateList.Items = append(updateList.Items, updateOpt)
@@ -241,7 +233,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		maps.Copy(s.AllAllocations(), allAllocations)
 	}
-	logger.Log.Info("inferno data", "systemData", systemData)
+	logger.Log.Info("inferno data ", "systemData ", systemData)
 
 	// Call Optimize ONCE across all variants
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
@@ -316,7 +308,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "failed to patch status", "name", updateVa.Name)
 			continue
 		}
-
 	}
 
 	return ctrl.Result{}, nil

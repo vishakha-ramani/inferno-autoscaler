@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// adapter to create inferno system data types
+// Adapter to create inferno system data types from config maps and cluster inventory data
 func CreateSystemData(
 	acceleratorUnitCostCm map[string]string,
 	serviceClassCm map[string]string,
@@ -36,14 +37,14 @@ func CreateSystemData(
 	for key, val := range acceleratorUnitCostCm {
 		cost, err := strconv.ParseFloat(val, 32)
 		if err != nil {
-			logger.Log.Info("failed to parse accelerator cost in configmap, skipping accelerator", "name", key)
+			logger.Log.Warn("failed to parse accelerator cost in configmap, skipping accelerator", "name", key)
 			continue
 		}
 		acceleratorData = append(acceleratorData, infernoConfig.AcceleratorSpec{
 			Name:         key,
-			Type:         key,
-			Multiplicity: 1,
-			Power:        infernoConfig.PowerSpec{},
+			Type:         key,                       // TODO: differentiate between name and type, should be in the configured accelerator spec
+			Multiplicity: 1,                         // TODO: multiplicity should be in the configured accelerator spec
+			Power:        infernoConfig.PowerSpec{}, // Not currently used
 			Cost:         float32(cost),
 		})
 	}
@@ -76,7 +77,7 @@ func CreateSystemData(
 	for key, val := range serviceClassCm {
 		var sc interfaces.ServiceClass
 		if err := yaml.Unmarshal([]byte(val), &sc); err != nil {
-			logger.Log.Info("failed to parse service class data, skipping service class", "key", key, "err", err)
+			logger.Log.Warn("failed to parse service class data, skipping service class", "key", key, "err", err)
 			continue
 		}
 		for _, entry := range sc.Data {
@@ -114,14 +115,13 @@ func CreateSystemData(
 func AddModelAcceleratorProfileToSystemData(
 	sd *infernoConfig.SystemData,
 	modelName string,
-	modelAcceleratorProfile *llmdVariantAutoscalingV1alpha1.AcceleratorProfile) error {
+	modelAcceleratorProfile *llmdVariantAutoscalingV1alpha1.AcceleratorProfile) (err error) {
 
-	alpha, err := strconv.ParseFloat(modelAcceleratorProfile.Alpha, 32)
-	if err != nil {
+	var alpha, beta float64
+	if alpha, err = strconv.ParseFloat(modelAcceleratorProfile.Alpha, 32); err != nil {
 		return err
 	}
-	beta, err := strconv.ParseFloat(modelAcceleratorProfile.Beta, 32)
-	if err != nil {
+	if beta, err = strconv.ParseFloat(modelAcceleratorProfile.Beta, 32); err != nil {
 		return err
 	}
 
@@ -138,20 +138,18 @@ func AddModelAcceleratorProfileToSystemData(
 	return nil
 }
 
-// add server specs to inferno system data
+// Add server specs to inferno system data
 func AddServerInfoToSystemData(
 	sd *infernoConfig.SystemData,
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
-	className string) error {
-
-	var arrivalRate, avgLength, cost, itlAverage, waitAverage float64
-	var err error
+	className string) (err error) {
 
 	// server load statistics
-	if arrivalRate, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 32); err != nil {
+	var arrivalRate, avgLength, cost, itlAverage, waitAverage float64
+	if arrivalRate, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 32); err != nil || math.IsNaN(arrivalRate) || math.IsInf(arrivalRate, 0) {
 		arrivalRate = 0
 	}
-	if avgLength, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil {
+	if avgLength, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil || math.IsNaN(avgLength) || math.IsInf(avgLength, 0) {
 		avgLength = 0
 	}
 
@@ -161,13 +159,13 @@ func AddServerInfoToSystemData(
 	}
 
 	// server allocation
-	if cost, err = strconv.ParseFloat(va.Status.CurrentAlloc.VariantCost, 32); err != nil {
+	if cost, err = strconv.ParseFloat(va.Status.CurrentAlloc.VariantCost, 32); err != nil || math.IsNaN(cost) || math.IsInf(cost, 0) {
 		cost = 0
 	}
-	if itlAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 32); err != nil {
+	if itlAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 32); err != nil || math.IsNaN(itlAverage) || math.IsInf(itlAverage, 0) {
 		itlAverage = 0
 	}
-	if waitAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.WaitAverage, 32); err != nil {
+	if waitAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.WaitAverage, 32); err != nil || math.IsNaN(waitAverage) || math.IsInf(waitAverage, 0) {
 		waitAverage = 0
 	}
 	AllocationData := &infernoConfig.AllocationData{
@@ -181,9 +179,8 @@ func AddServerInfoToSystemData(
 	}
 
 	// all server data
-	name := va.Name + ":" + va.Namespace
 	serverSpec := &infernoConfig.ServerSpec{
-		Name:         name,
+		Name:         FullName(va.Name, va.Namespace),
 		Class:        className,
 		Model:        va.Spec.ModelID,
 		CurrentAlloc: *AllocationData,
@@ -193,10 +190,12 @@ func AddServerInfoToSystemData(
 	return nil
 }
 
-func SetDesiredAllocation(name string,
-	nameSpace string,
+// Adapter from inferno alloc solution to optimized alloc
+func CreateOptimizedAlloc(name string,
+	namespace string,
 	allocationSolution *infernoConfig.AllocationSolution) (*llmdVariantAutoscalingV1alpha1.OptimizedAlloc, error) {
-	serverName := name + ":" + nameSpace
+
+	serverName := FullName(name, namespace)
 	var allocationData infernoConfig.AllocationData
 	var exists bool
 	if allocationData, exists = allocationSolution.Spec[serverName]; !exists {
@@ -208,4 +207,9 @@ func SetDesiredAllocation(name string,
 		NumReplicas: allocationData.NumReplicas,
 	}
 	return optimizedAlloc, nil
+}
+
+// Helper to create a (unique) full name from name and namespace
+func FullName(name string, namespace string) string {
+	return name + ":" + namespace
 }

@@ -5,12 +5,13 @@ import (
 	inferno "github.com/llm-inferno/optimizer/pkg/core"
 )
 
+// Adapter from inferno allocations to a model analyzer response
 func CreateModelAnalyzeResponseFromAllocations(allocations map[string]*inferno.Allocation) *interfaces.ModelAnalyzeResponse {
 	responseAllocations := make(map[string]*interfaces.ModelAcceleratorAllocation)
+
 	for key, alloc := range allocations {
 		responseAllocations[key] = &interfaces.ModelAcceleratorAllocation{
-			Allocation: allocations[key],
-
+			Allocation:         allocations[key],
 			RequiredPrefillQPS: float64(alloc.MaxArrvRatePerReplica() * 1000),
 			RequiredDecodeQPS:  float64(alloc.MaxArrvRatePerReplica() * 1000),
 			Reason:             "markovian analysis",
@@ -21,6 +22,7 @@ func CreateModelAnalyzeResponseFromAllocations(allocations map[string]*inferno.A
 	}
 }
 
+// Adapter from a model analyzer response to inferno allocations
 func CreateAllocationsFromModelAnalyzeResponse(response *interfaces.ModelAnalyzeResponse) map[string]*inferno.Allocation {
 	allocations := make(map[string]*inferno.Allocation)
 	for key, alloc := range response.Allocations {

@@ -7,6 +7,7 @@ KUBECTL=${KUBECTL:-kubectl}
 KIND_NAME=${KIND_NAME:-"kind-inferno-gpu-cluster"}
 KIND_CONTEXT=kind-${KIND_NAME}
 NAMESPACE=${NAMESPACE:-"inferno-autoscaler-system"}
+MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"inferno-autoscaler-monitoring"}
 KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-inferno-gpu-cluster-control-plane"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
 
@@ -40,3 +41,9 @@ ${KUBECTL} config set-context ${KIND_CONTEXT}
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
 _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
+
+# Install the configmap to run optimizer loop
+_kubectl apply -f deploy/ticker-configmap.yaml
+
+# deploy emulated vllme server
+hack/deploy-emulated-vllme-server.sh

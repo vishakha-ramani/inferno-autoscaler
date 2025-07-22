@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= quay.io/amalvank/inferno:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -73,6 +73,22 @@ create-kind-cluster:
 destroy-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
         hack/destroy-kind-cluster.sh
+
+# Deploys the Inferno Autoscaler on a Kind cluster with emulated GPU support.
+# This target assumes that the Kind cluster has been created and is running.
+.PHONY: deploy-inferno-emulated-on-kind
+deploy-inferno-emulated-on-kind:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
+		hack/deploy-inferno-emulated-on-kind.sh
+
+# Deploy controller in emulator mode
+.PHONY: deploy-emulated 
+deploy-emulated: KUSTOMIZATION=emulator
+deploy-emulated: deploy
+
+.PHONY: undeploy-inferno-on-kind
+undeploy-inferno-on-kind:
+	kubectl delete ns/inferno-autoscaler-system
 
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.

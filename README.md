@@ -34,6 +34,7 @@ For more details please refer to the community proposal [here](https://docs.goog
 - Access to a Kubernetes v1.11.3+ cluster.
 
 ## Quickstart: Emulated Deployment on Kind
+- Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**

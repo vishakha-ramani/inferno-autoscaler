@@ -1,5 +1,7 @@
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/amalvank/inferno:latest
+IMAGE_TAG_BASE ?= quay.io/infernoautoscaler
+IMG_TAG ?= latest
+IMG ?= $(IMAGE_TAG_BASE)/inferno-controller:$(IMG_TAG)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -72,7 +71,7 @@ type MetricKV struct {
 }
 
 func AddMetricsToOptStatus(ctx context.Context,
-	opt *v1alpha1.VariantAutoscaling,
+	opt *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	deployment appsv1.Deployment,
 	acceleratorCostVal float64,
 	promAPI promv1.API) (llmdVariantAutoscalingV1alpha1.Allocation, error) {
@@ -90,10 +89,13 @@ func AddMetricsToOptStatus(ctx context.Context,
 			arrivalVal = float64(vec[0].Value)
 		}
 		if warn != nil {
-			logger.Log.Info("Prometheus warnings", "warnings", warn)
+			logger.Log.Warn("Prometheus warnings", "warnings", warn)
 		}
 	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	}
+	if math.IsNaN(arrivalVal) || math.IsInf(arrivalVal, 0) {
+		arrivalVal = 0
 	}
 
 	// Query 2: Average token length
@@ -122,20 +124,26 @@ func AddMetricsToOptStatus(ctx context.Context,
 			waitAverageTime = float64(vec[0].Value) * 1000 //msec
 		}
 	} else {
-		logger.Log.Info("failed to get avg wait time, using 0", "model", modelName)
+		logger.Log.Warn("failed to get avg wait time, using 0", "model", modelName)
+	}
+	if math.IsNaN(waitAverageTime) || math.IsInf(waitAverageTime, 0) {
+		waitAverageTime = 0
 	}
 
 	// Query 4: Average ITL
 	itlQuery := fmt.Sprintf(`sum(rate(vllm:time_per_output_token_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
 		modelName, deployNamespace, modelName, deployNamespace)
-	itlAverage := 50.0
+	itlAverage := 0.0
 	if val, _, err := promAPI.Query(ctx, itlQuery, time.Now()); err == nil && val.Type() == model.ValVector {
 		vec := val.(model.Vector)
 		if len(vec) > 0 {
 			itlAverage = float64(vec[0].Value) * 1000 //msec
 		}
 	} else {
-		logger.Log.Info("failed to get avg itl time, using 0", "model", modelName)
+		logger.Log.Warn("failed to get avg itl time, using 0", "model", modelName)
+	}
+	if math.IsNaN(itlAverage) || math.IsInf(itlAverage, 0) {
+		itlAverage = 0
 	}
 
 	// number of replicas
@@ -145,7 +153,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	acc := ""
 	var ok bool
 	if acc, ok = opt.Labels["inference.optimization/acceleratorName"]; !ok {
-		logger.Log.Info("acceleratorName label not found on deployment", "deployment", deployment.Name)
+		logger.Log.Warn("acceleratorName label not found on deployment", "deployment", deployment.Name)
 	}
 
 	// cost

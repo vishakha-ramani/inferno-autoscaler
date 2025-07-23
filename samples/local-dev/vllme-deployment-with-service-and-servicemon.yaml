@@ -25,8 +25,28 @@ spec:
       - name: vllme
         image: quay.io/amalvank/vllme:latest
         imagePullPolicy: Always
+        env:
+          - name: DECODE_TIME
+            value: "20"
+          - name: PREFILL_TIME
+            value: "20"
+          - name: AVG_TOKENS
+            value: "128"
+          - name: TOKENS_DISTRIBUTION
+            value: "deterministic"
+          - name: MAX_BATCH_SIZE
+            value: "8"
+          - name: KVC_PER_TOKEN
+            value: "2"
         ports:
         - containerPort: 80
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 500Mi
 ---
 apiVersion: v1
 kind: Service

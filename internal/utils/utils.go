@@ -17,7 +17,7 @@ import (
 
 // Adapter to create inferno system data types from config maps and cluster inventory data
 func CreateSystemData(
-	acceleratorUnitCostCm map[string]string,
+	acceleratorCm map[string]map[string]string,
 	serviceClassCm map[string]string,
 	newInventory map[string]map[string]collector.AcceleratorModelInfo) *infernoConfig.SystemData {
 
@@ -34,15 +34,15 @@ func CreateSystemData(
 
 	// get accelerator data
 	acceleratorData := []infernoConfig.AcceleratorSpec{}
-	for key, val := range acceleratorUnitCostCm {
-		cost, err := strconv.ParseFloat(val, 32)
+	for key, val := range acceleratorCm {
+		cost, err := strconv.ParseFloat(val["cost"], 32)
 		if err != nil {
 			logger.Log.Warn("failed to parse accelerator cost in configmap, skipping accelerator", "name", key)
 			continue
 		}
 		acceleratorData = append(acceleratorData, infernoConfig.AcceleratorSpec{
 			Name:         key,
-			Type:         key,                       // TODO: differentiate between name and type, should be in the configured accelerator spec
+			Type:         val["device"],
 			Multiplicity: 1,                         // TODO: multiplicity should be in the configured accelerator spec
 			Power:        infernoConfig.PowerSpec{}, // Not currently used
 			Cost:         float32(cost),

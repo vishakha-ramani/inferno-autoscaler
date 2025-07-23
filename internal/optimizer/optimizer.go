@@ -30,7 +30,6 @@ func NewVariantAutoscalingsEngine(manager *infernoManager.Manager, system *infer
 func (engine *VariantAutoscalingsEngine) Optimize(ctx context.Context,
 	vaList llmdOptv1alpha1.VariantAutoscalingList,
 	analysis map[string]*interfaces.ModelAnalyzeResponse,
-	metrics map[string]*interfaces.MetricsSnapshot,
 ) (map[string]llmdOptv1alpha1.OptimizedAlloc, error) {
 
 	if err := engine.manager.Optimize(); err != nil {

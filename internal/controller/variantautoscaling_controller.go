@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"strconv"
@@ -78,29 +79,17 @@ const (
 	configMapNamespace = "default"
 )
 
-// type ServiceClassEntry struct {
-// 	Model  string `yaml:"model"`
-// 	SLOITL int    `yaml:"slo-itl"`
-// 	SLOTTW int    `yaml:"slo-ttw"`
-// }
-
-// type ServiceClass struct {
-// 	Name     string              `yaml:"name"`
-// 	Priority int                 `yaml:"priority"`
-// 	Data     []ServiceClassEntry `yaml:"data"`
-// }
-
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
+	if err != nil {
+		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimiziing")
+		return ctrl.Result{}, nil
+	}
 
 	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimiziing")
-		return ctrl.Result{}, nil
-	}
-
-	acceleratorUnitCostCm, err := r.readServiceClassConfig(ctx, "accelerator-unit-costs", "default")
-	if err != nil {
-		logger.Log.Error(err, "unable to read accelerator unit cost configmap, skipping optimiziing")
 		return ctrl.Result{}, nil
 	}
 
@@ -119,11 +108,10 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Error(err, "failed to get cluster inventory")
 	}
 
-	systemData := utils.CreateSystemData(acceleratorUnitCostCm, serviceClassCm, newInventory)
+	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm, newInventory)
 
 	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
 	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
-	var allMetrics = make(map[string]*interfaces.MetricsSnapshot)
 	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 
 	for _, va := range variantAutoscalingList.Items {
@@ -147,7 +135,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		}
 
-		acceleratorCostVal, ok := acceleratorUnitCostCm["A100"]
+		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
 		if !ok {
 			logger.Log.Info("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "name", va.Name)
 		}
@@ -171,40 +159,25 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			return ctrl.Result{}, err
 		}
 
-		var updateOpt llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateOpt); err != nil {
+		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
 			logger.Log.Error(err, "unable to get variantAutoscaling")
 		}
 
-		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateOpt, deploy, acceleratorCostValFloat, r.PromAPI)
+		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
 		if err != nil {
 			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
 			return ctrl.Result{}, nil
 		}
-		updateOpt.Status.CurrentAlloc = currentAllocation
+		updateVA.Status.CurrentAlloc = currentAllocation
 
-		if err := utils.AddServerInfoToSystemData(systemData, &updateOpt, className); err != nil {
-			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "name", updateOpt.Name)
+		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
+			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "name", updateVA.Name)
 			return ctrl.Result{}, err
 		}
 
-		var qps float64
-		if arrivalRate, err := strconv.ParseFloat(currentAllocation.Load.ArrivalRate, 32); err != nil {
-			qps = arrivalRate / 60
-		}
-		metrics := interfaces.MetricsSnapshot{
-			ActualQPS: qps,
-		}
-		// dummyAnalyzer := analyzer.NewSimplePrefillDecodeAnalyzer()
-		// dummyModelAnalyzerResponse, err := dummyAnalyzer.AnalyzeModel(ctx, updateOpt, &metrics)
-		// if err != nil {
-		// 	logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
-		// 	return ctrl.Result{}, nil
-		// }
 		vaFullName := utils.FullName(va.Name, va.Namespace)
-		allMetrics[vaFullName] = &metrics
-		// allAnalyzerResponses[vaFullName] = &dummyModelAnalyzerResponse
-		updateList.Items = append(updateList.Items, updateOpt)
+		updateList.Items = append(updateList.Items, updateVA)
 		vaMap[vaFullName] = &va
 	}
 
@@ -217,9 +190,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	modelanalyzer := analyzer.NewModelAnalyzer(system)
 	for _, s := range system.Servers() {
 		allAllocations := make(map[string]*inferno.Allocation)
-		modelAnalyzeResponse, err := modelanalyzer.AnalyzeModel(ctx, *vaMap[s.Name()], allMetrics[s.Name()])
+		modelAnalyzeResponse, err := modelanalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
 		if err != nil {
-			logger.Log.Error(err, "failed to analyze")
+			logger.Log.Error("model analyzer error", "failed to analyze", err)
 			return ctrl.Result{}, err
 		}
 		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
@@ -237,18 +210,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// Call Optimize ONCE across all variants
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
-	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses, allMetrics)
+	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
 		return ctrl.Result{}, nil
 	}
-
-	// dummyvariantAutoscaling := variantAutoscalingOptimizer.NewDummyVariantAutoscalingsEngine()
-	// optimizedAllocation, err := dummyvariantAutoscaling.Optimize(ctx, updateList, allAnalyzerResponses, allMetrics)
-	// if err != nil {
-	// 	logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
-	// 	return ctrl.Result{}, nil
-	// }
 
 	for i := range updateList.Items {
 		va := &updateList.Items[i]
@@ -461,4 +427,43 @@ func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Contex
 	}
 
 	return cm.Data, nil
+}
+
+func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context, cmName, cmNamespace string) (map[string]map[string]string, error) {
+	var cm corev1.ConfigMap
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
+		if err == nil {
+			return true, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Error(err, "ConfigMap not found, will not retry", "name", cmName, "namespace", cmNamespace)
+			return false, err
+		}
+
+		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying...")
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
+	}
+
+	out := make(map[string]map[string]string)
+	for acc, accInfoStr := range cm.Data {
+		accInfoMap := make(map[string]string)
+		if json.Unmarshal([]byte(accInfoStr), &accInfoMap) != nil {
+			return nil, fmt.Errorf("failed to read entry %s in ConfigMap %s/%s: %w", acc, cmNamespace, cmName, err)
+		}
+		out[acc] = accInfoMap
+	}
+	return out, nil
 }

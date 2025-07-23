@@ -29,24 +29,24 @@ echo "[3/3] Patching node ${control_plane_node} with GPU annotation and capacity
 cat <<EOF | kubectl patch node "${control_plane_node}" --type merge --patch "$(cat)"
 metadata:
   labels:
-    nvidia.com/gpu.product: A100
-    nvidia.com/gpu.memory: "40960"
+    nvidia.com/gpu.product: NVIDIA-A100-PCIE-80GB
+    nvidia.com/gpu.memory: "81920"
 EOF
 
 echo "Patching '${worker1_node}' with AMD GPU annotation..."
 cat <<EOF | kubectl patch node "${worker1_node}" --type merge --patch "$(cat)"
 metadata:
   labels:
-    amd.com/gpu.product: H100
-    amd.com/gpu.memory: "16384"
+    amd.com/gpu.product: AMD-MI300X-192GB
+    amd.com/gpu.memory: "196608"
 EOF
 
 echo "Patching '${worker2_node}' with Intel GPU annotation..."
 cat <<EOF | kubectl patch node "${worker2_node}" --type merge --patch "$(cat)"
 metadata:
   labels:
-    intel.com/gpu.product: L40
-    intel.com/gpu.memory: "16384"
+    intel.com/gpu.product: Intel-Gaudi-2-96GB
+    intel.com/gpu.memory: "98304"
 EOF
 
 echo "[4/5] Starting kubectl proxy..."

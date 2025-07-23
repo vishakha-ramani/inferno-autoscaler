@@ -17,12 +17,6 @@ type ModelAcceleratorAllocation struct {
 	Reason             string
 }
 
-// Represents additional metrics snapshot which
-// ModelAnalyzer or Optimizer could consume
-type MetricsSnapshot struct {
-	ActualQPS float64
-}
-
 type ServiceClassEntry struct {
 	Model  string `yaml:"model"`
 	SLOITL int    `yaml:"slo-itl"`

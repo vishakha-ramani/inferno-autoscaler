@@ -21,7 +21,6 @@ func (e *DummyVariantAutoscalingsEngine) Optimize(
 	ctx context.Context,
 	va llmdOptv1alpha1.VariantAutoscalingList,
 	analysis map[string]*interfaces.ModelAnalyzeResponse,
-	metrics map[string]*interfaces.MetricsSnapshot,
 ) (map[string]llmdOptv1alpha1.OptimizedAlloc, error) {
 
 	result := make(map[string]llmdOptv1alpha1.OptimizedAlloc)
@@ -30,9 +29,8 @@ func (e *DummyVariantAutoscalingsEngine) Optimize(
 		name := va.Name
 
 		analysis, ok1 := analysis[name]
-		_, ok2 := metrics[name]
-		if !ok1 || !ok2 {
-			// Skip if either analysis or metrics are missing
+		if !ok1 {
+			// Skip if either analysis is missing
 			continue
 		}
 

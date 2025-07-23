@@ -28,17 +28,17 @@ spec:
         accCount: 1
         alpha: "20.58"
         beta: "0.41"
-        maxBatchSize: 32
+        maxBatchSize: 4
         atTokens: 128
-      - acc: "H100"
+      - acc: "MI300X"
         accCount: 1
-        alpha: "12.98"
-        beta: "0.52"
-        maxBatchSize: 38
+        alpha: "7.77"
+        beta: "0.15"
+        maxBatchSize: 4
         atTokens: 128
-      - acc: "L40"
-        accCount: 2
-        alpha: "46.81"
-        beta: "2.02"
-        maxBatchSize: 20
+      - acc: "G2"
+        accCount: 1
+        alpha: "17.15"
+        beta: "0.34"
+        maxBatchSize: 4
         atTokens: 128

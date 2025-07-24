@@ -146,10 +146,10 @@ func AddServerInfoToSystemData(
 
 	// server load statistics
 	var arrivalRate, avgLength, cost, itlAverage, waitAverage float64
-	if arrivalRate, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 32); err != nil || math.IsNaN(arrivalRate) || math.IsInf(arrivalRate, 0) {
+	if arrivalRate, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 32); err != nil || !CheckValue(arrivalRate) {
 		arrivalRate = 0
 	}
-	if avgLength, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil || math.IsNaN(avgLength) || math.IsInf(avgLength, 0) {
+	if avgLength, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil || !CheckValue(avgLength) {
 		avgLength = 0
 	}
 
@@ -159,13 +159,13 @@ func AddServerInfoToSystemData(
 	}
 
 	// server allocation
-	if cost, err = strconv.ParseFloat(va.Status.CurrentAlloc.VariantCost, 32); err != nil || math.IsNaN(cost) || math.IsInf(cost, 0) {
+	if cost, err = strconv.ParseFloat(va.Status.CurrentAlloc.VariantCost, 32); err != nil || !CheckValue(cost) {
 		cost = 0
 	}
-	if itlAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 32); err != nil || math.IsNaN(itlAverage) || math.IsInf(itlAverage, 0) {
+	if itlAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 32); err != nil || !CheckValue(itlAverage) {
 		itlAverage = 0
 	}
-	if waitAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.WaitAverage, 32); err != nil || math.IsNaN(waitAverage) || math.IsInf(waitAverage, 0) {
+	if waitAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.WaitAverage, 32); err != nil || !CheckValue(waitAverage) {
 		waitAverage = 0
 	}
 	AllocationData := &infernoConfig.AllocationData{
@@ -212,4 +212,9 @@ func CreateOptimizedAlloc(name string,
 // Helper to create a (unique) full name from name and namespace
 func FullName(name string, namespace string) string {
 	return name + ":" + namespace
+}
+
+// Helper to check if a value is valid (not NaN or infinite)
+func CheckValue(x float64) bool {
+	return !(math.IsNaN(x) || math.IsInf(x, 0))
 }

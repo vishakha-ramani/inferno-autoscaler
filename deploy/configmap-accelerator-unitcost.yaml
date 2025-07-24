@@ -1,5 +1,13 @@
 apiVersion: v1
 kind: ConfigMap
+# This configMap defines the set of accelerators available
+# to the autoscaler to assign to variants
+#
+# For each accelerator, need to specify a (unique) name and some properties:
+# - device is the name of the device (card) corresponding to this accelerator,
+#   it should be the same as the device specified in the node object
+# - cost is the cents/hour cost of this accelerator
+#
 metadata:
   name: accelerator-unit-costs
   namespace: default

@@ -80,6 +80,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	modelName := opt.Labels["inference.optimization/modelName"]
 
 	// Setup Prometheus client
+	// TODO: agree on using standard vllm metrics
 	// Query 1: Arrival rate (requests per minute)
 	arrivalQuery := fmt.Sprintf(`sum(rate(vllm:requests_count_total{model_name="%s",namespace="%s"}[1m])) * 60`, modelName, deployNamespace)
 	arrivalVal := 0.0
@@ -94,11 +95,10 @@ func AddMetricsToOptStatus(ctx context.Context,
 	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
-	if math.IsNaN(arrivalVal) || math.IsInf(arrivalVal, 0) {
-		arrivalVal = 0
-	}
+	FixValue(&arrivalVal)
 
 	// Query 2: Average token length
+	// TODO: split composite query to individual queries
 	tokenQuery := fmt.Sprintf(`delta(vllm:tokens_count_total{model_name="%s",namespace="%s"}[1m])/delta(vllm:requests_count_total{model_name="%s",namespace="%s"}[1m])`,
 		modelName, deployNamespace, modelName, deployNamespace)
 	avgLen := 0.0
@@ -110,9 +110,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
-	if math.IsNaN(avgLen) || math.IsInf(avgLen, 0) {
-		avgLen = 0
-	}
+	FixValue(&avgLen)
 
 	// Query 3: Average waiting time
 	waitQuery := fmt.Sprintf(`sum(rate(vllm:request_queue_time_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
@@ -126,9 +124,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	} else {
 		logger.Log.Warn("failed to get avg wait time, using 0", "model", modelName)
 	}
-	if math.IsNaN(waitAverageTime) || math.IsInf(waitAverageTime, 0) {
-		waitAverageTime = 0
-	}
+	FixValue(&waitAverageTime)
 
 	// Query 4: Average ITL
 	itlQuery := fmt.Sprintf(`sum(rate(vllm:time_per_output_token_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
@@ -142,9 +138,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	} else {
 		logger.Log.Warn("failed to get avg itl time, using 0", "model", modelName)
 	}
-	if math.IsNaN(itlAverage) || math.IsInf(itlAverage, 0) {
-		itlAverage = 0
-	}
+	FixValue(&itlAverage)
 
 	// number of replicas
 	numReplicas := int(*deployment.Spec.Replicas)
@@ -177,4 +171,11 @@ func AddMetricsToOptStatus(ctx context.Context,
 		},
 	}
 	return currentAlloc, nil
+}
+
+// Helper to handle if a value is NaN or infinite
+func FixValue(x *float64) {
+	if math.IsNaN(*x) || math.IsInf(*x, 0) {
+		*x = 0
+	}
 }

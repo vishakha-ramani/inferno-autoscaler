@@ -35,6 +35,7 @@ func (e *DummyVariantAutoscalingsEngine) Optimize(
 		}
 
 		// Dummy per-replica capacities
+		// TODO: remove or have hard coded values passed as configuration values
 		perReplicaPrefill := 100.0
 		perReplicaDecode := 300.0
 

@@ -81,6 +81,7 @@ const (
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimiziing")
@@ -182,15 +183,16 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// analyze
+	// TODO: keep data specific to inferno in own new class
 	system := inferno.NewSystem()
 	optimizerSpec := system.SetFromSpec(&systemData.Spec)
 	optimizer := infernoSolver.NewOptimizerFromSpec(optimizerSpec)
 	manager := infernoManager.NewManager(system, optimizer)
 
-	modelanalyzer := analyzer.NewModelAnalyzer(system)
+	modelAnalyzer := analyzer.NewModelAnalyzer(system)
 	for _, s := range system.Servers() {
 		allAllocations := make(map[string]*inferno.Allocation)
-		modelAnalyzeResponse, err := modelanalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
+		modelAnalyzeResponse, err := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
 		if err != nil {
 			logger.Log.Error("model analyzer error", "failed to analyze", err)
 			return ctrl.Result{}, err
@@ -399,71 +401,56 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
 }
 
 func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Context, cmName, cmNamespace string) (map[string]string, error) {
-	var cm corev1.ConfigMap
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
+	if cmPtr, err := r.getConfigMap(ctx, cmName, cmNamespace); err == nil {
+		return (*cmPtr).Data, nil
+	} else {
+		return nil, err
 	}
-
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
-		if err == nil {
-			return true, nil
-		}
-
-		if apierrors.IsNotFound(err) {
-			logger.Log.Error(err, "ConfigMap not found, will not retry", "name", cmName, "namespace", cmNamespace)
-			return false, err
-		}
-
-		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying...")
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
-	}
-
-	return cm.Data, nil
 }
 
 func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context, cmName, cmNamespace string) (map[string]map[string]string, error) {
-	var cm corev1.ConfigMap
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
+	var cmPtr *corev1.ConfigMap
+	var err error
+	if cmPtr, err = r.getConfigMap(ctx, cmName, cmNamespace); err != nil {
+		return nil, err
 	}
-
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
-		if err == nil {
-			return true, nil
-		}
-
-		if apierrors.IsNotFound(err) {
-			logger.Log.Error(err, "ConfigMap not found, will not retry", "name", cmName, "namespace", cmNamespace)
-			return false, err
-		}
-
-		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying...")
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
-	}
-
 	out := make(map[string]map[string]string)
-	for acc, accInfoStr := range cm.Data {
+	for acc, accInfoStr := range (*cmPtr).Data {
 		accInfoMap := make(map[string]string)
-		if json.Unmarshal([]byte(accInfoStr), &accInfoMap) != nil {
+		if err := json.Unmarshal([]byte(accInfoStr), &accInfoMap); err != nil {
 			return nil, fmt.Errorf("failed to read entry %s in ConfigMap %s/%s: %w", acc, cmNamespace, cmName, err)
 		}
 		out[acc] = accInfoMap
 	}
 	return out, nil
+}
+
+func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
+	var cm corev1.ConfigMap
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
+		if err == nil {
+			return true, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Error(err, "ConfigMap not found, will not retry", "name", cmName, "namespace", cmNamespace)
+			return false, err
+		}
+
+		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying...")
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
+	}
+	return &cm, nil
 }

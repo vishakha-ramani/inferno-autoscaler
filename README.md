@@ -140,7 +140,7 @@ kubectl get deployments
 NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 vllme-deployment   1/1     1            1           35s
 
-kubectl port-forward svc/vllme-service 8000:80
+kubectl port-forward svc/vllme-service 30000:80
 ```
 
 **Load generation**
@@ -184,6 +184,18 @@ kubectl apply -f samples/local-dev/vllme-variantautoscaling.yaml
 
 # view status of the variant autoscaling object to get status of optimization
 ```
+
+**Applying configuration data**
+ ```sh
+kubectl apply -f deploy/ticker-configmap.yaml
+kubectl apply -f deploy/configmap-serviceclass.yaml
+kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
+```
+
+**Running the controller**
+
+If running the controller locally using `make run`, make sure to install [prerequisites](https://github.com/llm-inferno/optimizer?tab=readme-ov-file#prerequisites) first.
+
 ## Project Distribution
 
 Following the options to release and provide this solution to the users.

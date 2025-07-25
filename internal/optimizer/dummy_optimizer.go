@@ -1,4 +1,4 @@
-package controller
+package optimizer
 
 import (
 	"context"
@@ -20,8 +20,7 @@ func NewDummyVariantAutoscalingsEngine() *DummyVariantAutoscalingsEngine {
 func (e *DummyVariantAutoscalingsEngine) Optimize(
 	ctx context.Context,
 	va llmdOptv1alpha1.VariantAutoscalingList,
-	analysis map[string]interfaces.ModelAnalyzeResponse,
-	metrics map[string]interfaces.MetricsSnapshot,
+	analysis map[string]*interfaces.ModelAnalyzeResponse,
 ) (map[string]llmdOptv1alpha1.OptimizedAlloc, error) {
 
 	result := make(map[string]llmdOptv1alpha1.OptimizedAlloc)
@@ -30,24 +29,29 @@ func (e *DummyVariantAutoscalingsEngine) Optimize(
 		name := va.Name
 
 		analysis, ok1 := analysis[name]
-		_, ok2 := metrics[name]
-		if !ok1 || !ok2 {
-			// Skip if either analysis or metrics are missing
+		if !ok1 {
+			// Skip if either analysis is missing
 			continue
 		}
 
 		// Dummy per-replica capacities
+		// TODO: remove or have hard coded values passed as configuration values
 		perReplicaPrefill := 100.0
 		perReplicaDecode := 300.0
 
+		accelerator := "A100" // hardcoded dummy value
+
 		// Compute required replicas
-		replicasPrefill := math.Ceil(analysis.RequiredPrefillQPS / perReplicaPrefill)
-		replicasDecode := math.Ceil(analysis.RequiredDecodeQPS / perReplicaDecode)
-		replicaTarget := int(math.Max(replicasPrefill, replicasDecode))
+		replicaTarget := 0
+		if allocation := analysis.Allocations[accelerator]; allocation != nil {
+			replicasPrefill := math.Ceil(allocation.RequiredPrefillQPS / perReplicaPrefill)
+			replicasDecode := math.Ceil(allocation.RequiredDecodeQPS / perReplicaDecode)
+			replicaTarget = int(math.Max(replicasPrefill, replicasDecode))
+		}
 
 		alloc := llmdOptv1alpha1.OptimizedAlloc{
 			LastRunTime: metav1.NewTime(time.Now()),
-			Accelerator: "A100", // hardcoded dummy value
+			Accelerator: accelerator,
 			NumReplicas: replicaTarget + 1,
 		}
 

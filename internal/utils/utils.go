@@ -10,7 +10,7 @@ import (
 	collector "github.com/llm-d-incubation/inferno-autoscaler/internal/collector"
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
-	infernoConfig "github.com/llm-inferno/optimizer/pkg/config"
+	infernoConfig "github.com/llm-inferno/optimizer-light/pkg/config"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -98,8 +98,6 @@ func CreateSystemData(
 	systemData.Spec.Optimizer.Spec = infernoConfig.OptimizerSpec{
 		Unlimited:     false,
 		Heterogeneous: false,
-		MILPSolver:    false,
-		UseCplex:      false,
 	}
 
 	// initialize model data

@@ -2,7 +2,7 @@ package controller
 
 import (
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
-	inferno "github.com/llm-inferno/optimizer/pkg/core"
+	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
 )
 
 // Adapter from inferno allocations to a model analyzer response

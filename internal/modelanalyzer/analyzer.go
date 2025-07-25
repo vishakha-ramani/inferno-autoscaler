@@ -6,7 +6,7 @@ import (
 	llmdOptv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
-	inferno "github.com/llm-inferno/optimizer/pkg/core"
+	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
 )
 
 // Performance analyzer of queueing models associated with variant servers

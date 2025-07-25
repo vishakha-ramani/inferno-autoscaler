@@ -5,6 +5,7 @@ go 1.23.0
 godebug default=go1.23
 
 require (
+	github.com/llm-inferno/optimizer-light v0.2.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
 	k8s.io/apimachinery v0.32.1
@@ -12,11 +13,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
-require (
-	github.com/draffensperger/golp v0.0.0-20241201023928-94a60bf898d2 // indirect
-	github.com/llm-inferno/lpsolve v0.1.0 // indirect
-	github.com/llm-inferno/queue-analysis v0.1.0 // indirect
-)
+require github.com/llm-inferno/queue-analysis v0.1.0 // indirect
 
 require (
 	cel.dev/expr v0.18.0 // indirect
@@ -52,7 +49,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/llm-inferno/optimizer v0.1.0
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

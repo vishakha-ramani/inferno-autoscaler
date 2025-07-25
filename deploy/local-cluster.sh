@@ -7,8 +7,8 @@ DEFAULT_CLUSTER_NAME="a100-cluster"
 DEFAULT_NODES=5
 DEFAULT_GPUS_PER_NODE=2
 DEFAULT_GPU_TYPE="nvidia"
-DEFAULT_GPU_MODEL="NVIDIA-A100-PCIE-40GB"
-DEFAULT_GPU_MEMORY=40960
+DEFAULT_GPU_MODEL="NVIDIA-A100-PCIE-80GB"
+DEFAULT_GPU_MEMORY=81920
 
 # Initialize variables with defaults
 cluster_name="$DEFAULT_CLUSTER_NAME"
@@ -34,7 +34,7 @@ Options:
     -c CLUSTER_NAME    Cluster name (default: $DEFAULT_CLUSTER_NAME)
     -n NODES          Number of nodes (default: $DEFAULT_NODES)
     -g GPUS           GPUs per node (default: $DEFAULT_GPUS_PER_NODE)
-    -t TYPE           GPU type: nvidia, amd, intel (default: $DEFAULT_GPU_TYPE)
+    -t TYPE           GPU type: nvidia, amd, intel, mix (default: $DEFAULT_GPU_TYPE)
     -d MODEL          GPU model (default: $DEFAULT_GPU_MODEL)
     -m MEMORY         GPU memory in MB (default: $DEFAULT_GPU_MEMORY)
     -h                Show this help message
@@ -46,11 +46,11 @@ EOF
 validate_gpu_type() {
     local type="$1"
     case "$type" in
-        nvidia|amd|intel)
+        nvidia|amd|intel|mix)
             return 0
             ;;
         *)
-            echo "Error: Invalid GPU type '$type'. Valid values: nvidia, amd, intel"
+            echo "Error: Invalid GPU type '$type'. Valid values: nvidia, amd, intel, mix"
             exit 1
             ;;
     esac
@@ -165,8 +165,35 @@ EOF
 }
 
 # Patch all nodes with GPU labels
-for node_name in $(kubectl get nodes --no-headers -o custom-columns=":metadata.name"); do
-    patch_node_gpu "$node_name" "$gpu_type" "$gpus_per_node" "$gpu_model" "$gpu_memory"
+nodes_list=$(kubectl get nodes --no-headers -o custom-columns=":metadata.name")
+node_array=($nodes_list)
+for i in "${!node_array[@]}"; do
+    node_name="${node_array[$i]}"
+    if [ "$gpu_type" != "mix" ]; then
+        current_type="$gpu_type"
+        current_model="$gpu_model"
+        current_memory="$gpu_memory"
+    else
+        mix_index=$((i % 3))
+        case $mix_index in
+            0)
+                current_type="nvidia"
+                current_model="NVIDIA-A100-PCIE-80GB"
+                current_memory=81920
+                ;;
+            1)
+                current_type="amd"
+                current_model="AMD-MI300X-192G"
+                current_memory=196608
+                ;;
+            2)
+                current_type="intel"
+                current_model="Intel-Gaudi-2-96GB"
+                current_memory=98304
+                ;;
+        esac
+    fi
+    patch_node_gpu "$node_name" "$current_type" "$gpus_per_node" "$current_model" "$current_memory"
 done
 
 echo "[4/5] Starting kubectl proxy..."
@@ -188,9 +215,28 @@ if [[ $retries -eq 30 ]]; then
 fi
 
 # Patch nodes with GPU resource capacity
-for node_name in $(kubectl get nodes --no-headers -o custom-columns=":metadata.name"); do
+nodes_list=$(kubectl get nodes --no-headers -o custom-columns=":metadata.name")
+node_array=($nodes_list)
+for i in "${!node_array[@]}"; do
+    node_name="${node_array[$i]}"
+    if [ "$gpu_type" != "mix" ]; then
+        current_type="$gpu_type"
+    else
+        mix_index=$((i % 3))
+        case $mix_index in
+            0)
+                current_type="nvidia"
+                ;;
+            1)
+                current_type="amd"
+                ;;
+            2)
+                current_type="intel"
+                ;;
+        esac
+    fi
     echo "- Patching node (add): ${node_name}"
-    resource_name="${gpu_type}.com~1gpu"
+    resource_name="${current_type}.com~1gpu"
     resource_count="${gpus_per_node}"
 
     curl --header "Content-Type: application/json-patch+json" \

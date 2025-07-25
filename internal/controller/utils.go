@@ -3,12 +3,14 @@ package controller
 import (
 	"fmt"
 
+	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"gopkg.in/yaml.v3"
 )
 
-func findModelSLO(cmData map[string]string, targetModel string) (*ServiceClassEntry, string /* class name */, error) {
+// Helper to find SLOs for a model variant
+func findModelSLO(cmData map[string]string, targetModel string) (*interfaces.ServiceClassEntry, string /* class name */, error) {
 	for key, val := range cmData {
-		var sc ServiceClass
+		var sc interfaces.ServiceClass
 		if err := yaml.Unmarshal([]byte(val), &sc); err != nil {
 			return nil, "", fmt.Errorf("failed to parse %s: %w", key, err)
 		}

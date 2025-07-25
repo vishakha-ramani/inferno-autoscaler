@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -40,6 +42,10 @@ import (
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 	analyzer "github.com/llm-d-incubation/inferno-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/inferno-autoscaler/internal/optimizer"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
+	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
+	infernoManager "github.com/llm-inferno/optimizer-light/pkg/manager"
+	infernoSolver "github.com/llm-inferno/optimizer-light/pkg/solver"
 	"github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -73,29 +79,18 @@ const (
 	configMapNamespace = "default"
 )
 
-type ServiceClassEntry struct {
-	Model  string `yaml:"model"`
-	SLOITL int    `yaml:"slo-itl"`
-	SLOTTW int    `yaml:"slo-ttw"`
-}
-
-type ServiceClass struct {
-	Name     string              `yaml:"name"`
-	Priority int                 `yaml:"priority"`
-	Data     []ServiceClassEntry `yaml:"data"`
-}
-
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
+	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
+	if err != nil {
+		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimiziing")
+		return ctrl.Result{}, nil
+	}
 
 	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimiziing")
-		return ctrl.Result{}, nil
-	}
-
-	acceleratorUnitCostCm, err := r.readServiceClassConfig(ctx, "accelerator-unit-costs", "default")
-	if err != nil {
-		logger.Log.Error(err, "unable to read accelerator unit cost configmap, skipping optimiziing")
 		return ctrl.Result{}, nil
 	}
 
@@ -114,9 +109,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Error(err, "failed to get cluster inventory")
 	}
 
+	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm, newInventory)
+
 	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-	var allAnalyzerResponses = make(map[string]interfaces.ModelAnalyzeResponse)
-	var allMetrics = make(map[string]interfaces.MetricsSnapshot)
+	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
+	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 
 	for _, va := range variantAutoscalingList.Items {
 		modelName := va.Labels["inference.optimization/modelName"]
@@ -130,10 +127,16 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "failed to locate SLO for model")
 			return ctrl.Result{}, nil
 		}
-
 		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
 
-		acceleratorCostVal, ok := acceleratorUnitCostCm["A100"]
+		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
+			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
+				logger.Log.Info("variantAutoscaling bad model accelerator profile data, skipping optimization", "name", va.Name)
+				return ctrl.Result{}, err
+			}
+		}
+
+		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
 		if !ok {
 			logger.Log.Info("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "name", va.Name)
 		}
@@ -141,6 +144,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if err != nil {
 			logger.Log.Info("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "name", va.Name)
 		}
+
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
@@ -156,40 +160,59 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			return ctrl.Result{}, err
 		}
 
-		var updateOpt llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateOpt); err != nil {
+		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
 			logger.Log.Error(err, "unable to get variantAutoscaling")
 		}
 
-		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateOpt, deploy, acceleratorCostValFloat, r.PromAPI)
+		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
 		if err != nil {
 			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
 			return ctrl.Result{}, nil
 		}
+		updateVA.Status.CurrentAlloc = currentAllocation
 
-		updateOpt.Status.CurrentAlloc = currentAllocation
+		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
+			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "name", updateVA.Name)
+			return ctrl.Result{}, err
+		}
 
-		if err != nil {
-			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
-			return ctrl.Result{}, nil
-		}
-		dummyQps := 50.0
-		metrics := interfaces.MetricsSnapshot{
-			ActualQPS: dummyQps,
-		}
-		dummyAnalyzer := analyzer.NewSimplePrefillDecodeAnalyzer()
-		dummyModelAnalyzerResponse, err := dummyAnalyzer.AnalyzeModel(ctx, updateOpt, metrics)
-		if err != nil {
-			logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
-			return ctrl.Result{}, nil
-		}
-		allMetrics[va.Name] = metrics
-		allAnalyzerResponses[va.Name] = dummyModelAnalyzerResponse
-		updateList.Items = append(updateList.Items, updateOpt)
+		vaFullName := utils.FullName(va.Name, va.Namespace)
+		updateList.Items = append(updateList.Items, updateVA)
+		vaMap[vaFullName] = &va
 	}
+
+	// analyze
+	// TODO: keep data specific to inferno in own new class
+	system := inferno.NewSystem()
+	optimizerSpec := system.SetFromSpec(&systemData.Spec)
+	optimizer := infernoSolver.NewOptimizerFromSpec(optimizerSpec)
+	manager := infernoManager.NewManager(system, optimizer)
+
+	modelAnalyzer := analyzer.NewModelAnalyzer(system)
+	for _, s := range system.Servers() {
+		allAllocations := make(map[string]*inferno.Allocation)
+		modelAnalyzeResponse, err := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
+		if err != nil {
+			logger.Log.Error("model analyzer error", "failed to analyze", err)
+			return ctrl.Result{}, err
+		}
+		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
+		allocations := analyzer.CreateAllocationsFromModelAnalyzeResponse(modelAnalyzeResponse)
+		for acceleratorName, alloc := range allocations {
+			if s.CurAllocation() != nil {
+				penalty := s.CurAllocation().TransitionPenalty(alloc)
+				alloc.SetValue(penalty)
+			}
+			allAllocations[acceleratorName] = alloc
+		}
+		maps.Copy(s.AllAllocations(), allAllocations)
+	}
+	logger.Log.Info("inferno data ", "systemData ", systemData)
+
 	// Call Optimize ONCE across all variants
-	dummyvariantAutoscaling := variantAutoscalingOptimizer.NewDummyVariantAutoscalingsEngine()
-	optimizedAllocation, err := dummyvariantAutoscaling.Optimize(ctx, updateList, allAnalyzerResponses, allMetrics)
+	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
+	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
 		return ctrl.Result{}, nil
@@ -240,18 +263,19 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		}
 
+		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
+		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
+		updateVa.Status.Actuation.Applied = true
+
 		act := actuator.NewDummyActuator(r.Client)
 		if err := act.ApplyReplicaTargets(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to apply replicas")
 		}
-		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
-		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
-		updateVa.Status.Actuation.Applied = true
+
 		if err := r.Client.Status().Update(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to patch status", "name", updateVa.Name)
 			continue
 		}
-
 	}
 
 	return ctrl.Result{}, nil
@@ -377,6 +401,31 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
 }
 
 func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Context, cmName, cmNamespace string) (map[string]string, error) {
+	if cmPtr, err := r.getConfigMap(ctx, cmName, cmNamespace); err == nil {
+		return (*cmPtr).Data, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context, cmName, cmNamespace string) (map[string]map[string]string, error) {
+	var cmPtr *corev1.ConfigMap
+	var err error
+	if cmPtr, err = r.getConfigMap(ctx, cmName, cmNamespace); err != nil {
+		return nil, err
+	}
+	out := make(map[string]map[string]string)
+	for acc, accInfoStr := range (*cmPtr).Data {
+		accInfoMap := make(map[string]string)
+		if err := json.Unmarshal([]byte(accInfoStr), &accInfoMap); err != nil {
+			return nil, fmt.Errorf("failed to read entry %s in ConfigMap %s/%s: %w", acc, cmNamespace, cmName, err)
+		}
+		out[acc] = accInfoMap
+	}
+	return out, nil
+}
+
+func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
 	var cm corev1.ConfigMap
 	backoff := wait.Backoff{
 		Duration: 100 * time.Millisecond,
@@ -403,6 +452,5 @@ func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Contex
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
 	}
-
-	return cm.Data, nil
+	return &cm, nil
 }

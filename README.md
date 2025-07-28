@@ -117,7 +117,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n
 ```sh
 kubectl apply -f samples/local-dev/prometheus-deploy-all-in-one.yaml
 kubectl get -n default prometheus prometheus -w
-kubectl get -b monitoring services
+kubectl get services
 
 NAME                  TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
 prometheus-operated   ClusterIP   None         <none>        9090/TCP   17s

@@ -284,14 +284,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Start watching ConfigMap and ticker logic
-	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		<-mgr.Elected() // Wait for leader election
-		r.watchAndRunLoop()
-		return nil
-	})); err != nil {
-		return err
-	}
 
 	// To run locally, set the environment variable to Prometheus base URL e.g. PROMETHEUS_BASE_URL=http://localhost:9090
 	prom_addr := os.Getenv("PROMETHEUS_BASE_URL")
@@ -307,6 +299,24 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 
 	r.PromAPI = promv1.NewAPI(client)
+	logger.Log.Info("Prometheus client initialized")
+
+	// Start watching ConfigMap and ticker logic
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			// Controller shutdown before becoming leader
+			logger.Log.Info("Shutdown before leader election")
+			return nil
+		case <-mgr.Elected():
+			// Now leader — safe to run loop
+			logger.Log.Info("Elected as leader, starting optimization loop")
+			r.watchAndRunLoop()
+			return nil
+		}
+	})); err != nil {
+		return fmt.Errorf("failed to add watchAndRunLoop: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).

@@ -33,11 +33,8 @@ For more details please refer to the community proposal [here](https://docs.goog
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
-### Create cluster with fake GPUs
-
-```sh
-bash deploy/local-cluster.sh
-```
+## Quickstart: Emulated Deployment on Kind
+- Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
@@ -50,32 +47,42 @@ make docker-build docker-push IMG=<some-registry>/inferno-autoscaler:tag
 And it is required to have access to pull the image from the working environment.
 Make sure you have the proper permission to the registry if the above commands don’t work.
 
-**Install the CRDs into the cluster:**
+Use this target to spin up a complete local test environment:
 
 ```sh
-make install
-```
-
-**Install the configmap to run optimizer loop:**
-
-```sh
-kubectl apply -f deploy/ticker-configmap.yaml
-```
-
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/inferno-autoscaler:tag
+make deploy-inferno-emulated-on-kind IMG=<some-registry>/inferno-autoscaler:tag
 
 # prebuilt image
-# make deploy IMG=quay.io/amalvank/inferno:latest
+# make deploy-inferno-emulated-on-kind 
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
 
+This sets up:
+- Deploys a 3-node Kind cluster with fake GPU resources
+- Preloaded Inferno image
+- CRDs and controller deployment
+- Install Prometheus via Helm
+- vLLM emulator and load generator (OpenAI-based)
+
+```console
+Summary: GPU resource capacities and allocatables for cluster 'kind-inferno-gpu-cluster':
+-------------------------------------------------------------------------------------------------------------------------------
+Node                                     Resource             Capacity   Allocatable GPU Product                    Memory (MB)
+-------------------------------------------------------------------------------------------------------------------------------
+kind-inferno-gpu-cluster-control-plane   nvidia.com/gpu       8          8          NVIDIA-A100-PCIE-40GB          40960     
+kind-inferno-gpu-cluster-worker          amd.com/gpu          6          6          AMD-RX-7800-XT                 16384     
+kind-inferno-gpu-cluster-worker2         intel.com/gpu        4          4          Intel-Arc-A770                 16384     
+-------------------------------------------------------------------------------------------------------------------------------
+```
+
 
 ### To Uninstall
+
+```sh
+make undeploy-inferno-on-kind
+```
 
 **Delete the APIs(CRDs) from the cluster:**
 
@@ -83,45 +90,20 @@ privileges or be logged in as admin.
 make uninstall
 ```
 
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
 **Delete cluster**
 
 ```sh
-kind delete cluster -n a100-cluster
+make destroy-kind-cluster
 ```
 
-## Local development
+## Local development vllme setup
 
 Local development will need emulated vllm server, prometheus installed in KinD cluster. 
 
-**Create namespace**
+This script deploys emulated vllm server
 
 ```sh
-kubectl create ns monitoring
-```
-
-**Install prometheus**
-
-```sh
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring
-```
-
-**Wait for prometheus installation to complete**
-```sh
-kubectl apply -f samples/local-dev/prometheus-deploy-all-in-one.yaml
-kubectl get -n default prometheus prometheus -w
-kubectl get services
-
-NAME                  TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
-prometheus-operated   ClusterIP   None         <none>        9090/TCP   17s
-
+make deploy-inferno-emulated-on-kind
 ```
 
 **Access the server**
@@ -131,11 +113,9 @@ kubectl port-forward svc/prometheus-operated 9090:9090
 # server can be accessed at location: http://localhost:9090
 ```
 
-**Create vllm emulated deployment**
+**Check vllm emulated deployment**
 
 ```sh
-kubectl apply -f samples/local-dev/vllme-deployment-with-service-and-servicemon.yaml
-
 kubectl get deployments
 NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 vllme-deployment   1/1     1            1           35s
@@ -171,7 +151,7 @@ curl -G http://localhost:9090/api/v1/query \
 ```sh
 # username:admin
 # password: prom-operator
-kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaler-monitoring
 ```
 
 **Creating dummy workload**

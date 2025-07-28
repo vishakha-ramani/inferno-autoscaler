@@ -82,7 +82,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	// Setup Prometheus client
 	// TODO: agree on using standard vllm metrics
 	// Query 1: Arrival rate (requests per minute)
-	arrivalQuery := fmt.Sprintf(`sum(rate(vllm:requests_count_total{model_name="%s",namespace="%s"}[1m])) * 60`, modelName, deployNamespace)
+	arrivalQuery := fmt.Sprintf(`sum(rate(vllm:request_success_total{model_name="%s",namespace="%s"}[1m])) * 60`, modelName, deployNamespace)
 	arrivalVal := 0.0
 	if val, warn, err := promAPI.Query(ctx, arrivalQuery, time.Now()); err == nil && val.Type() == model.ValVector {
 		vec := val.(model.Vector)
@@ -99,7 +99,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 
 	// Query 2: Average token length
 	// TODO: split composite query to individual queries
-	tokenQuery := fmt.Sprintf(`delta(vllm:tokens_count_total{model_name="%s",namespace="%s"}[1m])/delta(vllm:requests_count_total{model_name="%s",namespace="%s"}[1m])`,
+	tokenQuery := fmt.Sprintf(`delta(vllm:tokens_total{model_name="%s",namespace="%s"}[1m])/delta(vllm:request_success_total{model_name="%s",namespace="%s"}[1m])`,
 		modelName, deployNamespace, modelName, deployNamespace)
 	avgLen := 0.0
 	if val, _, err := promAPI.Query(ctx, tokenQuery, time.Now()); err == nil && val.Type() == model.ValVector {

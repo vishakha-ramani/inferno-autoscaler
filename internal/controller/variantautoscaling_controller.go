@@ -311,7 +311,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		case <-mgr.Elected():
 			// Now leader — safe to run loop
 			logger.Log.Info("Elected as leader, starting optimization loop")
-			r.watchAndRunLoop()
+			r.watchAndRunLoop(ctx)
 			return nil
 		}
 	})); err != nil {
@@ -338,7 +338,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Complete(r)
 }
 
-func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
+func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
 	var lastInterval string
 
 	for {
@@ -394,11 +394,14 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
 					for {
 						select {
 						case <-tick:
-							_, err := r.Reconcile(context.Background(), ctrl.Request{})
+							_, err := r.Reconcile(ctx, ctrl.Request{})
 							if err != nil {
 								logger.Log.Error(err, "Manual reconcile failed")
 							}
 						case <-stopCh:
+							return
+						case <-ctx.Done():
+							logger.Log.Info("Context cancelled, stopping ticker loop")
 							return
 						}
 					}

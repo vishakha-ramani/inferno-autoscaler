@@ -4,7 +4,7 @@
 CLIENT_SCRIPT="client.py"
 
 # Poisson process parameters
-rpm=40 # requests per minute
+rpm=20 # requests per minute
 if [ -n "$1" ]; then
   rpm=$1
 fi

@@ -45,5 +45,11 @@ _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n $
 # Install the configmap to run optimizer loop
 _kubectl apply -f deploy/ticker-configmap.yaml
 
+# Install the configmap service class
+_kubectl apply -f deploy/configmap-serviceclass.yaml
+
+# Install the configmap for the accelerator unit cost
+_kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
+
 # deploy emulated vllme server
 hack/deploy-emulated-vllme-server.sh

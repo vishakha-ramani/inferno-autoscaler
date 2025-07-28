@@ -27,8 +27,8 @@ helm repo update
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n ${MONITORING_NAMESPACE}
 
 # Wait for prometheus installation to complete
-_kubectl apply -f samples/local-dev/prometheus-deploy-all-in-one.yaml
+_kubectl apply -f hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml
 _kubectl wait --for=condition=ready pods --all -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 
 # Create vllm emulated deployment
-_kubectl apply -f samples/local-dev/vllme-deployment-with-service-and-servicemon.yaml
+_kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-deployment-with-service-and-servicemon.yaml

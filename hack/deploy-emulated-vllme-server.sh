@@ -32,6 +32,3 @@ _kubectl wait --for=condition=ready pods --all -n ${MONITORING_NAMESPACE} --time
 
 # Create vllm emulated deployment
 _kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-deployment-with-service-and-servicemon.yaml
-
-# Create variant autoscaling object for controller
-_kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml

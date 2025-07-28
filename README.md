@@ -117,7 +117,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n
 ```sh
 kubectl apply -f samples/local-dev/prometheus-deploy-all-in-one.yaml
 kubectl get -n default prometheus prometheus -w
-kubectl get services
+kubectl get -b monitoring services
 
 NAME                  TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
 prometheus-operated   ClusterIP   None         <none>        9090/TCP   17s
@@ -195,6 +195,12 @@ kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 **Running the controller**
 
 If running the controller locally using `make run`, make sure to install [prerequisites](https://github.com/llm-inferno/optimizer?tab=readme-ov-file#prerequisites) first.
+
+Once you've forwarded prometheus to localhost:9090, the command to run:
+
+```shell
+make run PROMETHEUS_BASE_URL=http://localhost:9090
+```
 
 ## Project Distribution
 

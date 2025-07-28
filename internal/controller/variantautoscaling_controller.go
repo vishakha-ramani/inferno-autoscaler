@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -292,8 +293,14 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return err
 	}
 
+	// To run locally, set the environment variable to Prometheus base URL e.g. PROMETHEUS_BASE_URL=http://localhost:9090
+	prom_addr := os.Getenv("PROMETHEUS_BASE_URL")
+	if prom_addr == "" {
+		// Running in cluster
+		prom_addr = "http://prometheus-operated.default.svc.cluster.local:9090"
+	}
 	client, err := api.NewClient(api.Config{
-		Address: "http://prometheus-operated.default.svc.cluster.local:9090",
+		Address: prom_addr,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create prometheus client: %w", err)

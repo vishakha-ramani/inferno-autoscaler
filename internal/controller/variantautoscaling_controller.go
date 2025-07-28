@@ -30,9 +30,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -320,6 +323,19 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
+		Watches(
+			&corev1.Node{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				// Return nothing, we only want the Node object cached
+				return nil
+			}),
+			builder.WithPredicates(predicate.Funcs{ // minimal predicate that returns false
+				CreateFunc:  func(_ event.CreateEvent) bool { return false },
+				UpdateFunc:  func(_ event.UpdateEvent) bool { return false },
+				DeleteFunc:  func(_ event.DeleteEvent) bool { return false },
+				GenericFunc: func(_ event.GenericEvent) bool { return false },
+			}), // never trigger reconciliation
+		).
 		Named("variantAutoscaling").
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {

@@ -132,13 +132,6 @@ vllme-deployment   1/1     1            1           35s
 kubectl port-forward svc/vllme-service 30000:80
 ```
 
-**Create variant autoscaling object for controller**
-```sh
-kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
-
-# view status of the variant autoscaling object to get status of optimization
-```
-
 **Load generation**
 
 ```sh

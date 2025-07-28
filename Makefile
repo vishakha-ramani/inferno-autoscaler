@@ -87,8 +87,7 @@ deploy-inferno-emulated-on-kind:
 		hack/deploy-inferno-emulated-on-kind.sh $(KIND_ARGS)
 
 # Deploy controller in emulator mode
-.PHONY: deploy-emulated 
-deploy-emulated: KUSTOMIZATION=emulator
+.PHONY: deploy-emulated
 deploy-emulated: deploy
 
 .PHONY: undeploy-inferno-on-kind

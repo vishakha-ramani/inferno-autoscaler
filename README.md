@@ -50,9 +50,6 @@ Make sure you have the proper permission to the registry if the above commands d
 Use this target to spin up a complete local test environment:
 
 ```sh
-make deploy IMG=<some-registry>/inferno-controller:tag
-
-# prebuilt image
 make deploy-inferno-emulated-on-kind IMG=<some-registry>/inferno-controller:tag KIND_ARGS="-t mix -n 3 -g 4"
 
 # -t mix - mix vendors

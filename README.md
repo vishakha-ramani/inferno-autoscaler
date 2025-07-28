@@ -132,6 +132,10 @@ vllme-deployment   1/1     1            1           35s
 kubectl port-forward svc/vllme-service 8000:80
 ```
 
+**Sanity checks**
+
+Go to http://localhost:8000/metrics and check if you see metrics starting with vllm:. Refresh to see the values changing with the load generator on.
+
 **Create variant autoscaling object for controller**
 ```sh
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
@@ -140,6 +144,11 @@ kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 ```
 
 **Load generation**
+
+- Generates synthetic load by launching client.py repeatedly
+- Takes requests-per-minute (RPM) as input
+- Default = 20 RPM
+- Can be overridden by running:
 
 ```sh
 #run script

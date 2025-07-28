@@ -129,7 +129,7 @@ vllme-deployment   1/1     1            1           35s
 
 **Expose the vllme server**
 ```sh
-kubectl port-forward svc/vllme-service 30000:80
+kubectl port-forward svc/vllme-service 8000:80
 ```
 
 **Create variant autoscaling object for controller**

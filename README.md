@@ -40,7 +40,7 @@ For more details please refer to the community proposal [here](https://docs.goog
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/inferno-autoscaler:tag
+make docker-build docker-push IMG=<some-registry>/inferno-controller:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
@@ -153,6 +153,7 @@ kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 ```sh
 #run script
 cd ./hack/vllme/vllm_emulator
+pip install -r requirements.txt
 sh loadgen.sh 40
 
 # rpm - request per minute (default = 20)

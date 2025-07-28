@@ -1,5 +1,8 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMAGE_TAG_BASE ?= quay.io/infernoautoscaler
+IMG_TAG ?= latest
+IMG ?= $(IMAGE_TAG_BASE)/inferno-controller:$(IMG_TAG)
+KIND_ARGS ?= -t mix -n 3 -g 2   # Default: 3 nodes, 2 GPUs per node, mixed vendors
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -60,6 +63,38 @@ vet: ## Run go vet against code.
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+
+# Creates a multi-node Kind cluster
+# Adds emulated GPU labels and capacities per node 
+.PHONY: create-kind-cluster
+create-kind-cluster:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		hack/create-kind-gpu-cluster.sh $(KIND_ARGS)
+
+# Destroys the Kind cluster created by `create-kind-cluster`
+.PHONY: destroy-kind-cluster
+destroy-kind-cluster:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+        hack/destroy-kind-cluster.sh
+
+# Create Kind cluster (if needed)
+# Deploys the Inferno Autoscaler on a Kind cluster with emulated GPU support.
+# This target assumes that the Kind cluster has been created and is running.
+.PHONY: deploy-inferno-emulated-on-kind
+deploy-inferno-emulated-on-kind:
+	@echo ">>> Deploying Inferno (cluster args: $(KIND_ARGS), image: $(IMG))"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
+		hack/deploy-inferno-emulated-on-kind.sh $(KIND_ARGS)
+
+# Deploy controller in emulator mode
+.PHONY: deploy-emulated 
+deploy-emulated: KUSTOMIZATION=emulator
+deploy-emulated: deploy
+
+.PHONY: undeploy-inferno-on-kind
+undeploy-inferno-on-kind:
+	kubectl delete ns/inferno-autoscaler-system
+
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

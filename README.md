@@ -68,11 +68,36 @@ kubectl apply -f deploy/ticker-configmap.yaml
 make deploy IMG=<some-registry>/inferno-autoscaler:tag
 
 # prebuilt image
-# make deploy IMG=quay.io/amalvank/inferno:latest
+make deploy-inferno-emulated-on-kind IMG=<some-registry>/inferno-autoscaler:tag KIND_ARGS="-t mix -n 3 -g 4"
+
+# mix - mix vendors
+# -n - number of nodes
+# -g - number of gpus per node 
+
+# prebuilt image
+# make deploy-inferno-emulated-on-kind 
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
+
+The default set up:
+- Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
+- Preloaded Inferno image
+- CRDs and controller deployment
+- Install Prometheus via Helm
+- vLLM emulator and load generator (OpenAI-based)
+
+```console
+Summary: GPU resource capacities and allocatables for cluster 'kind-inferno-gpu-cluster':
+-------------------------------------------------------------------------------------------------------------------------------
+Node                                     Resource             Capacity   Allocatable GPU Product                    Memory (MB)
+-------------------------------------------------------------------------------------------------------------------------------
+kind-inferno-gpu-cluster-control-plane   nvidia.com/gpu       2          2          NVIDIA-A100-PCIE-40GB          40960     
+kind-inferno-gpu-cluster-worker          amd.com/gpu          2          2          AMD-RX-7800-XT                 16384     
+kind-inferno-gpu-cluster-worker2         intel.com/gpu        2          2          Intel-Arc-A770                 16384     
+-------------------------------------------------------------------------------------------------------------------------------
+```
 
 
 ### To Uninstall

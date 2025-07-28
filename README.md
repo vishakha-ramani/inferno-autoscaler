@@ -196,6 +196,12 @@ kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 
 If running the controller locally using `make run`, make sure to install [prerequisites](https://github.com/llm-inferno/optimizer?tab=readme-ov-file#prerequisites) first.
 
+Once you've forwarded prometheus to localhost:9090, the command to run:
+
+```shell
+make run PROMETHEUS_BASE_URL=http://localhost:9090
+```
+
 ## Project Distribution
 
 Following the options to release and provide this solution to the users.

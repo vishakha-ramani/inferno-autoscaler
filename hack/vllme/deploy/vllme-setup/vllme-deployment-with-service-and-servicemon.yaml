@@ -2,15 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllme-deployment
-  # labels:
-  #   inferno.server.managed: "true"
-  #   inferno.server.name: vllm-001
-  #   inferno.server.model: llama_13b
-  #   inferno.server.class: Premium
-  #   inferno.server.allocation.accelerator: MI250
-  #   inferno.server.allocation.maxbatchsize: "8"
-  #   inferno.server.load.rpm: "30.2"
-  #   inferno.server.load.numtokens: "1560"
 spec:
   replicas: 1
   selector:
@@ -23,21 +14,33 @@ spec:
     spec:
       containers:
       - name: vllme
-        image: quay.io/infernoautoscaler/vllme:slim-1.0
+        image: quay.io/infernoautoscaler/vllme:slim-1.0 # TODO: change the image
         imagePullPolicy: Always
-        env:
-          - name: DECODE_TIME
-            value: "20"
-          - name: PREFILL_TIME
-            value: "20"
-          - name: AVG_TOKENS
-            value: "128"
-          - name: TOKENS_DISTRIBUTION
-            value: "deterministic"
-          - name: MAX_BATCH_SIZE
-            value: "8"
-          - name: KVC_PER_TOKEN
-            value: "2"
+        env: 
+        - name: MODEL_NAME
+          value: "default" 
+        - name: DECODE_TIME
+          value: "20"        # In milliseconds, e.g., 50ms per token decode
+        - name: PREFILL_TIME
+          value: "20"       # In milliseconds, e.g., 100ms for prefill
+        - name: MODEL_SIZE
+          value: "25000"     # In MB, e.g., 25GB model size
+        - name: KVC_PER_TOKEN
+          value: "2"       # In MB, e.g., 100MB per token for KV cache
+        - name: MAX_SEQ_LEN
+          value: "2048"      # Max sequence length
+        - name: MEM_SIZE
+          value: "80000"     # Total device memory in MB, e.g., 80GB
+        - name: AVG_TOKENS
+          value: "128"       # Average generated tokens
+        - name: TOKENS_DISTRIBUTION
+          value: "deterministic"   # "uniform", "normal", "deterministic"
+        - name: MAX_BATCH_SIZE
+          value: "8"         # Max concurrent requests in a batch 
+        - name: REALTIME
+          value: "True"      # Boolean: "True" or "False"
+        - name: MUTE_PRINT
+          value: "False"     # Boolean: "True" or "False"
         ports:
         - containerPort: 80
         resources:

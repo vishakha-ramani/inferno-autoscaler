@@ -9,5 +9,5 @@ spec:
       containers:
         - name: manager
           env:
-            - name: EMULATOR_MODE
+            - name: EMULATOR_MODE # Enable emulator mode, consumes fake gpu resources on kind cluster
               value: "true"

@@ -33,46 +33,54 @@ For more details please refer to the community proposal [here](https://docs.goog
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
-### Create cluster with fake GPUs
-
-```sh
-bash deploy/local-cluster.sh
-```
+## Quickstart: Emulated Deployment on Kind
+- Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/inferno-autoscaler:tag
+make docker-build docker-push IMG=<some-registry>/inferno-controller:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
 And it is required to have access to pull the image from the working environment.
 Make sure you have the proper permission to the registry if the above commands don’t work.
 
-**Install the CRDs into the cluster:**
+Use this target to spin up a complete local test environment:
 
 ```sh
-make install
-```
+make deploy-inferno-emulated-on-kind IMG=<some-registry>/inferno-controller:tag KIND_ARGS="-t mix -n 3 -g 4"
 
-**Install the configmap to run optimizer loop:**
-
-```sh
-kubectl apply -f deploy/ticker-configmap.yaml
-```
-
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/inferno-autoscaler:tag
+# -t mix - mix vendors
+# -n - number of nodes
+# -g - number of gpus per node 
 
 # prebuilt image
-# make deploy IMG=quay.io/amalvank/inferno:latest
+# make deploy-inferno-emulated-on-kind 
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
+
+The default set up:
+- Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
+- Preloaded Inferno image
+- CRDs and controller deployment
+- Apply configuration data
+- Install Prometheus via Helm
+- vLLM emulator and load generator (OpenAI-based)
+
+```console
+Summary: GPU resource capacities and allocatables for cluster 'kind-inferno-gpu-cluster':
+-------------------------------------------------------------------------------------------------------------------------------
+Node                                     Resource             Capacity   Allocatable GPU Product                    Memory (MB)
+-------------------------------------------------------------------------------------------------------------------------------
+kind-inferno-gpu-cluster-control-plane   nvidia.com/gpu       2          2          NVIDIA-A100-PCIE-40GB          40960     
+kind-inferno-gpu-cluster-worker          amd.com/gpu          2          2          AMD-RX-7800-XT                 16384     
+kind-inferno-gpu-cluster-worker2         intel.com/gpu        2          2          Intel-Arc-A770                 16384     
+-------------------------------------------------------------------------------------------------------------------------------
+```
 
 
 ### To Uninstall
@@ -80,76 +88,75 @@ privileges or be logged in as admin.
 **Delete the APIs(CRDs) from the cluster:**
 
 ```sh
-make uninstall
+make undeploy-inferno-on-kind
 ```
 
-**UnDeploy the controller from the cluster:**
+**Delete the APIs(CRDs) from the cluster:**
 
 ```sh
-make undeploy
+make uninstall
 ```
 
 **Delete cluster**
 
 ```sh
-kind delete cluster -n a100-cluster
+make destroy-kind-cluster
 ```
 
-## Local development
+## Local development vllme setup
 
 Local development will need emulated vllm server, prometheus installed in KinD cluster. 
 
-**Create namespace**
-
+This script already deploys emulated vllm server:
 ```sh
-kubectl create ns monitoring
+make deploy-inferno-emulated-on-kind
 ```
 
-**Install prometheus**
-
-```sh
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring
-```
-
-**Wait for prometheus installation to complete**
-```sh
-kubectl apply -f samples/local-dev/prometheus-deploy-all-in-one.yaml
-kubectl get -n default prometheus prometheus -w
-kubectl get services
-
-NAME                  TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
-prometheus-operated   ClusterIP   None         <none>        9090/TCP   17s
-
-```
-
-**Access the server**
+**Expose the promethues server**
 
 ```sh
 kubectl port-forward svc/prometheus-operated 9090:9090
 # server can be accessed at location: http://localhost:9090
 ```
 
-**Create vllm emulated deployment**
+**Check vllm emulated deployment**
 
 ```sh
-kubectl apply -f samples/local-dev/vllme-deployment-with-service-and-servicemon.yaml
-
 kubectl get deployments
 NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 vllme-deployment   1/1     1            1           35s
+```
 
-kubectl port-forward svc/vllme-service 30000:80
+**Expose the vllme server**
+```sh
+kubectl port-forward svc/vllme-service 8000:80
+```
+
+**Sanity checks**
+
+Go to http://localhost:8000/metrics and check if you see metrics starting with vllm:. Refresh to see the values changing with the load generator on.
+
+**Create variant autoscaling object for controller**
+```sh
+kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
+
+# view status of the variant autoscaling object to get status of optimization
 ```
 
 **Load generation**
 
-```sh
-git clone https://github.com/vishakha-ramani/vllm_emulator.git -b new-metric
+- Generates synthetic load by launching client.py repeatedly
+- Takes requests-per-minute (RPM) as input
+- Default = 20 RPM
+- Can be overridden by running:
 
+```sh
 #run script
-sh ./loadgen.sh
+cd ./hack/vllme/vllm_emulator
+pip install -r requirements.txt
+sh loadgen.sh 40
+
+# rpm - request per minute (default = 20)
 
 ```
 
@@ -171,28 +178,10 @@ curl -G http://localhost:9090/api/v1/query \
 ```sh
 # username:admin
 # password: prom-operator
-kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaling-monitoring
 ```
 
-**Creating dummy workload**
- ```sh
- kubectl apply -f samples/local-dev/vllme-deployment-with-service-and-servicemon.yaml
- ```
-**Creating variant autoscaling object for controller**
-```sh
-kubectl apply -f samples/local-dev/vllme-variantautoscaling.yaml
-
-# view status of the variant autoscaling object to get status of optimization
-```
-
-**Applying configuration data**
- ```sh
-kubectl apply -f deploy/ticker-configmap.yaml
-kubectl apply -f deploy/configmap-serviceclass.yaml
-kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
-```
-
-**Running the controller**
+**Running the controller locally for dev**
 
 If running the controller locally using `make run`, make sure to install [prerequisites](https://github.com/llm-inferno/optimizer?tab=readme-ov-file#prerequisites) first.
 

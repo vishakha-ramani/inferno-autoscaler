@@ -287,14 +287,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Start watching ConfigMap and ticker logic
-	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		<-mgr.Elected() // Wait for leader election
-		r.watchAndRunLoop()
-		return nil
-	})); err != nil {
-		return err
-	}
 
 	// To run locally, set the environment variable to Prometheus base URL e.g. PROMETHEUS_BASE_URL=http://localhost:9090
 	prom_addr := os.Getenv("PROMETHEUS_BASE_URL")
@@ -309,7 +301,25 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("failed to create prometheus client: %w", err)
 	}
 
-	r.PromAPI = promv1.NewAPI(promClient)
+	r.PromAPI = promv1.NewAPI(client)
+	logger.Log.Info("Prometheus client initialized")
+
+	// Start watching ConfigMap and ticker logic
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			// Controller shutdown before becoming leader
+			logger.Log.Info("Shutdown before leader election")
+			return nil
+		case <-mgr.Elected():
+			// Now leader — safe to run loop
+			logger.Log.Info("Elected as leader, starting optimization loop")
+			r.watchAndRunLoop(ctx)
+			return nil
+		}
+	})); err != nil {
+		return fmt.Errorf("failed to add watchAndRunLoop: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
@@ -344,7 +354,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Complete(r)
 }
 
-func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
+func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
 	var lastInterval string
 
 	for {
@@ -400,11 +410,14 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop() {
 					for {
 						select {
 						case <-tick:
-							_, err := r.Reconcile(context.Background(), ctrl.Request{})
+							_, err := r.Reconcile(ctx, ctrl.Request{})
 							if err != nil {
 								logger.Log.Error(err, "Manual reconcile failed")
 							}
 						case <-stopCh:
+							return
+						case <-ctx.Done():
+							logger.Log.Info("Context cancelled, stopping ticker loop")
 							return
 						}
 					}

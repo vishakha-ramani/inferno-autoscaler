@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
       - name: vllme
-        image: quay.io/amalvank/vllme:latest
+        image: quay.io/infernoautoscaler/vllme:slim-1.0
         imagePullPolicy: Always
         env:
           - name: DECODE_TIME

@@ -83,8 +83,6 @@ const (
 )
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
-	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimiziing")
@@ -104,12 +102,22 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	// Filter out resources with DeletionTimestamp set
+	activeVAs := make([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling, 0, len(variantAutoscalingList.Items))
+	for _, va := range variantAutoscalingList.Items {
+		if va.DeletionTimestamp.IsZero() {
+			activeVAs = append(activeVAs, va)
+		} else {
+			logger.Log.Info("Skipping deleted VariantAutoscaling", "name", va.Name)
+		}
+	}
+
 	newInventory, err := collector.CollectInventoryK8S(ctx, r.Client)
 
-	if err == nil {
-		logger.Log.Info("current inventory in the cluster", "capacity", newInventory)
-	} else {
+	if err != nil {
 		logger.Log.Error(err, "failed to get cluster inventory")
+		//node listing failed, rely on reconciler to requeue and retry.
+		return ctrl.Result{}, err
 	}
 
 	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm, newInventory)
@@ -118,8 +126,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
 	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 
-	for _, va := range variantAutoscalingList.Items {
+	for _, va := range activeVAs {
 		modelName := va.Labels["inference.optimization/modelName"]
+		//TODO this should be part of the webhook to validate VAs
 		if modelName == "" {
 			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization", "name", va.Name)
 			return ctrl.Result{}, err
@@ -151,15 +160,33 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		err = r.Get(ctx, types.NamespacedName{
-			Name:      va.Name,
-			Namespace: va.Namespace,
-		}, &deploy)
+		backoff := wait.Backoff{
+			Duration: 100 * time.Millisecond,
+			Factor:   2.0,
+			Jitter:   0.1,
+			Steps:    5,
+		}
+		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			err := r.Get(ctx, types.NamespacedName{
+				Name:      va.Name,
+				Namespace: va.Namespace,
+			}, &deploy)
+			if err == nil {
+				return true, nil
+			}
+			if apierrors.IsNotFound(err) {
+				// No need to retry if not found
+				return false, err
+			}
+			// Retry on other errors
+			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			return false, nil
+		})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment", "variantAutoscaling", va.Name)
+			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling", va.Name)
 			return ctrl.Result{}, err
 		}
 

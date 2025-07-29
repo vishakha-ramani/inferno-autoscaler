@@ -126,6 +126,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
 	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
 	for _, va := range activeVAs {
 		modelName := va.Labels["inference.optimization/modelName"]
 		//TODO this should be part of the webhook to validate VAs
@@ -136,36 +143,36 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 		entry, className, err := findModelSLO(serviceClassCm, modelName)
 		if err != nil {
-			logger.Log.Error(err, "failed to locate SLO for model")
-			return ctrl.Result{}, nil
+			logger.Log.Error(err, "failed to locate SLO for model", "variantAutoscaling-name", va.Name, "modelName", modelName)
+			//Skip this variantAutoscaling if no SLO found
+			continue
 		}
 		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
 
 		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
 			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
-				logger.Log.Info("variantAutoscaling bad model accelerator profile data, skipping optimization", "name", va.Name)
-				return ctrl.Result{}, err
+				logger.Log.Error("variantAutoscaling bad model accelerator profile data, skipping optimization", "variantAutoscaling-name", va.Name)
+				// Skip this variantAutoscaling if bad accelerator profile
+				continue
 			}
 		}
 
 		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
 		if !ok {
-			logger.Log.Info("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "name", va.Name)
+			logger.Log.Error("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			// Skip this variantAutoscaling if no accelerator cost found
+			continue
 		}
 		acceleratorCostValFloat, err := strconv.ParseFloat(acceleratorCostVal, 32)
 		if err != nil {
-			logger.Log.Info("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "name", va.Name)
+			logger.Log.Error("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			// Skip this variantAutoscaling if unable to parse accelerator cost
+			continue
 		}
 
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		backoff := wait.Backoff{
-			Duration: 100 * time.Millisecond,
-			Factor:   2.0,
-			Jitter:   0.1,
-			Steps:    5,
-		}
 		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 			err := r.Get(ctx, types.NamespacedName{
 				Name:      va.Name,
@@ -186,13 +193,17 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling", va.Name)
-			return ctrl.Result{}, err
+			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling-name", va.Name)
+			// Skip this variantAutoscaling if Deployment not found or other error
+			// could be the case where deployment is deleted.
+			continue
 		}
 
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
-			logger.Log.Error(err, "unable to get variantAutoscaling")
+			logger.Log.Error(err, "unable to get variantAutoscaling", "deployment-name", deploy.Name, "namespace", deploy.Namespace)
+			// Skip this variantAutoscaling if unable to get it
+			continue
 		}
 
 		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
@@ -203,8 +214,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		updateVA.Status.CurrentAlloc = currentAllocation
 
 		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
-			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "name", updateVA.Name)
-			return ctrl.Result{}, err
+			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "variantAutoscaling-name", updateVA.Name)
+			// Skip this variantAutoscaling if bad server data
+			continue
 		}
 
 		vaFullName := utils.FullName(va.Name, va.Namespace)
@@ -234,8 +246,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
 	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses)
 	if err != nil {
-		logger.Log.Error(err, "unable to perform model optimization, skipping this variantAutoscaling loop")
-		return ctrl.Result{}, nil
+		logger.Log.Error(err, "unable to perform model optimization, retrying")
+		return ctrl.Result{}, err
 	}
 
 	for i := range updateList.Items {
@@ -292,8 +304,21 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "failed to apply replicas")
 		}
 
-		if err := r.Client.Status().Update(ctx, &updateVa); err != nil {
-			logger.Log.Error(err, "failed to patch status", "name", updateVa.Name)
+		err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			if updateErr := r.Client.Status().Update(ctx, &updateVa); updateErr != nil {
+				// Don't retry on permanent errors like validation failures
+				if apierrors.IsInvalid(updateErr) || apierrors.IsForbidden(updateErr) {
+					logger.Log.Error(updateErr, "permanent error while patching status", "name", updateVa.Name)
+					return false, updateErr
+				}
+				logger.Log.Error(updateErr, "transient error while patching status, will retry", "name", updateVa.Name)
+				return false, nil // retry
+			}
+			return true, nil // success
+		})
+
+		if err != nil {
+			logger.Log.Error(err, "failed to patch status after retries", "name", updateVa.Name)
 			continue
 		}
 	}

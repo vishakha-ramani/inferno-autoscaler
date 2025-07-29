@@ -294,14 +294,14 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		// Running in cluster
 		prom_addr = "http://prometheus-operated.default.svc.cluster.local:9090"
 	}
-	client, err := api.NewClient(api.Config{
+	promClient, err := api.NewClient(api.Config{
 		Address: prom_addr,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create prometheus client: %w", err)
 	}
 
-	r.PromAPI = promv1.NewAPI(client)
+	r.PromAPI = promv1.NewAPI(promClient)
 	logger.Log.Info("Prometheus client initialized")
 
 	// Start watching ConfigMap and ticker logic

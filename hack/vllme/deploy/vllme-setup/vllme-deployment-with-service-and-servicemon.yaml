@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: vllme
-        image: quay.io/infernoautoscaler/vllme:slim-1.0 # TODO: change the image
+        image: quay.io/infernoautoscaler/vllme:0.2.0
         imagePullPolicy: Always
         env: 
         - name: MODEL_NAME

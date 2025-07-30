@@ -8,31 +8,14 @@ import (
 )
 
 var (
-	optimizationTotal    *prometheus.CounterVec
-	optimizationDuration *prometheus.HistogramVec
-	replicaScalingTotal  *prometheus.CounterVec
-	desiredReplicas      *prometheus.GaugeVec
-	currentReplicas      *prometheus.GaugeVec
-	optimizationErrors   *prometheus.CounterVec
+	replicaScalingTotal *prometheus.CounterVec
+	desiredReplicas     *prometheus.GaugeVec
+	currentReplicas     *prometheus.GaugeVec
+	optimizationErrors  *prometheus.CounterVec
 )
 
 // InitMetrics registers all custom metrics with the provided registry
 func InitMetrics(registry prometheus.Registerer) {
-	optimizationTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "inferno_optimization_total",
-			Help: "Total number of optimization runs",
-		},
-		[]string{"variant_name", "namespace", "status"},
-	)
-	optimizationDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "inferno_optimization_duration_seconds",
-			Help:    "Duration of optimization runs in seconds",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"variant_name", "namespace"},
-	)
 	replicaScalingTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "inferno_replica_scaling_total",
@@ -62,8 +45,6 @@ func InitMetrics(registry prometheus.Registerer) {
 		[]string{"variant_name", "namespace", "error_type"},
 	)
 
-	registry.MustRegister(optimizationTotal)
-	registry.MustRegister(optimizationDuration)
 	registry.MustRegister(replicaScalingTotal)
 	registry.MustRegister(desiredReplicas)
 	registry.MustRegister(currentReplicas)
@@ -83,25 +64,6 @@ type MetricsEmitter struct{}
 // NewMetricsEmitter creates a new metrics emitter
 func NewMetricsEmitter() *MetricsEmitter {
 	return &MetricsEmitter{}
-}
-
-// EmitOptimizationMetrics emits metrics related to optimization runs
-func (m *MetricsEmitter) EmitOptimizationMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, status string, duration float64) {
-	if va == nil {
-		return
-	}
-
-	labels := prometheus.Labels{
-		"variant_name": va.Name,
-		"namespace":    va.Namespace,
-		"status":       status,
-	}
-
-	optimizationTotal.With(labels).Inc()
-	optimizationDuration.With(prometheus.Labels{
-		"variant_name": va.Name,
-		"namespace":    va.Namespace,
-	}).Observe(duration)
 }
 
 // EmitReplicaScalingMetrics emits metrics related to replica scaling

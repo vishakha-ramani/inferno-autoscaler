@@ -170,7 +170,7 @@ kubectl logs -n inferno-autoscaler-monitoring prometheus-kube-prometheus-stack-p
 2. **Query custom metrics**: Check if inferno metrics are being scraped
    ```sh
    # Core inferno metrics
-   curl -s "http://localhost:9090/api/v1/query?query=inferno_optimization_total"
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_replica_scaling_total"
    curl -s "http://localhost:9090/api/v1/query?query=inferno_current_replicas"
    curl -s "http://localhost:9090/api/v1/query?query=inferno_desired_replicas"
    

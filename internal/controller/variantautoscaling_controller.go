@@ -295,13 +295,9 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 	// Record optimization start time for metrics
 	optimizationStart := time.Now()
 
-	// Emit successful optimization metrics
+	// Optimization completed successfully
 	optimizationDuration := time.Since(optimizationStart).Seconds()
-	metricsEmitter := metrics.NewMetricsEmitter()
-	for i := range updateList.Items {
-		va := &updateList.Items[i]
-		metricsEmitter.EmitOptimizationMetrics(ctx, va, "success", optimizationDuration)
-	}
+	logger.Log.Debug("Optimization completed", "duration_seconds", optimizationDuration)
 
 	logger.Log.Debug("Optimization metrics emitted, starting to process variants", "variant_count", len(updateList.Items))
 

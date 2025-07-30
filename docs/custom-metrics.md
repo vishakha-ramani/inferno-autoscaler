@@ -8,23 +8,6 @@ All custom metrics are prefixed with `inferno_` and include labels for `variant_
 
 ## Optimization Metrics
 
-### `inferno_optimization_total`
-- **Type**: Counter
-- **Description**: Total number of optimization runs
-- **Labels**: 
-  - `variant_name`: Name of the variant being optimized
-  - `namespace`: Kubernetes namespace
-  - `status`: Status of the optimization (success, failed, etc.)
-- **Use Case**: Track optimization frequency and success rates
-
-### `inferno_optimization_duration_seconds`
-- **Type**: Histogram
-- **Description**: Duration of optimization runs in seconds
-- **Labels**:
-  - `variant_name`: Name of the variant being optimized
-  - `namespace`: Kubernetes namespace
-- **Use Case**: Monitor optimization performance and identify slow optimizations
-
 ### `inferno_optimization_errors_total`
 - **Type**: Counter
 - **Description**: Total number of optimization errors
@@ -93,24 +76,18 @@ spec:
 
 ### Basic Queries
 ```promql
-# Optimization success rate
-rate(inferno_optimization_total{status="success"}[5m])
-
 # Current replicas by variant
 inferno_current_replicas
 
 # Scaling frequency
 rate(inferno_replica_scaling_total[5m])
 
-# Optimization duration 95th percentile
-histogram_quantile(0.95, rate(inferno_optimization_duration_seconds_bucket[5m]))
+# Error rate by type
+rate(inferno_optimization_errors_total[5m])
 ```
 
 ### Advanced Queries
 ```promql
-# Optimization duration 95th percentile
-histogram_quantile(0.95, rate(inferno_optimization_duration_seconds_bucket[5m]))
-
 # Scaling frequency by direction
 rate(inferno_replica_scaling_total{direction="scale_up"}[5m])
 
@@ -130,4 +107,4 @@ abs(inferno_desired_replicas - inferno_current_replicas)
 4. Ensure Prometheus is scraping the target
 
 ### Performance Issues
-Monitor optimization duration metrics to identify slow optimizations and potential bottlenecks. 
+Monitor replica scaling metrics to identify scaling patterns and potential bottlenecks. 

@@ -193,9 +193,6 @@ func main() {
 		})
 	}
 
-	// Register custom metrics with the controller-runtime Prometheus registry
-	setupLog.Info("Registering custom metrics with Prometheus registry")
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -261,6 +258,7 @@ func main() {
 
 	// Register custom metrics with Prometheus registry
 	// This makes the metrics available for scraping by Prometheus
+	setupLog.Info("Registering custom metrics with Prometheus registry")
 	metrics.InitMetrics(crmetrics.Registry)
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

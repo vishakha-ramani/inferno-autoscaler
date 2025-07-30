@@ -622,7 +622,7 @@ func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName,
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
 	// First, try environment variable
 	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
-		logger.Log.Info("Using Prometheus address from environment variable", "address", promAddr)
+		logger.Log.Info("Using Prometheus address from environment variable -", "address: ", promAddr)
 		return promAddr, nil
 	}
 

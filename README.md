@@ -143,55 +143,6 @@ kubectl port-forward svc/vllme-service 8000:80
 
 Go to http://localhost:8000/metrics and check if you see metrics starting with vllm:. Refresh to see the values changing with the load generator on.
 
-**Custom Metrics Verification**
-
-The Inferno Autoscaler exposes custom metrics that can be accessed through Prometheus. To verify the custom metrics are working:
-
-1. **Check Prometheus targets**: Ensure both targets are active
-   ```sh
-   # Check inferno-autoscaler target
-   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
-   
-   # Check vllme target
-   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("vllme"))'
-   ```
-   
-   **Note**: If targets don't appear immediately, wait 1-2 minutes for ServiceMonitor discovery to complete.
-
-**If targets still don't appear after waiting:**
-```sh
-# Check Prometheus operator logs for discovery events
-kubectl logs -n inferno-autoscaler-monitoring deployment/kube-prometheus-stack-operator --tail=10
-
-# Check Prometheus pod logs for configuration reloads
-kubectl logs -n inferno-autoscaler-monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus --tail=10
-```
-
-2. **Query custom metrics**: Check if inferno metrics are being scraped
-   ```sh
-   # Core inferno metrics
-   curl -s "http://localhost:9090/api/v1/query?query=inferno_replica_scaling_total"
-   curl -s "http://localhost:9090/api/v1/query?query=inferno_current_replicas"
-   curl -s "http://localhost:9090/api/v1/query?query=inferno_desired_replicas"
-   
-   # vLLM metrics
-   curl -s "http://localhost:9090/api/v1/query?query=vllm:gpu_cache_usage_perc"
-   ```
-
-3. **Direct metrics endpoint access**: Verify metrics are exposed
-   ```sh
-   # Note: Ensure pods are ready before port forwarding
-   # Inferno controller metrics
-   kubectl port-forward svc/inferno-autoscaler-controller-manager-metrics-service 8080:8080 -n inferno-autoscaler-system &
-   curl -s "http://localhost:8080/metrics" | grep -E "(inferno_|# HELP inferno)"
-   
-   # vLLM emulator metrics
-   kubectl port-forward svc/vllme-service 8000:80 &
-   curl -s "http://localhost:8000/metrics" | grep -E "(vllm|# HELP vllm)"
-   ```
-
-For detailed information about the custom metrics, see [Custom Metrics Documentation](docs/custom-metrics.md).
-
 **Create variant autoscaling object for controller**
 ```sh
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
@@ -199,24 +150,6 @@ kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 # view status of the variant autoscaling object to get status of optimization
 kubectl get variantautoscaling vllme-deployment -o yaml
 ```
-
-**Apply ServiceMonitor for custom metrics**
-```sh
-kubectl apply -f config/prometheus/servicemonitor.yaml
-
-# Verify ServiceMonitor is correctly configured
-kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml | grep -A 10 namespaceSelector
-
-# Note: ServiceMonitor discovery takes 1-2 minutes to complete
-```
-
-**Note**: The vllme ServiceMonitor is automatically created in the correct namespace (`inferno-autoscaler-monitoring`) with the proper labels for Prometheus discovery.
-
-**Important**: The inferno-autoscaler ServiceMonitor must be deployed in the `inferno-autoscaler-monitoring` namespace (not `inferno-autoscaler-system`) for Prometheus to discover it. The ServiceMonitor includes a `namespaceSelector` to target services in the `inferno-autoscaler-system` namespace.
-
-**Common Issue**: If the inferno-autoscaler target doesn't appear in Prometheus, check that the ServiceMonitor includes the `namespaceSelector` configuration. Without it, Prometheus won't discover services across different namespaces.
-
-**Timing Note**: ServiceMonitor discovery can take 1-2 minutes after applying. Don't worry if targets don't appear immediately - this is normal behavior.
 
 **Load generation**
 
@@ -246,6 +179,78 @@ curl -G http://localhost:9090/api/v1/query \
 {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1752075000.160,"9.333333333333332"]}]}}% 
 
 ```
+
+### Inferno custom metrics
+
+**Apply ServiceMonitor for custom metrics**
+
+The Inferno Autoscaler exposes custom metrics that can be accessed through Prometheus.
+
+```sh
+kubectl apply -f config/prometheus/servicemonitor.yaml
+
+# Verify ServiceMonitor is correctly configured
+kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml | grep -A 10 namespaceSelector
+
+# Note: ServiceMonitor discovery takes 1-2 minutes to complete
+```
+
+**Note**: The vllme ServiceMonitor is automatically created in the correct namespace (`inferno-autoscaler-monitoring`) with the proper labels for Prometheus discovery.
+
+**Important**: The inferno-autoscaler ServiceMonitor must be deployed in the `inferno-autoscaler-monitoring` namespace (not `inferno-autoscaler-system`) for Prometheus to discover it. The ServiceMonitor includes a `namespaceSelector` to target services in the `inferno-autoscaler-system` namespace.
+
+**Common Issue**: If the inferno-autoscaler target doesn't appear in Prometheus, check that the ServiceMonitor includes the `namespaceSelector` configuration. Without it, Prometheus won't discover services across different namespaces.
+
+**Timing Note**: ServiceMonitor discovery can take 1-2 minutes after applying. Don't worry if targets don't appear immediately - this is normal behavior.
+
+**Custom Metrics Verification**
+
+To verify the custom metrics are working:
+
+1. **Check Prometheus targets**: Ensure both targets are active
+   ```sh
+   # Check inferno-autoscaler target
+   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
+   
+   # Check vllme target
+   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("vllme"))'
+   ```
+   
+   **Note**: If targets don't appear immediately, wait 1-2 minutes for ServiceMonitor discovery to complete.
+
+     **If targets still don't appear after waiting:**
+     ```sh
+     # Check Prometheus operator logs for discovery events
+     kubectl logs -n inferno-autoscaler-monitoring deployment/kube-prometheus-stack-operator --tail=10
+
+     # Check Prometheus pod logs for configuration reloads
+     kubectl logs -n inferno-autoscaler-monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus --tail=10
+     ```
+
+2. **Query custom metrics**: Check if inferno metrics are being scraped
+   ```sh
+   # Core inferno metrics
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_replica_scaling_total"
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_current_replicas"
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_desired_replicas"
+   
+   # vLLM metrics
+   curl -s "http://localhost:9090/api/v1/query?query=vllm:gpu_cache_usage_perc"
+   ```
+
+3. **Direct metrics endpoint access**: Verify metrics are exposed
+   ```sh
+   # Note: Ensure pods are ready before port forwarding
+   # Inferno controller metrics
+   kubectl port-forward svc/inferno-autoscaler-controller-manager-metrics-service 8080:8080 -n inferno-autoscaler-system &
+   curl -s "http://localhost:8080/metrics" | grep -E "(inferno_|# HELP inferno)"
+   
+   # vLLM emulator metrics
+   kubectl port-forward svc/vllme-service 8000:80 &
+   curl -s "http://localhost:8000/metrics" | grep -E "(vllm|# HELP vllm)"
+   ```
+
+For detailed information about the custom metrics, see [Custom Metrics Documentation](docs/custom-metrics.md).
 
 **Accessing the Grafana**
 

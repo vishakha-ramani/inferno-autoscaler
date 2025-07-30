@@ -37,42 +37,27 @@ elif PRINT_WHERE == "FILE_ONLY":
 
 ###---------------------------------- Global Settings -------------------------------------
 
-D = 1        # D devices
-
-KVC_PER_TOKEN = 100     # KVCache size for one Token in MB # will be different for different models : https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/
-
 MAX_SEQ_LEN   = 2048      # TODO: Currently not used
 INF           = float('inf')
-
-REALTIME_FLAG = True     # Simulation will be realtime. Each clock step will have a sleep of step_time
 MUTE_PRINT    = False
-
-# time for one decode run in ms (inter-token latency) #TODO: Assumed independent of batch size or no of tokens generated
-DECODE_TIME: int = os.getenv('DECODE_TIME', 50)
-# NOTE: Not considered yet. Time for prefill run. Assumed independent of request length #TODO: If two request are added together, will they take same Prefill time or twice the prefill time?
-PREFILL_TIME: int = os.getenv('PREFILL_TIME', 100)
-
-# MB (80 GB)
-M: int = os.getenv('MEM_SIZE', 80000)
-# Model size in MB
-MODEL_SIZE: int = os.getenv('MODEL_SIZE', 25000)
 
 ###------------------------------- Classes ----------------------------------------------
 
 class Clock:
-    def __init__(self, start_time, step_time):
+    def __init__(self, start_time: float, step_time: float, realtime: bool = True):
         '''
-        step_time is typically one iteration of vllm, rougly equal to the decode time
+        step_time: duration of one decode iteration in ms
+        realtime: if True, sleep for step_time to simulate real-time progression
         '''
         self.start_time = start_time
-        self.step_time  = step_time
+        self.step_time = step_time
+        self.curr_time = start_time
+        self.realtime = realtime
 
-        self.curr_time  = start_time
-
-    async def time_step(self, no_steps=1):
-        if REALTIME_FLAG:
-            await asyncio.sleep(no_steps*self.step_time/1000)  #sleep in sec
-        self.curr_time = self.curr_time + no_steps*self.step_time
+    async def time_step(self, no_steps: int = 1):
+        if self.realtime:
+            await asyncio.sleep(no_steps * self.step_time / 1000)  # step_time is in ms
+        self.curr_time += no_steps * self.step_time
         return self.curr_time
 
     def get_curr_time(self):
@@ -80,7 +65,7 @@ class Clock:
 
 
 class Model():
-    def __init__(self, model_name, model_size = 25000, kvcache_per_token = KVC_PER_TOKEN, decode_time = DECODE_TIME, prefill_time = PREFILL_TIME):
+    def __init__(self, model_name: str, model_size: int = 25000, kvcache_per_token: int = 1, decode_time: int = 50, prefill_time: int = 100):
         self.model_name      = model_name
         self.KVcachePerToken = kvcache_per_token
         self.ModelSize       = model_size          ## size in MB
@@ -88,7 +73,7 @@ class Model():
         self.DecodeTime      = decode_time         # in ms
 
     def run_one_iteration(self, request_list=[], any_prefill = False):  # TODO: Add prefill time consideration
-        return DECODE_TIME                     # time duration of one forward run as a function of requests scheduled
+        return self.DecodeTime                     # time duration of one forward run as a function of requests scheduled
 
 
 class Device:
@@ -406,11 +391,11 @@ class vLLM():
 
     def add_new_request(self, request: RequestElement):    #TODO: We assume only 1 vLLM instance. Eventually the Request will be added as Request element at a global queue and then fed to vLLM queue
         '''
-        Add a new request to vLLM quque. Either it runs right away or waits at the end of waiting queue
+        Add a new request to vLLM queue. Either it runs right away or waits at the end of waiting queue
         '''
         request.arrival_time = self.Clock.get_curr_time()
         # update metrics: total number of request arrivals
-        self.metrics.counter_requests_total.labels(model_name=self.Model.model_name).inc()
+        self.metrics.counter_request_arrival_total.labels(model_name=self.Model.model_name).inc()
         self._add_to_vllm_queue(request)
 
     def _evict_requests_for_next_iteration(self):
@@ -448,6 +433,10 @@ class vLLM():
         ## Step all running requests by one
         #logger.critical("------------- vLLM iteration starting: generating next set of tokens -----------")
         curr_time = await self.Clock.time_step()
+        
+        if len(self.running_queue) > 0: # Only observe if there are requests running to generate tokens
+            self.metrics.histogram_time_per_output_token.labels(model_name=self.Model.model_name).observe(self.Model.DecodeTime / 1000.0)
+
         for req in self.running_queue:
             no_new_tokens = 1                                         # TODO: Assumes only one token per request
             mem_required = self.Model.KVcachePerToken * no_new_tokens
@@ -458,6 +447,7 @@ class vLLM():
                 self._remove_from_running_queue(req)
                 if req.event != None:
                     req.event.set() # notify waiters
+                self.metrics.counter_request_success_total.labels(model_name=self.Model.model_name).inc() # increment the counter for finished requests
                 logger.info(f"~*~ Finished request {req.ReqId}. Output token length {req.token_len}")
 
         #logger.critical("******** Making eviction and admitting decisions for next iteration ******")

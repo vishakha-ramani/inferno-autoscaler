@@ -19,31 +19,40 @@ from vllm_model import *
 
 
 class Settings(BaseSettings):
-    # Use the environment variable for the model name
-    model: str = os.getenv('MODEL_NAME', 'default')  # Default to 'default' if not set
-    # Time for one decode run in ms (inter-token latency) #TODO: Assumed independent of batch size or no of tokens generated
-    decode_time: int = DECODE_TIME
-    # Model size in MB
-    model_size: int = MODEL_SIZE
-    # KVCache size for one token in MB
-    kvc_per_token: int = KVC_PER_TOKEN
-    # average number of tokens in message
-    avg_generated_len: int = os.getenv('AVG_TOKENS', 100)
-    # distribution of number of tokens per request
+    model: str = os.getenv('MODEL_NAME', 'default')
+    decode_time: int = int(os.getenv('DECODE_TIME', 50))         # ms
+    prefill_time: int = int(os.getenv('PREFILL_TIME', 100))      # ms
+    model_size: int = int(os.getenv('MODEL_SIZE', 25000))        # MB
+    kvc_per_token: int = int(os.getenv('KVC_PER_TOKEN', 4))    # MB
+    max_seq_len: int = int(os.getenv('MAX_SEQ_LEN', 2048))       # not yet used
+    mem_size: int = int(os.getenv('MEM_SIZE', 80000))            # MB
+    avg_generated_len: int = int(os.getenv('AVG_TOKENS', 100))
     tokens_distribution: str = os.getenv('TOKENS_DISTRIBUTION', "uniform")
-    # maximum batch size
-    max_batch_size: int = os.getenv('MAX_BATCH_SIZE', 1)
+    max_batch_size: int = int(os.getenv('MAX_BATCH_SIZE', 1))
+    realtime: bool = True
+    mute_print: bool = False
 
 
 settings = Settings()
 
-clock = Clock(start_time = 0, step_time = settings.decode_time)
-model = Model(model_name = settings.model, model_size = settings.model_size, kvcache_per_token = settings.kvc_per_token)
+clock = Clock(
+   start_time = 0, 
+   step_time = settings.decode_time,
+   realtime=settings.realtime
+   )
 
-labels=dict(model_name=model)
+model = Model(
+   model_name = settings.model,
+   model_size = settings.model_size, 
+   kvcache_per_token = settings.kvc_per_token, 
+   decode_time=settings.decode_time,
+   prefill_time=settings.prefill_time
+   )
+
+labels=dict(model_name=settings.model)
 metrics = Metrics(labelnames=labels) # register metrics
 
-gpu   = Device(device_id = 1, net_memory = M, metrics = metrics, model_name = settings.model, useable_ratio = 0.8)
+gpu   = Device(device_id = 1, net_memory = settings.mem_size, metrics = metrics, model_name = settings.model, useable_ratio = 0.8)
 
 vllmi = vLLM( device=gpu, clock=clock, model=model, metrics=metrics, max_batch_size=settings.max_batch_size)
 load  = Load( settings.avg_generated_len, settings.tokens_distribution)

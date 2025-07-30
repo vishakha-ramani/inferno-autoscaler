@@ -112,12 +112,18 @@ This script already deploys emulated vllm server:
 make deploy-inferno-emulated-on-kind
 ```
 
-**Expose the promethues server**
+**Expose the prometheus server**
 
 ```sh
-kubectl port-forward svc/prometheus-operated 9090:9090
+# Wait for all pods to be ready before port forwarding
+sleep 30 && kubectl get pods -A | grep -E "(inferno|vllme|prometheus)"
+
+# Port forward Prometheus
+kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-monitoring &
 # server can be accessed at location: http://localhost:9090
 ```
+
+**Important**: Always ensure pods are ready before attempting port forwarding to avoid connection errors.
 
 **Check vllm emulated deployment**
 
@@ -129,19 +135,88 @@ vllme-deployment   1/1     1            1           35s
 
 **Expose the vllme server**
 ```sh
-kubectl port-forward svc/vllme-service 8000:80
+# Note: Ensure pods are ready before port forwarding (see Prometheus section above)
+kubectl port-forward svc/vllme-service 8000:80 &
 ```
 
 **Sanity checks**
 
 Go to http://localhost:8000/metrics and check if you see metrics starting with vllm:. Refresh to see the values changing with the load generator on.
 
+**Custom Metrics Verification**
+
+The Inferno Autoscaler exposes custom metrics that can be accessed through Prometheus. To verify the custom metrics are working:
+
+1. **Check Prometheus targets**: Ensure both targets are active
+   ```sh
+   # Check inferno-autoscaler target
+   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
+   
+   # Check vllme target
+   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("vllme"))'
+   ```
+   
+   **Note**: If targets don't appear immediately, wait 1-2 minutes for ServiceMonitor discovery to complete.
+
+**If targets still don't appear after waiting:**
+```sh
+# Check Prometheus operator logs for discovery events
+kubectl logs -n inferno-autoscaler-monitoring deployment/kube-prometheus-stack-operator --tail=10
+
+# Check Prometheus pod logs for configuration reloads
+kubectl logs -n inferno-autoscaler-monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus --tail=10
+```
+
+2. **Query custom metrics**: Check if inferno metrics are being scraped
+   ```sh
+   # Core inferno metrics
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_optimization_total"
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_current_replicas"
+   curl -s "http://localhost:9090/api/v1/query?query=inferno_desired_replicas"
+   
+   # vLLM metrics
+   curl -s "http://localhost:9090/api/v1/query?query=vllm:gpu_cache_usage_perc"
+   ```
+
+3. **Direct metrics endpoint access**: Verify metrics are exposed
+   ```sh
+   # Note: Ensure pods are ready before port forwarding
+   # Inferno controller metrics
+   kubectl port-forward svc/inferno-autoscaler-controller-manager-metrics-service 8080:8080 -n inferno-autoscaler-system &
+   curl -s "http://localhost:8080/metrics" | grep -E "(inferno_|# HELP inferno)"
+   
+   # vLLM emulator metrics
+   kubectl port-forward svc/vllme-service 8000:80 &
+   curl -s "http://localhost:8000/metrics" | grep -E "(vllm|# HELP vllm)"
+   ```
+
+For detailed information about the custom metrics, see [Custom Metrics Documentation](docs/custom-metrics.md).
+
 **Create variant autoscaling object for controller**
 ```sh
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 
 # view status of the variant autoscaling object to get status of optimization
+kubectl get variantautoscaling vllme-deployment -o yaml
 ```
+
+**Apply ServiceMonitor for custom metrics**
+```sh
+kubectl apply -f config/prometheus/servicemonitor.yaml
+
+# Verify ServiceMonitor is correctly configured
+kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml | grep -A 10 namespaceSelector
+
+# Note: ServiceMonitor discovery takes 1-2 minutes to complete
+```
+
+**Note**: The vllme ServiceMonitor is automatically created in the correct namespace (`inferno-autoscaler-monitoring`) with the proper labels for Prometheus discovery.
+
+**Important**: The inferno-autoscaler ServiceMonitor must be deployed in the `inferno-autoscaler-monitoring` namespace (not `inferno-autoscaler-system`) for Prometheus to discover it. The ServiceMonitor includes a `namespaceSelector` to target services in the `inferno-autoscaler-system` namespace.
+
+**Common Issue**: If the inferno-autoscaler target doesn't appear in Prometheus, check that the ServiceMonitor includes the `namespaceSelector` configuration. Without it, Prometheus won't discover services across different namespaces.
+
+**Timing Note**: ServiceMonitor discovery can take 1-2 minutes after applying. Don't worry if targets don't appear immediately - this is normal behavior.
 
 **Load generation**
 
@@ -178,7 +253,7 @@ curl -G http://localhost:9090/api/v1/query \
 ```sh
 # username:admin
 # password: prom-operator
-kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaling-monitoring
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaler-monitoring &
 ```
 
 **Running the controller locally for dev**
@@ -190,6 +265,98 @@ Once you've forwarded prometheus to localhost:9090, the command to run:
 ```shell
 make run PROMETHEUS_BASE_URL=http://localhost:9090
 ```
+
+**Prometheus Configuration**
+
+The controller supports flexible Prometheus configuration through multiple methods (in order of precedence):
+
+1. **Environment Variable** (highest priority):
+   ```shell
+   PROMETHEUS_BASE_URL=http://localhost:9090
+   ```
+
+2. **ConfigMap Configuration**:
+   The `inferno-autoscaler-inferno-variantautoscaling-config` ConfigMap in the `inferno-autoscaler-system` namespace contains:
+   ```yaml
+   data:
+     PROMETHEUS_BASE_URL: "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+     GLOBAL_OPT_INTERVAL: "60s"
+     GLOBAL_OPT_TRIGGER: "false"
+   ```
+
+3. **Default In-Cluster Address** (fallback):
+   ```shell
+   http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090
+   ```
+
+**Note**: The `PROMETHEUS_BASE_URL` is now automatically set in the deployment configuration for in-cluster deployments.
+
+## Troubleshooting
+
+### ServiceMonitor Not Discovered
+If the inferno-autoscaler metrics are not being scraped by Prometheus:
+
+1. **Check ServiceMonitor namespace**: Ensure the ServiceMonitor is in `inferno-autoscaler-monitoring` namespace
+   ```sh
+   kubectl get servicemonitor -n inferno-autoscaler-monitoring | grep inferno
+   ```
+
+2. **Verify ServiceMonitor configuration**: Check the ServiceMonitor is correctly configured
+   ```sh
+   kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml
+   ```
+
+3. **Check namespaceSelector**: Ensure the ServiceMonitor has a `namespaceSelector` to target services in `inferno-autoscaler-system`
+   ```sh
+   kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml | grep -A 5 namespaceSelector
+   ```
+   The ServiceMonitor should include:
+   ```yaml
+   namespaceSelector:
+     matchNames:
+     - inferno-autoscaler-system
+   ```
+
+4. **Check Prometheus targets**: Verify targets are being discovered
+   ```sh
+   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
+   ```
+
+5. **Wait for discovery**: ServiceMonitor discovery can take 1-2 minutes. If targets don't appear immediately:
+   ```sh
+   # Wait and check again
+   sleep 60 && curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
+   
+   # Check Prometheus operator logs for discovery events
+   kubectl logs -n inferno-autoscaler-monitoring deployment/kube-prometheus-stack-operator --tail=10
+   ```
+
+### Controller Configuration Issues
+If the controller shows ConfigMap errors:
+
+1. **Check ConfigMap exists**: Verify the ConfigMap is deployed
+   ```sh
+   kubectl get configmap -n inferno-autoscaler-system | grep inferno
+   ```
+
+2. **Restart controller pod**: Force restart to pick up new configuration
+   ```sh
+   kubectl delete pod -n inferno-autoscaler-system -l control-plane=controller-manager
+   ```
+
+### Metrics Not Appearing
+If custom metrics are not showing up:
+
+1. **Check controller logs**: Look for metrics emission errors
+   ```sh
+   kubectl logs -n inferno-autoscaler-system deployment/inferno-autoscaler-controller-manager --tail=20
+   ```
+
+2. **Verify variant autoscaling object**: Ensure it exists and is being processed
+   ```sh
+   kubectl get variantautoscaling
+   kubectl describe variantautoscaling vllme-deployment
+   ```
 
 ## Project Distribution
 
@@ -216,24 +383,6 @@ the project, i.e.:
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/<org>/inferno-autoscaler/<tag or branch>/dist/install.yaml
 ```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
 
 ## Contributing
 

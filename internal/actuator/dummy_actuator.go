@@ -9,15 +9,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type DummyActuator struct {
-	Client client.Client
+	Client         client.Client
+	MetricsEmitter *metrics.MetricsEmitter
 }
 
 func NewDummyActuator(k8sClient client.Client) *DummyActuator {
-	return &DummyActuator{Client: k8sClient}
+	return &DummyActuator{
+		Client:         k8sClient,
+		MetricsEmitter: metrics.NewMetricsEmitter(),
+	}
 }
 
 func (a *DummyActuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
@@ -42,5 +47,32 @@ func (a *DummyActuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscal
 	}
 
 	logger.Log.Info("Patched Deployment", "name", deploy.Name, "num replicas", replicas)
+
+	// Emit metrics for replica scaling
+	if replicas > *original.Spec.Replicas {
+		a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_up", "load_increase")
+	} else if replicas < *original.Spec.Replicas {
+		a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_down", "load_decrease")
+	}
+
+	return nil
+}
+
+func (a *DummyActuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
+	// Emit replica metrics
+	if VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas > 0 {
+		a.MetricsEmitter.EmitReplicaMetrics(
+			ctx,
+			VariantAutoscaling,
+			int32(VariantAutoscaling.Status.CurrentAlloc.NumReplicas),
+			int32(VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas),
+			VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator,
+		)
+		logger.Log.Debug("EmitReplicaMetrics completed")
+	} else {
+		logger.Log.Debug("Skipping EmitReplicaMetrics - NumReplicas is 0")
+	}
+
+	logger.Log.Info("Emitted metrics for variant", "name", VariantAutoscaling.Name, "namespace", VariantAutoscaling.Namespace)
 	return nil
 }

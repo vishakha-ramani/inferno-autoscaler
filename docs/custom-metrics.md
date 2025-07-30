@@ -1,0 +1,133 @@
+# Custom Metrics Documentation
+
+The Inferno Autoscaler exposes a focused set of custom metrics that provide insights into the autoscaling behavior and optimization performance. These metrics are exposed via Prometheus and can be used for monitoring, alerting, and dashboard creation.
+
+## Metrics Overview
+
+All custom metrics are prefixed with `inferno_` and include labels for `variant_name`, `namespace`, and other relevant dimensions to enable detailed analysis and filtering.
+
+## Optimization Metrics
+
+### `inferno_optimization_total`
+- **Type**: Counter
+- **Description**: Total number of optimization runs
+- **Labels**: 
+  - `variant_name`: Name of the variant being optimized
+  - `namespace`: Kubernetes namespace
+  - `status`: Status of the optimization (success, failed, etc.)
+- **Use Case**: Track optimization frequency and success rates
+
+### `inferno_optimization_duration_seconds`
+- **Type**: Histogram
+- **Description**: Duration of optimization runs in seconds
+- **Labels**:
+  - `variant_name`: Name of the variant being optimized
+  - `namespace`: Kubernetes namespace
+- **Use Case**: Monitor optimization performance and identify slow optimizations
+
+### `inferno_optimization_errors_total`
+- **Type**: Counter
+- **Description**: Total number of optimization errors
+- **Labels**:
+  - `variant_name`: Name of the variant
+  - `namespace`: Kubernetes namespace
+  - `error_type`: Type of error encountered
+- **Use Case**: Track and alert on optimization failures
+
+## Replica Management Metrics
+
+### `inferno_current_replicas`
+- **Type**: Gauge
+- **Description**: Current number of replicas for each variant
+- **Labels**:
+  - `variant_name`: Name of the variant
+  - `namespace`: Kubernetes namespace
+  - `accelerator_type`: Type of accelerator being used
+- **Use Case**: Monitor current scaling state
+
+### `inferno_desired_replicas`
+- **Type**: Gauge
+- **Description**: Desired number of replicas for each variant
+- **Labels**:
+  - `variant_name`: Name of the variant
+  - `namespace`: Kubernetes namespace
+  - `accelerator_type`: Type of accelerator being used
+- **Use Case**: Compare desired vs current replicas to detect scaling issues
+
+### `inferno_replica_scaling_total`
+- **Type**: Counter
+- **Description**: Total number of replica scaling operations
+- **Labels**:
+  - `variant_name`: Name of the variant
+  - `namespace`: Kubernetes namespace
+  - `direction`: Direction of scaling (up, down)
+  - `reason`: Reason for scaling
+- **Use Case**: Track scaling frequency and reasons
+
+## Configuration
+
+### Metrics Endpoint
+The metrics are exposed at the `/metrics` endpoint on port 8080 (HTTP).
+
+### ServiceMonitor Configuration
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inferno-autoscaler
+  namespace: inferno-autoscaler-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  endpoints:
+  - port: http
+    scheme: http
+    interval: 30s
+    path: /metrics
+```
+
+## Example Queries
+
+### Basic Queries
+```promql
+# Optimization success rate
+rate(inferno_optimization_total{status="success"}[5m])
+
+# Current replicas by variant
+inferno_current_replicas
+
+# Scaling frequency
+rate(inferno_replica_scaling_total[5m])
+
+# Optimization duration 95th percentile
+histogram_quantile(0.95, rate(inferno_optimization_duration_seconds_bucket[5m]))
+```
+
+### Advanced Queries
+```promql
+# Optimization duration 95th percentile
+histogram_quantile(0.95, rate(inferno_optimization_duration_seconds_bucket[5m]))
+
+# Scaling frequency by direction
+rate(inferno_replica_scaling_total{direction="scale_up"}[5m])
+
+# Error rate by type
+rate(inferno_optimization_errors_total[5m])
+
+# Replica count mismatch
+abs(inferno_desired_replicas - inferno_current_replicas)
+```
+
+## Troubleshooting
+
+### Metrics Not Appearing
+1. Check if the ServiceMonitor is properly configured
+2. Verify the metrics endpoint is accessible
+3. Check controller logs for metrics initialization errors
+4. Ensure Prometheus is scraping the target
+
+### Performance Issues
+Monitor optimization duration metrics to identify slow optimizations and potential bottlenecks. 

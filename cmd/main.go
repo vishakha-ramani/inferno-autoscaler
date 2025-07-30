@@ -39,10 +39,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	llmdv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
+	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/controller"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
-	// +kubebuilder:scaffold:imports
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+	//+kubebuilder:scaffold:imports
 )
 
 var (
@@ -53,8 +55,8 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(llmdv1alpha1.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
+	utilruntime.Must(llmdVariantAutoscalingV1alpha1.AddToScheme(scheme))
+	//+kubebuilder:scaffold:scheme
 }
 
 // nolint:gocyclo
@@ -81,7 +83,7 @@ func main() {
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
-	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
@@ -191,6 +193,9 @@ func main() {
 		})
 	}
 
+	// Register custom metrics with the controller-runtime Prometheus registry
+	setupLog.Info("Registering custom metrics with Prometheus registry")
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -250,6 +255,14 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
+
+	// Sync the custom logger before starting the manager
+	logger.SyncLogger()
+
+	// Register custom metrics with Prometheus registry
+	// This makes the metrics available for scraping by Prometheus
+	metrics.InitMetrics(crmetrics.Registry)
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error("problem running manager", zap.Error(err))
 		os.Exit(1)

@@ -42,9 +42,6 @@ echo "Deploying Inferno controller-manager"
 make deploy-emulated
 _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 
-# Install the configmap to run optimizer loop
-_kubectl apply -f deploy/ticker-configmap.yaml
-
 # Install the configmap service class
 _kubectl apply -f deploy/configmap-serviceclass.yaml
 

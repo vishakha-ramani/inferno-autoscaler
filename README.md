@@ -119,7 +119,7 @@ make deploy-inferno-emulated-on-kind
 sleep 30 && kubectl get pods -A | grep -E "(inferno|vllme|prometheus)"
 
 # Port forward Prometheus
-kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-monitoring &
+kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-monitoring
 # server can be accessed at location: http://localhost:9090
 ```
 
@@ -136,7 +136,7 @@ vllme-deployment   1/1     1            1           35s
 **Expose the vllme server**
 ```sh
 # Note: Ensure pods are ready before port forwarding (see Prometheus section above)
-kubectl port-forward svc/vllme-service 8000:80 &
+kubectl port-forward svc/vllme-service 8000:80
 ```
 
 **Sanity checks**
@@ -253,7 +253,7 @@ curl -G http://localhost:9090/api/v1/query \
 ```sh
 # username:admin
 # password: prom-operator
-kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaler-monitoring &
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n inferno-autoscaler-monitoring
 ```
 
 **Running the controller locally for dev**

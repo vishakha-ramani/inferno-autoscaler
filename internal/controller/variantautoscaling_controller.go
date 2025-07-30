@@ -46,6 +46,7 @@ import (
 	analyzer "github.com/llm-d-incubation/inferno-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/inferno-autoscaler/internal/optimizer"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
+	infernoConfig "github.com/llm-inferno/optimizer-light/pkg/config"
 	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
 	infernoManager "github.com/llm-inferno/optimizer-light/pkg/manager"
 	infernoSolver "github.com/llm-inferno/optimizer-light/pkg/solver"
@@ -85,147 +86,39 @@ const (
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
-		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimiziing")
+		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimizing")
 		return ctrl.Result{}, nil
 	}
 
 	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", "default")
 	if err != nil {
-		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimiziing")
+		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimizing")
 		return ctrl.Result{}, nil
 	}
 
-	// each variantAutoscaling CR corresponds to a variant which spawns exactly one deployment.
 	var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
 	if err := r.List(ctx, &variantAutoscalingList); err != nil {
 		logger.Log.Error(err, "unable to list variantAutoscaling resources")
 		return ctrl.Result{}, err
 	}
 
-	// Filter out resources with DeletionTimestamp set
-	activeVAs := make([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling, 0, len(variantAutoscalingList.Items))
-	for _, va := range variantAutoscalingList.Items {
-		if va.DeletionTimestamp.IsZero() {
-			activeVAs = append(activeVAs, va)
-		} else {
-			logger.Log.Info("Skipping deleted VariantAutoscaling", "name", va.Name)
-		}
-	}
+	activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
 
 	newInventory, err := collector.CollectInventoryK8S(ctx, r.Client)
-
 	if err != nil {
 		logger.Log.Error(err, "failed to get cluster inventory")
-		//node listing failed, rely on reconciler to requeue and retry.
 		return ctrl.Result{}, err
 	}
 
 	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm, newInventory)
 
-	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-	var allAnalyzerResponses = make(map[string]*interfaces.ModelAnalyzeResponse)
-	var vaMap = make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
-
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
-	}
-
-	for _, va := range activeVAs {
-		modelName := va.Labels["inference.optimization/modelName"]
-		//TODO this should be part of the webhook to validate VAs
-		if modelName == "" {
-			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization", "name", va.Name)
-			return ctrl.Result{}, err
-		}
-
-		entry, className, err := findModelSLO(serviceClassCm, modelName)
-		if err != nil {
-			logger.Log.Error(err, "failed to locate SLO for model", "variantAutoscaling-name", va.Name, "modelName", modelName)
-			//Skip this variantAutoscaling if no SLO found
-			continue
-		}
-		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
-
-		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
-			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
-				logger.Log.Error("variantAutoscaling bad model accelerator profile data, skipping optimization", "variantAutoscaling-name", va.Name)
-				// Skip this variantAutoscaling if bad accelerator profile
-				continue
-			}
-		}
-
-		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
-		if !ok {
-			logger.Log.Error("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
-			// Skip this variantAutoscaling if no accelerator cost found
-			continue
-		}
-		acceleratorCostValFloat, err := strconv.ParseFloat(acceleratorCostVal, 32)
-		if err != nil {
-			logger.Log.Error("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
-			// Skip this variantAutoscaling if unable to parse accelerator cost
-			continue
-		}
-
-		//TODO: remove calling duplicate deployment calls
-		// Check if Deployment exists for this variantAutoscaling
-		var deploy appsv1.Deployment
-		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-			err := r.Get(ctx, types.NamespacedName{
-				Name:      va.Name,
-				Namespace: va.Namespace,
-			}, &deploy)
-			if err == nil {
-				return true, nil
-			}
-			if apierrors.IsNotFound(err) {
-				// No need to retry if not found
-				return false, err
-			}
-			// Retry on other errors
-			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
-			return false, nil
-		})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling-name", va.Name)
-			// Skip this variantAutoscaling if Deployment not found or other error
-			// could be the case where deployment is deleted.
-			continue
-		}
-
-		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
-			logger.Log.Error(err, "unable to get variantAutoscaling", "deployment-name", deploy.Name, "namespace", deploy.Namespace)
-			// Skip this variantAutoscaling if unable to get it
-			continue
-		}
-
-		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
-		if err != nil {
-			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
-			return ctrl.Result{}, nil
-		}
-		updateVA.Status.CurrentAlloc = currentAllocation
-
-		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
-			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "variantAutoscaling-name", updateVA.Name)
-			// Skip this variantAutoscaling if bad server data
-			continue
-		}
-
-		vaFullName := utils.FullName(va.Name, va.Namespace)
-		updateList.Items = append(updateList.Items, updateVA)
-		vaMap[vaFullName] = &va
+	updateList, vaMap, allAnalyzerResponses, err := r.prepareVariantAutoscalings(ctx, activeVAs, acceleratorCm, serviceClassCm, systemData)
+	if err != nil {
+		logger.Log.Error(err, "failed to prepare variant autoscalings")
+		return ctrl.Result{}, err
 	}
 
 	// analyze
-	// TODO: keep data specific to inferno in own new class
 	system := inferno.NewSystem()
 	optimizerSpec := system.SetFromSpec(&systemData.Spec)
 	optimizer := infernoSolver.NewOptimizerFromSpec(optimizerSpec)
@@ -242,17 +135,147 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 	logger.Log.Info("inferno data ", "systemData ", systemData)
 
-	// Call Optimize ONCE across all variants
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
-	optimizedAllocation, err := engine.Optimize(ctx, updateList, allAnalyzerResponses)
+	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, retrying")
 		return ctrl.Result{}, err
 	}
 
+	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
+		logger.Log.Error(err, "failed to apply optimized allocations")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// filterActiveVariantAutoscalings returns only those VAs not marked for deletion.
+func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.VariantAutoscaling) []llmdVariantAutoscalingV1alpha1.VariantAutoscaling {
+	active := make([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling, 0, len(items))
+	for _, va := range items {
+		if va.DeletionTimestamp.IsZero() {
+			active = append(active, va)
+		} else {
+			logger.Log.Info("Skipping deleted VariantAutoscaling", "name", va.Name)
+		}
+	}
+	return active
+}
+
+// prepareVariantAutoscalings collects and prepares all data for optimization.
+func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
+	ctx context.Context,
+	activeVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	acceleratorCm map[string]map[string]string,
+	serviceClassCm map[string]string,
+	systemData *infernoConfig.SystemData,
+) (*llmdVariantAutoscalingV1alpha1.VariantAutoscalingList, map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling, map[string]*interfaces.ModelAnalyzeResponse, error) {
+	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
+	allAnalyzerResponses := make(map[string]*interfaces.ModelAnalyzeResponse)
+	vaMap := make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
+	for _, va := range activeVAs {
+		modelName := va.Labels["inference.optimization/modelName"]
+		if modelName == "" {
+			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization", "name", va.Name)
+			continue
+		}
+
+		entry, className, err := findModelSLO(serviceClassCm, modelName)
+		if err != nil {
+			logger.Log.Error(err, "failed to locate SLO for model", "variantAutoscaling-name", va.Name, "modelName", modelName)
+			continue
+		}
+		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
+
+		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
+			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
+				logger.Log.Error("variantAutoscaling bad model accelerator profile data, skipping optimization", "variantAutoscaling-name", va.Name)
+				continue
+			}
+		}
+
+		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
+		if !ok {
+			logger.Log.Error("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			continue
+		}
+		acceleratorCostValFloat, err := strconv.ParseFloat(acceleratorCostVal, 32)
+		if err != nil {
+			logger.Log.Error("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			continue
+		}
+
+		var deploy appsv1.Deployment
+		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			err := r.Get(ctx, types.NamespacedName{
+				Name:      va.Name,
+				Namespace: va.Namespace,
+			}, &deploy)
+			if err == nil {
+				return true, nil
+			}
+			if apierrors.IsNotFound(err) {
+				return false, err
+			}
+			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			return false, nil
+		})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling-name", va.Name)
+			continue
+		}
+
+		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
+			logger.Log.Error(err, "unable to get variantAutoscaling", "deployment-name", deploy.Name, "namespace", deploy.Namespace)
+			continue
+		}
+
+		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
+		if err != nil {
+			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
+			continue
+		}
+		updateVA.Status.CurrentAlloc = currentAllocation
+
+		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
+			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "variantAutoscaling-name", updateVA.Name)
+			continue
+		}
+
+		vaFullName := utils.FullName(va.Name, va.Namespace)
+		updateList.Items = append(updateList.Items, updateVA)
+		vaMap[vaFullName] = &va
+	}
+	return &updateList, vaMap, allAnalyzerResponses, nil
+}
+
+// applyOptimizedAllocations applies the optimized allocation to all VariantAutoscaling resources.
+func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
+	ctx context.Context,
+	updateList *llmdVariantAutoscalingV1alpha1.VariantAutoscalingList,
+	optimizedAllocation map[string]llmdVariantAutoscalingV1alpha1.OptimizedAlloc,
+) error {
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
 	for i := range updateList.Items {
 		va := &updateList.Items[i]
-		// Fetch the latest version from API server
 		var updateVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		if err := r.Get(ctx, client.ObjectKeyFromObject(va), &updateVa); err != nil {
 			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server", "name", va.Name)
@@ -261,10 +284,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 		original := updateVa.DeepCopy()
 
-		//TODO: remove calling duplicate deployment calls
-		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		err = r.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      va.Name,
 			Namespace: va.Namespace,
 		}, &deploy)
@@ -273,10 +294,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				continue
 			}
 			logger.Log.Error(err, "failed to get Deployment", "variantAutoscaling", updateVa.Name)
-			return ctrl.Result{}, err
+			return err
 		}
 
-		// Add OwnerReference if not already set
 		if !metav1.IsControlledBy(&updateVa, &deploy) {
 			updateVa.OwnerReferences = append(updateVa.OwnerReferences, metav1.OwnerReference{
 				APIVersion:         deploy.APIVersion,
@@ -287,11 +307,10 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				BlockOwnerDeletion: ptr(true),
 			})
 
-			// Patch metadata change (ownerReferences)
 			patch := client.MergeFrom(original)
 			if err := r.Client.Patch(ctx, &updateVa, patch); err != nil {
 				logger.Log.Error(err, "failed to patch ownerReference", "name", updateVa.Name)
-				return ctrl.Result{}, err
+				return err
 			}
 		}
 
@@ -304,17 +323,16 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Error(err, "failed to apply replicas")
 		}
 
-		err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 			if updateErr := r.Client.Status().Update(ctx, &updateVa); updateErr != nil {
-				// Don't retry on permanent errors like validation failures
 				if apierrors.IsInvalid(updateErr) || apierrors.IsForbidden(updateErr) {
 					logger.Log.Error(updateErr, "permanent error while patching status", "name", updateVa.Name)
 					return false, updateErr
 				}
 				logger.Log.Error(updateErr, "transient error while patching status, will retry", "name", updateVa.Name)
-				return false, nil // retry
+				return false, nil
 			}
-			return true, nil // success
+			return true, nil
 		})
 
 		if err != nil {
@@ -322,8 +340,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			continue
 		}
 	}
-
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

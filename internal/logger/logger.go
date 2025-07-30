@@ -8,28 +8,47 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var zapLogger *zap.Logger
 var Log *zap.SugaredLogger
 
-func init() {
+func InitLogger() (*zap.SugaredLogger, error) {
+	if zapLogger != nil {
+		Log = zapLogger.Sugar()
+		return Log, nil
+	}
 
-	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL")) // "debug", "info", etc.
-	var level zapcore.Level
+	// Unified config
+	level := GetZapLevelFromEnv()
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderCfg.LevelKey = "level"
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.AddSync(os.Stdout),
+		level,
+	)
+
+	zapLogger = zap.New(core)
+	Log = zapLogger.Sugar()
+	return Log, nil
+}
+
+func GetZapLevelFromEnv() zapcore.Level {
+	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL"))
 	switch levelStr {
 	case "debug":
-		level = zapcore.DebugLevel
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
 	case "warn":
-		level = zapcore.WarnLevel
+		return zapcore.WarnLevel
 	case "error":
-		level = zapcore.ErrorLevel
+		return zapcore.ErrorLevel
 	default:
-		level = zapcore.InfoLevel // default
+		return zapcore.InfoLevel // fallback
 	}
-	config := zap.NewProductionConfig()
-	config.Level = zap.NewAtomicLevelAt(level)
-
-	raw, err := config.Build()
-	if err != nil {
-		panic("failed to build zap logger: " + err.Error())
-	}
-	Log = raw.Sugar()
 }

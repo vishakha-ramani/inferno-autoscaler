@@ -87,7 +87,7 @@ func main() {
 
 	flag.Parse()
 
-	setupLog, err := logger.NewLogger()
+	setupLog, err := logger.InitLogger()
 	if err != nil {
 		panic("unable to initialize logger: " + err.Error())
 	}

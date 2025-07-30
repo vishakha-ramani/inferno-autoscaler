@@ -8,18 +8,33 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var zapLogger *zap.Logger
 var Log *zap.SugaredLogger
 
-func init() {
-	level := GetZapLevelFromEnv() // Use the function from utils
-	config := zap.NewProductionConfig()
-	config.Level = zap.NewAtomicLevelAt(level)
-
-	raw, err := config.Build()
-	if err != nil {
-		panic("failed to build zap logger: " + err.Error())
+func InitLogger() (*zap.SugaredLogger, error) {
+	if zapLogger != nil {
+		Log = zapLogger.Sugar()
+		return Log, nil
 	}
-	Log = raw.Sugar()
+
+	// Unified config
+	level := GetZapLevelFromEnv()
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderCfg.LevelKey = "level"
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.AddSync(os.Stdout),
+		level,
+	)
+
+	zapLogger = zap.New(core)
+	Log = zapLogger.Sugar()
+	return Log, nil
 }
 
 func GetZapLevelFromEnv() zapcore.Level {
@@ -36,20 +51,4 @@ func GetZapLevelFromEnv() zapcore.Level {
 	default:
 		return zapcore.InfoLevel // fallback
 	}
-}
-
-func NewLogger() (*zap.Logger, error) {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "ts"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	level := GetZapLevelFromEnv()
-
-	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderCfg),
-		zapcore.AddSync(os.Stdout),
-		level,
-	)
-
-	return zap.New(core), nil
 }

@@ -202,7 +202,8 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			}
 		}
 
-		acceleratorCostVal, ok := acceleratorCm["A100"]["cost"]
+		accName := va.Labels["inference.optimization/acceleratorName"]
+		acceleratorCostVal, ok := acceleratorCm[accName]["cost"]
 		if !ok {
 			logger.Log.Error("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
 			continue

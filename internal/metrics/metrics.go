@@ -36,9 +36,17 @@ func InitMetrics(registry prometheus.Registerer) {
 		},
 		[]string{"variant_name", "namespace", "accelerator_type"},
 	)
+
+	// Register metrics with the registry
 	registry.MustRegister(replicaScalingTotal)
 	registry.MustRegister(desiredReplicas)
 	registry.MustRegister(currentReplicas)
+
+	// Initialize metrics with default values to ensure they appear in /metrics endpoint
+	// This ensures the metrics are visible even before they're set to actual values
+	replicaScalingTotal.WithLabelValues("default", "default", "none", "none").Add(0)
+	desiredReplicas.WithLabelValues("default", "default", "none").Set(0)
+	currentReplicas.WithLabelValues("default", "default", "none").Set(0)
 }
 
 // InitMetricsAndEmitter registers metrics with Prometheus and creates a metrics emitter

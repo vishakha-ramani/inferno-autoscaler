@@ -256,8 +256,8 @@ func main() {
 	// Sync the custom logger before starting the manager
 	logger.SyncLogger()
 
-	// Register custom metrics with Prometheus registry
-	// This makes the metrics available for scraping by Prometheus
+	// Register custom metrics with the controller-runtime Prometheus registry
+	// This makes the metrics available for scraping by Prometheus and direct endpoint access
 	setupLog.Info("Registering custom metrics with Prometheus registry")
 	metrics.InitMetrics(crmetrics.Registry)
 

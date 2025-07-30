@@ -9,6 +9,7 @@ KIND_CONTEXT=kind-${KIND_NAME}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"inferno-autoscaler-monitoring"}
 KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-inferno-gpu-cluster-control-plane"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
+LLMD_NAMESPACE=${LLMD_NAMESPACE:-"llm-d-sim"}
 
 _kubectl() {
         ${KUBECTL} --context ${KIND_CONTEXT} $@
@@ -20,6 +21,7 @@ _kind() {
 
 # Local development will need emulated vllm server, prometheus installed in KinD cluster
 _kubectl create ns ${MONITORING_NAMESPACE}
+_kubectl create ns ${LLMD_NAMESPACE}
 
 # Install Prometheus using Helm
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts

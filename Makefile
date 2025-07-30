@@ -94,6 +94,14 @@ deploy-emulated: deploy
 undeploy-inferno-on-kind:
 	kubectl delete ns/inferno-autoscaler-system
 
+# Creates Kind cluster with emulated GPU support
+# Deploys the Inferno Autoscaler on a Kind cluster
+# Deploys the llm-d components in the same Kind cluster
+.PHONY: deploy-llm-d-inferno-emulated-on-kind
+deploy-llm-d-inferno-emulated-on-kind:
+	@echo ">>> Deploying integrated llm-d and Inferno (cluster args: $(KIND_ARGS), image: $(IMG))"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
+		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS)
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

@@ -26,30 +26,30 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	llmdv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/controller"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
 	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	setupLog *zap.Logger
 )
-
-var opts = zap.Options{
-	Development: true,
-}
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -86,10 +86,24 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	level := logger.GetZapLevelFromEnv()
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.AddSync(os.Stdout),
+		level,
+	)
+
+	setupLog = zap.New(core)
+	defer setupLog.Sync()
+
+	ctrllog.SetLogger(ctrlzap.New(ctrlzap.UseDevMode(false), ctrlzap.WriteTo(os.Stdout)))
+
+	setupLog.Info("Zap logger initialized")
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -113,8 +127,10 @@ func main() {
 	webhookTLSOpts := tlsOpts
 
 	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
+		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
+			zap.String("metrics-cert-path", metricsCertPath),
+			zap.String("metrics-cert-name", metricsCertName),
+			zap.String("metrics-cert-key", metricsCertKey))
 
 		var err error
 		webhookCertWatcher, err = certwatcher.New(
@@ -122,7 +138,7 @@ func main() {
 			filepath.Join(webhookCertPath, webhookCertKey),
 		)
 		if err != nil {
-			setupLog.Error(err, "Failed to initialize webhook certificate watcher")
+			setupLog.Error("Failed to initialize webhook certificate watcher", zap.Error(err))
 			os.Exit(1)
 		}
 
@@ -163,7 +179,10 @@ func main() {
 	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
 	if len(metricsCertPath) > 0 {
 		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
-			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
+			zap.String("metrics-cert-path", metricsCertPath),
+			zap.String("metrics-cert-name", metricsCertName),
+			zap.String("metrics-cert-key", metricsCertKey),
+		)
 
 		var err error
 		metricsCertWatcher, err = certwatcher.New(
@@ -171,7 +190,7 @@ func main() {
 			filepath.Join(metricsCertPath, metricsCertKey),
 		)
 		if err != nil {
-			setupLog.Error(err, "to initialize metrics certificate watcher", "error", err)
+			setupLog.Error("Failed to initialize metrics certificate watcher", zap.Error(err))
 			os.Exit(1)
 		}
 
@@ -200,7 +219,7 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error("unable to start manager", zap.Error(err))
 		os.Exit(1)
 	}
 
@@ -208,7 +227,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "variantautoscaling")
+		setupLog.Error("unable to create controller", zap.String("controller", "variantautoscaling"), zap.Error(err))
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
@@ -216,7 +235,7 @@ func main() {
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
 		if err := mgr.Add(metricsCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
+			setupLog.Error("unable to add metrics certificate watcher to manager", zap.Error(err))
 			os.Exit(1)
 		}
 	}
@@ -224,23 +243,23 @@ func main() {
 	if webhookCertWatcher != nil {
 		setupLog.Info("Adding webhook certificate watcher to manager")
 		if err := mgr.Add(webhookCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
+			setupLog.Error("unable to add webhook certificate watcher to manager", zap.Error(err))
 			os.Exit(1)
 		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
+		setupLog.Error("unable to set up health check", zap.Error(err))
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
+		setupLog.Error("unable to set up ready check", zap.Error(err))
 		os.Exit(1)
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+		setupLog.Error("problem running manager", zap.Error(err))
 		os.Exit(1)
 	}
 }

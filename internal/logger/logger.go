@@ -11,19 +11,7 @@ import (
 var Log *zap.SugaredLogger
 
 func init() {
-
-	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL")) // "debug", "info", etc.
-	var level zapcore.Level
-	switch levelStr {
-	case "debug":
-		level = zapcore.DebugLevel
-	case "warn":
-		level = zapcore.WarnLevel
-	case "error":
-		level = zapcore.ErrorLevel
-	default:
-		level = zapcore.InfoLevel // default
-	}
+	level := GetZapLevelFromEnv() // Use the function from utils
 	config := zap.NewProductionConfig()
 	config.Level = zap.NewAtomicLevelAt(level)
 
@@ -32,4 +20,20 @@ func init() {
 		panic("failed to build zap logger: " + err.Error())
 	}
 	Log = raw.Sugar()
+}
+
+func GetZapLevelFromEnv() zapcore.Level {
+	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL"))
+	switch levelStr {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.InfoLevel // fallback
+	}
 }

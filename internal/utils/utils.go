@@ -3,7 +3,9 @@ package utils
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
@@ -11,6 +13,7 @@ import (
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-inferno/optimizer-light/pkg/config"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -217,4 +220,20 @@ func FullName(name string, namespace string) string {
 // Helper to check if a value is valid (not NaN or infinite)
 func CheckValue(x float64) bool {
 	return !(math.IsNaN(x) || math.IsInf(x, 0))
+}
+
+func GetZapLevelFromEnv() zapcore.Level {
+	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL"))
+	switch levelStr {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.InfoLevel // fallback
+	}
 }

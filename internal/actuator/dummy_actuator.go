@@ -1,4 +1,4 @@
-package controller
+package actuator
 
 import (
 	"context"

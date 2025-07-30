@@ -11,7 +11,6 @@ var (
 	replicaScalingTotal *prometheus.CounterVec
 	desiredReplicas     *prometheus.GaugeVec
 	currentReplicas     *prometheus.GaugeVec
-	optimizationErrors  *prometheus.CounterVec
 )
 
 // InitMetrics registers all custom metrics with the provided registry
@@ -37,18 +36,9 @@ func InitMetrics(registry prometheus.Registerer) {
 		},
 		[]string{"variant_name", "namespace", "accelerator_type"},
 	)
-	optimizationErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "inferno_optimization_errors_total",
-			Help: "Total number of optimization errors",
-		},
-		[]string{"variant_name", "namespace", "error_type"},
-	)
-
 	registry.MustRegister(replicaScalingTotal)
 	registry.MustRegister(desiredReplicas)
 	registry.MustRegister(currentReplicas)
-	registry.MustRegister(optimizationErrors)
 }
 
 // InitMetricsAndEmitter registers metrics with Prometheus and creates a metrics emitter
@@ -96,19 +86,4 @@ func (m *MetricsEmitter) EmitReplicaMetrics(ctx context.Context, va *llmdOptv1al
 
 	currentReplicas.With(baseLabels).Set(float64(current))
 	desiredReplicas.With(baseLabels).Set(float64(desired))
-}
-
-// EmitErrorMetrics emits error-related metrics
-func (m *MetricsEmitter) EmitErrorMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, errorType string) {
-	if va == nil {
-		return
-	}
-
-	labels := prometheus.Labels{
-		"variant_name": va.Name,
-		"namespace":    va.Namespace,
-		"error_type":   errorType,
-	}
-
-	optimizationErrors.With(labels).Inc()
 }

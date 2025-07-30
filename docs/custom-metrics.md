@@ -8,14 +8,7 @@ All custom metrics are prefixed with `inferno_` and include labels for `variant_
 
 ## Optimization Metrics
 
-### `inferno_optimization_errors_total`
-- **Type**: Counter
-- **Description**: Total number of optimization errors
-- **Labels**:
-  - `variant_name`: Name of the variant
-  - `namespace`: Kubernetes namespace
-  - `error_type`: Type of error encountered
-- **Use Case**: Track and alert on optimization failures
+*No optimization metrics are currently exposed. Optimization timing is logged at DEBUG level.*
 
 ## Replica Management Metrics
 
@@ -82,8 +75,8 @@ inferno_current_replicas
 # Scaling frequency
 rate(inferno_replica_scaling_total[5m])
 
-# Error rate by type
-rate(inferno_optimization_errors_total[5m])
+# Desired replicas by variant
+inferno_desired_replicas
 ```
 
 ### Advanced Queries
@@ -91,11 +84,11 @@ rate(inferno_optimization_errors_total[5m])
 # Scaling frequency by direction
 rate(inferno_replica_scaling_total{direction="scale_up"}[5m])
 
-# Error rate by type
-rate(inferno_optimization_errors_total[5m])
-
 # Replica count mismatch
 abs(inferno_desired_replicas - inferno_current_replicas)
+
+# Scaling frequency by reason
+rate(inferno_replica_scaling_total[5m]) by (reason)
 ```
 
 ## Troubleshooting

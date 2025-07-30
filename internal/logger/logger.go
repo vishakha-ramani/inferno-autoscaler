@@ -37,3 +37,19 @@ func GetZapLevelFromEnv() zapcore.Level {
 		return zapcore.InfoLevel // fallback
 	}
 }
+
+func NewLogger() (*zap.Logger, error) {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	level := GetZapLevelFromEnv()
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.AddSync(os.Stdout),
+		level,
+	)
+
+	return zap.New(core), nil
+}

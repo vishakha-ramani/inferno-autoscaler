@@ -286,6 +286,12 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 	updateList *llmdVariantAutoscalingV1alpha1.VariantAutoscalingList,
 	optimizedAllocation map[string]llmdVariantAutoscalingV1alpha1.OptimizedAlloc,
 ) error {
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
 	// Record optimization start time for metrics
 	optimizationStart := time.Now()
 
@@ -318,20 +324,29 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      va.Name,
-			Namespace: va.Namespace,
-		}, &deploy)
+		err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			err := r.Get(ctx, types.NamespacedName{
+				Name:      va.Name,
+				Namespace: va.Namespace,
+			}, &deploy)
+			if err == nil {
+				return true, nil
+			}
+			if apierrors.IsNotFound(err) {
+				return false, err
+			}
+			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			return false, nil
+		})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.Log.Info("Deployment not found, skipping", "variantAutoscaling", updateVa.Name)
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment", "variantAutoscaling", updateVa.Name)
-			continue
+			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling", updateVa.Name)
+			return err
 		}
 
-		// Add OwnerReference if not already set
 		if !metav1.IsControlledBy(&updateVa, &deploy) {
 			updateVa.OwnerReferences = append(updateVa.OwnerReferences, metav1.OwnerReference{
 				APIVersion:         deploy.APIVersion,
@@ -346,7 +361,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			patch := client.MergeFrom(original)
 			if err := r.Client.Patch(ctx, &updateVa, patch); err != nil {
 				logger.Log.Error(err, "failed to patch ownerReference", "name", updateVa.Name)
-				continue
+				return err
 			}
 		}
 
@@ -359,6 +374,18 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			logger.Log.Error(err, "failed to apply replicas")
 		}
 
+		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			if updateErr := r.Client.Status().Update(ctx, &updateVa); updateErr != nil {
+				if apierrors.IsInvalid(updateErr) || apierrors.IsForbidden(updateErr) {
+					logger.Log.Error(updateErr, "permanent error while patching status", "name", updateVa.Name)
+					return false, updateErr
+				}
+				logger.Log.Error(updateErr, "transient error while patching status, will retry", "name", updateVa.Name)
+				return false, nil
+			}
+			return true, nil
+		})
+
 		// Emit metrics for the variant autoscaling
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to emit metrics", "name", updateVa.Name)
@@ -366,8 +393,8 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			logger.Log.Debug("EmitMetrics call completed successfully", "name", updateVa.Name)
 		}
 
-		if err := r.Client.Status().Update(ctx, &updateVa); err != nil {
-			logger.Log.Error(err, "failed to patch status", "name", updateVa.Name)
+		if err != nil {
+			logger.Log.Error(err, "failed to patch status after retries", "name", updateVa.Name)
 			continue
 		}
 	}

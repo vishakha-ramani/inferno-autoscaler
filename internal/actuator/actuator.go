@@ -13,19 +13,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type DummyActuator struct {
+type Actuator struct {
 	Client         client.Client
 	MetricsEmitter *metrics.MetricsEmitter
 }
 
-func NewDummyActuator(k8sClient client.Client) *DummyActuator {
-	return &DummyActuator{
+func NewActuator(k8sClient client.Client) *Actuator {
+	return &Actuator{
 		Client:         k8sClient,
 		MetricsEmitter: metrics.NewMetricsEmitter(),
 	}
 }
 
-func (a *DummyActuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
+func (a *Actuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
 	desired := VariantAutoscaling.Status.DesiredOptimizedAlloc
 	var deploy appsv1.Deployment
 	err := a.Client.Get(ctx, types.NamespacedName{
@@ -46,29 +46,40 @@ func (a *DummyActuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscal
 		return fmt.Errorf("failed to patch Deployment %s: %w", deploy.Name, err)
 	}
 
-	logger.Log.Info("Patched Deployment", "name", deploy.Name, "num replicas", replicas)
+	logger.Log.Info("Patched Deployment", "name: ", deploy.Name, " num-replicas: ", replicas)
 
 	// Emit metrics for replica scaling
 	if replicas > *original.Spec.Replicas {
-		a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_up", "load_increase")
+		if err := a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_up", "load_increase"); err != nil {
+			logger.Log.Error(err, "Failed to emit scale-up metrics", "name", VariantAutoscaling.Name)
+			// Don't fail the deployment patch for metric emission errors
+		}
 	} else if replicas < *original.Spec.Replicas {
-		a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_down", "load_decrease")
+		if err := a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_down", "load_decrease"); err != nil {
+			logger.Log.Error(err, "Failed to emit scale-down metrics", "name", VariantAutoscaling.Name)
+			// Don't fail the deployment patch for metric emission errors
+		}
 	}
 
 	return nil
 }
 
-func (a *DummyActuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
+func (a *Actuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv1alpha1.VariantAutoscaling) error {
 	// Emit replica metrics
 	if VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas > 0 {
-		a.MetricsEmitter.EmitReplicaMetrics(
+		if err := a.MetricsEmitter.EmitReplicaMetrics(
 			ctx,
 			VariantAutoscaling,
 			int32(VariantAutoscaling.Status.CurrentAlloc.NumReplicas),
 			int32(VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas),
 			VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator,
-		)
-		logger.Log.Debug("EmitReplicaMetrics completed")
+		); err != nil {
+			logger.Log.Error(err, "Failed to emit replica metrics", "name", VariantAutoscaling.Name)
+			// Don't fail the reconciliation for metric emission errors
+			// Metrics are critical for HPA, but emission failures shouldn't break core functionality
+		} else {
+			logger.Log.Debug("EmitReplicaMetrics completed")
+		}
 	} else {
 		logger.Log.Debug("Skipping EmitReplicaMetrics - NumReplicas is 0")
 	}

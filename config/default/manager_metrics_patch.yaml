@@ -2,6 +2,7 @@
 - op: add
   path: /spec/template/spec/containers/0/args/0
   value: --metrics-bind-address=:8080
+# TODO: For production deployments, consider enabling secure metrics with TLS certificates
 - op: add
   path: /spec/template/spec/containers/0/args/1
   value: --metrics-secure=false

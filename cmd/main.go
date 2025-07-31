@@ -254,12 +254,17 @@ func main() {
 	setupLog.Info("starting manager")
 
 	// Sync the custom logger before starting the manager
-	logger.SyncLogger()
+	if logger.Log != nil {
+		logger.Log.Sync()
+	}
 
 	// Register custom metrics with the controller-runtime Prometheus registry
 	// This makes the metrics available for scraping by Prometheus and direct endpoint access
 	setupLog.Info("Registering custom metrics with Prometheus registry")
-	metrics.InitMetrics(crmetrics.Registry)
+	if err := metrics.InitMetrics(crmetrics.Registry); err != nil {
+		setupLog.Error("failed to initialize metrics", zap.Error(err))
+		os.Exit(1)
+	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error("problem running manager", zap.Error(err))

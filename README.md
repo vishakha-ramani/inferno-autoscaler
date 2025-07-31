@@ -281,7 +281,7 @@ The controller supports flexible Prometheus configuration through multiple metho
    ```
 
 2. **ConfigMap Configuration**:
-   The `inferno-autoscaler-inferno-variantautoscaling-config` ConfigMap in the `inferno-autoscaler-system` namespace contains:
+   The `inferno-autoscaler-variantautoscaling-config` ConfigMap in the `inferno-autoscaler-system` namespace contains:
    ```yaml
    data:
      PROMETHEUS_BASE_URL: "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
@@ -294,74 +294,52 @@ The controller supports flexible Prometheus configuration through multiple metho
    http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090
    ```
 
-**Note**: The `PROMETHEUS_BASE_URL` is now automatically set in the deployment configuration for in-cluster deployments.
+**Customizing Prometheus URL for Different Environments:**
 
-## Troubleshooting
+**Local Development:**
+```shell
+# When running locally with port-forwarded Prometheus
+PROMETHEUS_BASE_URL=http://localhost:9090
+```
 
-### ServiceMonitor Not Discovered
-If the inferno-autoscaler metrics are not being scraped by Prometheus:
+**Different Cluster Namespace:**
+```shell
+# If Prometheus is in a different namespace
+PROMETHEUS_BASE_URL=http://prometheus-operated.monitoring.svc.cluster.local:9090
+```
 
-1. **Check ServiceMonitor namespace**: Ensure the ServiceMonitor is in `inferno-autoscaler-monitoring` namespace
-   ```sh
-   kubectl get servicemonitor -n inferno-autoscaler-monitoring | grep inferno
-   ```
+**External Prometheus:**
+```shell
+# For external Prometheus instances
+PROMETHEUS_BASE_URL=https://prometheus.example.com:9090
+```
 
-2. **Verify ServiceMonitor configuration**: Check the ServiceMonitor is correctly configured
-   ```sh
-   kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml
-   ```
+**Custom Prometheus Installation:**
+```shell
+# For custom Prometheus deployments
+PROMETHEUS_BASE_URL=http://my-prometheus.my-namespace.svc.cluster.local:9090
+```
 
-3. **Check namespaceSelector**: Ensure the ServiceMonitor has a `namespaceSelector` to target services in `inferno-autoscaler-system`
-   ```sh
-   kubectl get servicemonitor inferno-autoscaler -n inferno-autoscaler-monitoring -o yaml | grep -A 5 namespaceSelector
-   ```
-   The ServiceMonitor should include:
-   ```yaml
-   namespaceSelector:
-     matchNames:
-     - inferno-autoscaler-system
-   ```
+**Note**: The `PROMETHEUS_BASE_URL` is now automatically set in the deployment configuration for in-cluster deployments. The controller includes retry logic to handle Prometheus startup delays and will wait up to 5 minutes for Prometheus to become available.
 
-4. **Check Prometheus targets**: Verify targets are being discovered
-   ```sh
-   curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
-   ```
+## Security Considerations
 
-5. **Wait for discovery**: ServiceMonitor discovery can take 1-2 minutes. If targets don't appear immediately:
-   ```sh
-   # Wait and check again
-   sleep 60 && curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("inferno"))'
-   
-   # Check Prometheus operator logs for discovery events
-   kubectl logs -n inferno-autoscaler-monitoring deployment/kube-prometheus-stack-operator --tail=10
-   ```
+### Metrics Endpoint Security
+The controller's metrics endpoint is currently configured for HTTP access on port 8080 without TLS encryption. This configuration is suitable for development and testing environments but should be secured for production deployments.
 
-### Controller Configuration Issues
-If the controller shows ConfigMap errors:
+**For Production Deployments:**
+1. Enable secure metrics by setting `--metrics-secure=true`
+2. Configure TLS certificates for the metrics endpoint
+3. Use network policies to restrict access to the metrics port
+4. Consider using a reverse proxy with TLS termination
 
-1. **Check ConfigMap exists**: Verify the ConfigMap is deployed
-   ```sh
-   kubectl get configmap -n inferno-autoscaler-system | grep inferno
-   ```
-
-2. **Restart controller pod**: Force restart to pick up new configuration
-   ```sh
-   kubectl delete pod -n inferno-autoscaler-system -l control-plane=controller-manager
-   ```
-
-### Metrics Not Appearing
-If custom metrics are not showing up:
-
-1. **Check controller logs**: Look for metrics emission errors
-   ```sh
-   kubectl logs -n inferno-autoscaler-system deployment/inferno-autoscaler-controller-manager --tail=20
-   ```
-
-2. **Verify variant autoscaling object**: Ensure it exists and is being processed
-   ```sh
-   kubectl get variantautoscaling
-   kubectl describe variantautoscaling vllme-deployment
-   ```
+**Example Production Configuration:**
+```yaml
+# In config/default/manager_metrics_patch.yaml
+- op: replace
+  path: /spec/template/spec/containers/0/args/1
+  value: --metrics-secure=true
+```
 
 ## Project Distribution
 

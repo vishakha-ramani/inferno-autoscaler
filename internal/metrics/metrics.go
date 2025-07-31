@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 
 	llmdOptv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,7 +15,7 @@ var (
 )
 
 // InitMetrics registers all custom metrics with the provided registry
-func InitMetrics(registry prometheus.Registerer) {
+func InitMetrics(registry prometheus.Registerer) error {
 	replicaScalingTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "inferno_replica_scaling_total",
@@ -38,22 +39,32 @@ func InitMetrics(registry prometheus.Registerer) {
 	)
 
 	// Register metrics with the registry
-	registry.MustRegister(replicaScalingTotal)
-	registry.MustRegister(desiredReplicas)
-	registry.MustRegister(currentReplicas)
+	if err := registry.Register(replicaScalingTotal); err != nil {
+		return fmt.Errorf("failed to register replicaScalingTotal metric: %w", err)
+	}
+	if err := registry.Register(desiredReplicas); err != nil {
+		return fmt.Errorf("failed to register desiredReplicas metric: %w", err)
+	}
+	if err := registry.Register(currentReplicas); err != nil {
+		return fmt.Errorf("failed to register currentReplicas metric: %w", err)
+	}
 
 	// Initialize metrics with default values to ensure they appear in /metrics endpoint
 	// This ensures the metrics are visible even before they're set to actual values
 	replicaScalingTotal.WithLabelValues("default", "default", "none", "none").Add(0)
 	desiredReplicas.WithLabelValues("default", "default", "none").Set(0)
 	currentReplicas.WithLabelValues("default", "default", "none").Set(0)
+
+	return nil
 }
 
 // InitMetricsAndEmitter registers metrics with Prometheus and creates a metrics emitter
 // This is a convenience function that handles both registration and emitter creation
-func InitMetricsAndEmitter(registry prometheus.Registerer) *MetricsEmitter {
-	InitMetrics(registry)
-	return NewMetricsEmitter()
+func InitMetricsAndEmitter(registry prometheus.Registerer) (*MetricsEmitter, error) {
+	if err := InitMetrics(registry); err != nil {
+		return nil, err
+	}
+	return NewMetricsEmitter(), nil
 }
 
 // MetricsEmitter handles emission of custom metrics
@@ -65,11 +76,7 @@ func NewMetricsEmitter() *MetricsEmitter {
 }
 
 // EmitReplicaScalingMetrics emits metrics related to replica scaling
-func (m *MetricsEmitter) EmitReplicaScalingMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, direction, reason string) {
-	if va == nil {
-		return
-	}
-
+func (m *MetricsEmitter) EmitReplicaScalingMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, direction, reason string) error {
 	labels := prometheus.Labels{
 		"variant_name": va.Name,
 		"namespace":    va.Namespace,
@@ -77,21 +84,29 @@ func (m *MetricsEmitter) EmitReplicaScalingMetrics(ctx context.Context, va *llmd
 		"reason":       reason,
 	}
 
+	// These operations are local and should never fail, but we handle errors for debugging
+	if replicaScalingTotal == nil {
+		return fmt.Errorf("replicaScalingTotal metric not initialized")
+	}
+
 	replicaScalingTotal.With(labels).Inc()
+	return nil
 }
 
 // EmitReplicaMetrics emits current and desired replica metrics
-func (m *MetricsEmitter) EmitReplicaMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, current, desired int32, acceleratorType string) {
-	if va == nil {
-		return
-	}
-
+func (m *MetricsEmitter) EmitReplicaMetrics(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling, current, desired int32, acceleratorType string) error {
 	baseLabels := prometheus.Labels{
 		"variant_name":     va.Name,
 		"namespace":        va.Namespace,
 		"accelerator_type": acceleratorType,
 	}
 
+	// These operations are local and should never fail, but we handle errors for debugging
+	if currentReplicas == nil || desiredReplicas == nil {
+		return fmt.Errorf("replica metrics not initialized")
+	}
+
 	currentReplicas.With(baseLabels).Set(float64(current))
 	desiredReplicas.With(baseLabels).Set(float64(desired))
+	return nil
 }

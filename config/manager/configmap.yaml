@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: inferno-variantautoscaling-config
+  name: variantautoscaling-config
   namespace: inferno-autoscaler-system
   labels:
     app.kubernetes.io/name: inferno-autoscaler
     app.kubernetes.io/managed-by: kustomize
 data:
   # Prometheus configuration
-  PROMETHEUS_BASE_URL: "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+  PROMETHEUS_BASE_URL: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
   
   # Optimization configuration
   GLOBAL_OPT_INTERVAL: "60s"

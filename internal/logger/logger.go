@@ -52,10 +52,3 @@ func GetZapLevelFromEnv() zapcore.Level {
 		return zapcore.InfoLevel // fallback
 	}
 }
-
-// SyncLogger ensures the logger is properly synced
-func SyncLogger() {
-	if Log != nil {
-		Log.Sync()
-	}
-}

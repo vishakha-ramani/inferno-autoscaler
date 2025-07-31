@@ -90,14 +90,3 @@ abs(inferno_desired_replicas - inferno_current_replicas)
 # Scaling frequency by reason
 rate(inferno_replica_scaling_total[5m]) by (reason)
 ```
-
-## Troubleshooting
-
-### Metrics Not Appearing
-1. Check if the ServiceMonitor is properly configured
-2. Verify the metrics endpoint is accessible
-3. Check controller logs for metrics initialization errors
-4. Ensure Prometheus is scraping the target
-
-### Performance Issues
-Monitor replica scaling metrics to identify scaling patterns and potential bottlenecks. 

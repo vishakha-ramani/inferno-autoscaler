@@ -80,7 +80,7 @@ type VariantAutoscalingReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;list;watch
 
 const (
-	configMapName      = "inferno-autoscaler-inferno-variantautoscaling-config"
+	configMapName      = "inferno-autoscaler-variantautoscaling-config"
 	configMapNamespace = "inferno-autoscaler-system"
 )
 
@@ -360,7 +360,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
 		updateVa.Status.Actuation.Applied = true
 
-		act := actuator.NewDummyActuator(r.Client)
+		act := actuator.NewActuator(r.Client)
 		if err := act.ApplyReplicaTargets(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to apply replicas")
 		}
@@ -409,6 +409,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	initMetricsEmitter()
 
 	// Configure Prometheus client using flexible configuration
+	// TODO: If configuration changes become a concern, implement a configuration watcher rather than per-cycle initialization.
 	prom_addr, err := r.getPrometheusConfig(context.Background())
 	if err != nil {
 		logger.Log.Warn("Failed to get Prometheus config, using default", "error", err)
@@ -425,7 +426,29 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 
 	r.PromAPI = promv1.NewAPI(promClient)
-	logger.Log.Info("Prometheus client initialized successfully")
+
+	// Validate that the API is working by testing a simple query with retry logic
+	backoff := wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    6, // 5s, 10s, 20s, 40s, 80s, 160s = ~5 minutes total
+	}
+
+	err = wait.ExponentialBackoffWithContext(context.Background(), backoff, func(ctx context.Context) (bool, error) {
+		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
+		if err != nil {
+			logger.Log.Warn("Prometheus API validation failed, retrying...", "error", err)
+			return false, nil // Continue retrying
+		}
+		return true, nil // Success
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to validate prometheus API connection after retries: %w", err)
+	}
+
+	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
 
 	// Start watching ConfigMap and ticker logic
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
@@ -621,14 +644,35 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 		return promAddr, nil
 	}
 
-	// Then, try to get from ConfigMap
+	// Then, try to get from ConfigMap with retry logic
 	cm := &corev1.ConfigMap{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      configMapName,
-		Namespace: configMapNamespace,
-	}, cm)
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    3, // Fewer retries since we have a default fallback
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      configMapName,
+			Namespace: configMapNamespace,
+		}, cm)
+		if err == nil {
+			return true, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Warn("ConfigMap not found for Prometheus config, will not retry", "name", configMapName, "namespace", configMapNamespace)
+			return false, err
+		}
+
+		logger.Log.Warn("Transient error fetching ConfigMap for Prometheus config, retrying...", "error", err)
+		return false, nil
+	})
+
 	if err != nil {
-		logger.Log.Warn("Failed to get ConfigMap for Prometheus config, using default", "error", err)
+		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default", "error", err)
 	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
 		logger.Log.Info("Using Prometheus address from ConfigMap", "address", promAddr)
 		return promAddr, nil

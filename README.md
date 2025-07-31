@@ -199,7 +199,7 @@ Use this target to spin up a local test environment integrated with llm-d core c
 make deploy-llm-d-inferno-emulated-on-kind
 ```
 
-This script deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno autoscaler.
+This target deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno-autoscaler.
 
 The default set up:
 - Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
@@ -227,9 +227,17 @@ cd hack/vllme/vllm_emulator
 python loadgen.py
 ```
 
-To request the gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
+- To request the gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
+- As '*model name*', insert: "**vllm**"
 
-As '*model name*', insert: "**vllm**"
+**Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
+
+### Uninstalling llm-d and Inferno-autoscaler 
+Use this target to undeploy the integrated test environment and related resources:
+
+```sh
+make undeploy-llm-d-inferno-emulated-on-kind
+```
 
 ## Project Distribution
 

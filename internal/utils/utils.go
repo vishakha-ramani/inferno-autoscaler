@@ -189,6 +189,20 @@ func AddServerInfoToSystemData(
 		CurrentAlloc:    *AllocationData,
 		DesiredAlloc:    infernoConfig.AllocationData{},
 	}
+
+	// set max batch size if configured
+	maxBatchSize := 0
+	accName := va.Labels["inference.optimization/acceleratorName"]
+	for _, ap := range va.Spec.ModelProfile.Accelerators {
+		if ap.Acc == accName {
+			maxBatchSize = ap.MaxBatchSize
+			break
+		}
+	}
+	if maxBatchSize > 0 {
+		serverSpec.MaxBatchSize = maxBatchSize
+	}
+
 	sd.Spec.Servers.Spec = append(sd.Spec.Servers.Spec, *serverSpec)
 	return nil
 }

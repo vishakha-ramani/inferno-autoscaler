@@ -221,11 +221,15 @@ infra-sim-inference-gateway   NodePort    10.16.2.157   <none>        80:37479/T
 kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
 ```
 
-3. Launch the `loadgen.sh` script to send requests to the `v1/chat/completions` endpoint:
+3. Launch the `loadgen.py` load generator to send requests to the `v1/chat/completions` endpoint:
 ```sh
-cd hack/vllm_emulator
-bash loadgen.sh
+cd hack/vllme/vllm_emulator
+python loadgen.py
 ```
+
+To request the gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
+
+As '*model name*', insert: "**vllm**"
 
 ## Project Distribution
 

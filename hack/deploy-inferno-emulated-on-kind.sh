@@ -38,18 +38,19 @@ echo "Installing inferno CRD"
 make install
 sleep 10
 ${KUBECTL} config set-context ${KIND_CONTEXT}
-echo "Deploying Inferno controller-manager"
-make deploy-emulated
-_kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
-
-# Install the configmap to run optimizer loop
-_kubectl apply -f deploy/ticker-configmap.yaml
-
 # Install the configmap service class
 _kubectl apply -f deploy/configmap-serviceclass.yaml
 
 # Install the configmap for the accelerator unit cost
 _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 
-# deploy emulated vllme server
+# deploy emulated vllme server (includes Prometheus)
 hack/deploy-emulated-vllme-server.sh
+
+# Wait for Prometheus to be ready before deploying controller
+echo "Waiting for Prometheus to be ready..."
+_kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n ${MONITORING_NAMESPACE} --timeout=5m
+
+echo "Deploying Inferno controller-manager"
+make deploy-emulated
+_kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}

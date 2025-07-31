@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inferno-autoscaler
+  namespace: inferno-autoscaler-monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  namespaceSelector:
+    matchNames:
+    - inferno-autoscaler-system
+  endpoints:
+  - port: http
+    scheme: http
+    interval: 30s
+    path: /metrics 

@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: inferno-variantautoscaling-config
-  namespace: default
-data:
-  GLOBAL_OPT_INTERVAL: "1m"
-  GLOBAL_OPT_TRIGGER: "false"

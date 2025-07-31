@@ -43,6 +43,7 @@ import (
 	collector "github.com/llm-d-incubation/inferno-autoscaler/internal/collector"
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
 	analyzer "github.com/llm-d-incubation/inferno-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/inferno-autoscaler/internal/optimizer"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
@@ -79,11 +80,22 @@ type VariantAutoscalingReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;list;watch
 
 const (
-	configMapName      = "inferno-variantautoscaling-config"
-	configMapNamespace = "default"
+	configMapName      = "inferno-autoscaler-variantautoscaling-config"
+	configMapNamespace = "inferno-autoscaler-system"
 )
 
+func initMetricsEmitter() {
+	logger.Log.Info("Creating metrics emitter instance")
+	// Force initialization of metrics by creating a metrics emitter
+	_ = metrics.NewMetricsEmitter()
+	logger.Log.Info("Metrics emitter created successfully")
+}
+
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	logger.Log.Debug("Reconcile function called", "request_name", req.Name, "request_namespace", req.Namespace)
+
+	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimizing")
@@ -133,13 +145,20 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
 	}
-	logger.Log.Info("inferno data ", "systemData ", systemData)
+	logger.Log.Debug("System data prepared for optimization", "systemData", systemData)
 
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
+
 	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, retrying")
 		return ctrl.Result{}, err
+	}
+
+	logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
+	logger.Log.Debug("Optimized allocation map", "keys", len(optimizedAllocation), "updateList_count", len(updateList.Items))
+	for key, value := range optimizedAllocation {
+		logger.Log.Debug("Optimized allocation entry", "key", key, "value", value)
 	}
 
 	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
@@ -275,26 +294,47 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		Steps:    5,
 	}
 
+	logger.Log.Debug("Optimization metrics emitted, starting to process variants", "variant_count", len(updateList.Items))
+
 	for i := range updateList.Items {
 		va := &updateList.Items[i]
+		_, ok := optimizedAllocation[va.Name]
+		logger.Log.Debug("Processing variant", "index", i, "name", va.Name, "namespace", va.Namespace, "has_optimized_alloc", ok)
+		if !ok {
+			logger.Log.Debug("No optimized allocation found for variant", "name", va.Name)
+			continue
+		}
+		// Fetch the latest version from API server
 		var updateVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		if err := r.Get(ctx, client.ObjectKeyFromObject(va), &updateVa); err != nil {
 			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server", "name", va.Name)
 			continue
 		}
-
 		original := updateVa.DeepCopy()
 
+		//TODO: remove calling duplicate deployment calls
+		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      va.Name,
-			Namespace: va.Namespace,
-		}, &deploy)
+		err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+			err := r.Get(ctx, types.NamespacedName{
+				Name:      va.Name,
+				Namespace: va.Namespace,
+			}, &deploy)
+			if err == nil {
+				return true, nil
+			}
+			if apierrors.IsNotFound(err) {
+				return false, err
+			}
+			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			return false, nil
+		})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
+				logger.Log.Info("Deployment not found, skipping", "variantAutoscaling", updateVa.Name)
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment", "variantAutoscaling", updateVa.Name)
+			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling", updateVa.Name)
 			return err
 		}
 
@@ -308,6 +348,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 				BlockOwnerDeletion: ptr(true),
 			})
 
+			// Patch metadata change (ownerReferences)
 			patch := client.MergeFrom(original)
 			if err := r.Client.Patch(ctx, &updateVa, patch); err != nil {
 				logger.Log.Error(err, "failed to patch ownerReference", "name", updateVa.Name)
@@ -319,7 +360,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
 		updateVa.Status.Actuation.Applied = true
 
-		act := actuator.NewDummyActuator(r.Client)
+		act := actuator.NewActuator(r.Client)
 		if err := act.ApplyReplicaTargets(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to apply replicas")
 		}
@@ -336,23 +377,47 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			return true, nil
 		})
 
+		// Emit metrics for the variant autoscaling
+		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
+			logger.Log.Error(err, "failed to emit metrics", "name", updateVa.Name)
+		} else {
+			logger.Log.Debug("EmitMetrics call completed successfully", "name", updateVa.Name)
+		}
+
 		if err != nil {
 			logger.Log.Error(err, "failed to patch status after retries", "name", updateVa.Name)
 			continue
 		}
 	}
+
+	logger.Log.Debug("Completed variant processing loop")
+
+	// Log summary of reconciliation
+	if len(updateList.Items) > 0 {
+		logger.Log.Info("Reconciliation completed",
+			"variants_processed", len(updateList.Items),
+			"optimization_successful", true)
+	}
+
 	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
-	// To run locally, set the environment variable to Prometheus base URL e.g. PROMETHEUS_BASE_URL=http://localhost:9090
-	prom_addr := os.Getenv("PROMETHEUS_BASE_URL")
-	if prom_addr == "" {
-		// Running in cluster
-		prom_addr = "http://prometheus-operated.default.svc.cluster.local:9090"
+	// Initialize metrics
+	initMetricsEmitter()
+
+	// Configure Prometheus client using flexible configuration
+	// TODO: If configuration changes become a concern, implement a configuration watcher rather than per-cycle initialization.
+	prom_addr, err := r.getPrometheusConfig(context.Background())
+	if err != nil {
+		logger.Log.Warn("Failed to get Prometheus config, using default", "error", err)
+		// Use default as fallback
+		prom_addr = "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
 	}
+
+	logger.Log.Info("Initializing Prometheus client", "address", prom_addr)
 	promClient, err := api.NewClient(api.Config{
 		Address: prom_addr,
 	})
@@ -361,7 +426,29 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 
 	r.PromAPI = promv1.NewAPI(promClient)
-	logger.Log.Info("Prometheus client initialized")
+
+	// Validate that the API is working by testing a simple query with retry logic
+	backoff := wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    6, // 5s, 10s, 20s, 40s, 80s, 160s = ~5 minutes total
+	}
+
+	err = wait.ExponentialBackoffWithContext(context.Background(), backoff, func(ctx context.Context) (bool, error) {
+		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
+		if err != nil {
+			logger.Log.Warn("Prometheus API validation failed, retrying...", "error", err)
+			return false, nil // Continue retrying
+		}
+		return true, nil // Success
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to validate prometheus API connection after retries: %w", err)
+	}
+
+	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
 
 	// Start watching ConfigMap and ticker logic
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
@@ -548,4 +635,51 @@ func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName,
 		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
 	}
 	return &cm, nil
+}
+
+func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
+	// First, try environment variable
+	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
+		logger.Log.Info("Using Prometheus address from environment variable -", "address: ", promAddr)
+		return promAddr, nil
+	}
+
+	// Then, try to get from ConfigMap with retry logic
+	cm := &corev1.ConfigMap{}
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    3, // Fewer retries since we have a default fallback
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      configMapName,
+			Namespace: configMapNamespace,
+		}, cm)
+		if err == nil {
+			return true, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Warn("ConfigMap not found for Prometheus config, will not retry", "name", configMapName, "namespace", configMapNamespace)
+			return false, err
+		}
+
+		logger.Log.Warn("Transient error fetching ConfigMap for Prometheus config, retrying...", "error", err)
+		return false, nil
+	})
+
+	if err != nil {
+		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default", "error", err)
+	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
+		logger.Log.Info("Using Prometheus address from ConfigMap", "address", promAddr)
+		return promAddr, nil
+	}
+
+	// Default in-cluster address
+	defaultAddr := "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+	logger.Log.Info("Using default Prometheus address", "address", defaultAddr)
+	return defaultAddr, nil
 }

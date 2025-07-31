@@ -40,7 +40,7 @@ func (engine *VariantAutoscalingsEngine) Optimize(ctx context.Context,
 		return nil, fmt.Errorf("no feasible solution found")
 	}
 
-	logger.Log.Info("optimization solution ", "system ", engine.system)
+	logger.Log.Debug("Optimization solution", "system", engine.system)
 
 	optimizedAllocMap := make(map[string]llmdOptv1alpha1.OptimizedAlloc)
 	for _, va := range vaList.Items {

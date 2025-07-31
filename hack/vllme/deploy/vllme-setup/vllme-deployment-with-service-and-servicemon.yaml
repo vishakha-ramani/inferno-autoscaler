@@ -2,19 +2,24 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllme-deployment
+  namespace: llm-d-sim
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: vllme
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: ms-sim-llm-d-modelservice
   template:
     metadata:
       labels:
         app: vllme
+        llm-d.ai/inferenceServing: "true"
+        llm-d.ai/model: ms-sim-llm-d-modelservice
     spec:
       containers:
       - name: vllme
-        image: quay.io/infernoautoscaler/vllme:0.2.0
+        image: quay.io/infernoautoscaler/vllme:0.2.1
         imagePullPolicy: Always
         env: 
         - name: MODEL_NAME
@@ -55,6 +60,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: vllme-service
+  namespace: llm-d-sim
   labels:
     app: vllme
 spec:
@@ -72,6 +78,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: vllme-servicemonitor
+  namespace: llm-d-sim
   labels:
     app: vllme
 spec:

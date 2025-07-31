@@ -115,6 +115,7 @@ async def chat_completions(request: ChatCompletionRequest):
         "usage": {
             "prompt_tokens": reqi.InputTokenLength,
             "completion_tokens": reqi.token_len,
+            "total_tokens": reqi.token_len
         }
     }
 

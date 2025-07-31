@@ -128,7 +128,7 @@ kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-mon
 **Check vllm emulated deployment**
 
 ```sh
-kubectl get deployments
+kubectl get deployments -n llm-d-sim
 NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 vllme-deployment   1/1     1            1           35s
 ```
@@ -339,6 +339,53 @@ The controller's metrics endpoint is currently configured for HTTP access on por
 - op: replace
   path: /spec/template/spec/containers/0/args/1
   value: --metrics-secure=true
+
+## Integration with llm-d 
+
+Use this target to spin up a local test environment integrated with llm-d core components:
+
+```sh
+make deploy-llm-d-inferno-emulated-on-kind
+```
+
+This target deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno-autoscaler.
+
+The default set up:
+- Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
+- Includes the Inferno autoscaler
+- Installs the [llm-d core infrastructure for simulation purposes](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/sim/README.md)
+- Includes vLLM emulator and load generator (OpenAI-based)
+
+To curl the Gateway:
+1. Find the gateway service:
+```sh
+kubectl get services -n llm-d-sim
+NAME                          TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)             AGE
+gaie-sim-epp                  ClusterIP   10.16.2.6     <none>        9002/TCP,9090/TCP   42s
+infra-sim-inference-gateway   NodePort    10.16.2.157   <none>        80:37479/TCP        64s
+```
+
+2. Then `port-forward` the gateway service to we can curl it:
+```sh
+kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
+```
+
+3. Launch the `loadgen.py` load generator to send requests to the `v1/chat/completions` endpoint:
+```sh
+cd hack/vllme/vllm_emulator
+python loadgen.py
+```
+
+- To request the gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
+- As '*model name*', insert: "**vllm**"
+
+**Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
+
+### Uninstalling llm-d and Inferno-autoscaler 
+Use this target to undeploy the integrated test environment and related resources:
+
+```sh
+make undeploy-llm-d-inferno-emulated-on-kind
 ```
 
 ## Project Distribution

@@ -82,7 +82,7 @@ destroy-kind-cluster:
 # This target assumes that the Kind cluster has been created and is running.
 .PHONY: deploy-inferno-emulated-on-kind
 deploy-inferno-emulated-on-kind:
-	@echo ">>> Deploying Inferno (cluster args: $(KIND_ARGS), image: $(IMG))"
+	@echo ">>> Deploying Inferno-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
 		hack/deploy-inferno-emulated-on-kind.sh $(KIND_ARGS)
 
@@ -92,8 +92,23 @@ deploy-emulated: deploy
 
 .PHONY: undeploy-inferno-on-kind
 undeploy-inferno-on-kind:
-	kubectl delete ns/inferno-autoscaler-system
+	make undeploy
+	kubectl delete ns/inferno-autoscaler-system --ignore-not-found
+	kubectl delete ns/inferno-autoscaler-monitoring --ignore-not-found
 
+# Creates Kind cluster with emulated GPU support (if needed)
+# Deploys the Inferno Autoscaler on a Kind cluster
+# Deploys the llm-d components in the same Kind cluster
+.PHONY: deploy-llm-d-inferno-emulated-on-kind
+deploy-llm-d-inferno-emulated-on-kind:
+	@echo ">>> Deploying integrated llm-d and Inferno-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
+		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS)
+
+.PHONY: undeploy-llm-d-inferno-emulated-on-kind
+undeploy-llm-d-inferno-emulated-on-kind:
+	@echo ">>> Undeploying llm-d and Inferno-autoscaler"
+	hack/undeploy-llm-d-inferno-emulated-on-kind.sh
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

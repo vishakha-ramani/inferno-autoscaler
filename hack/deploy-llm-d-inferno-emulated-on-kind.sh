@@ -49,6 +49,15 @@ function deploy_inferno() {
     echo "Inferno Autoscaler deployed successfully."
 }
 
+echo ">>> Cloning llm-d-infra repo and running the installer..."
+if [[ ! -d "$INFRA_REPO_DIR" ]]; then
+    echo ">>> Cloning llm-d-infra repo"
+    git clone https://github.com/llm-d-incubation/llm-d-infra.git "$INFRA_REPO_DIR"
+else
+    echo ">>> Using existing repo clone, updating..."
+    git -C "$INFRA_REPO_DIR" pull --ff-only
+fi
+
 if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
   echo "ARM64 platform detected, using custom arm64 values.yaml"
   cp "$DEFAULT_VALUES_FILE" $INFRA_REPO_DIR/quickstart/examples/sim/gaie-sim/values.yaml
@@ -60,15 +69,6 @@ fi
 
 cd "$PROJ_ROOT_DIR"
 deploy_inferno
-
-echo ">>> Cloning llm-d-infra repo and running the installer..."
-if [[ ! -d "$INFRA_REPO_DIR" ]]; then
-    echo ">>> Cloning llm-d-infra repo"
-    git clone https://github.com/llm-d-incubation/llm-d-infra.git "$INFRA_REPO_DIR"
-else
-    echo ">>> Using existing repo clone, updating..."
-    git -C "$INFRA_REPO_DIR" pull --ff-only
-fi
 
 cd "$INFRA_REPO_DIR/quickstart"
 echo ">>> Running the dependency script"

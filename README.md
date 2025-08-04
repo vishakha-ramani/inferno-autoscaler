@@ -64,7 +64,7 @@ make deploy-inferno-emulated-on-kind IMG=<some-registry>/inferno-controller:tag 
 privileges or be logged in as admin.
 
 The default set up:
-- Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
+- Deploys a Kind cluster with 3 nodes, 2 GPUs per node, mixed vendors with fake GPU resources
 - Preloaded Inferno image
 - CRDs and controller deployment
 - Apply configuration data
@@ -82,6 +82,28 @@ kind-inferno-gpu-cluster-worker2         intel.com/gpu        2          2      
 -------------------------------------------------------------------------------------------------------------------------------
 ```
 
+**Check the inferno controller is up:**
+
+```sh
+kubectl get pods -n inferno-autoscaler-system
+```
+
+```sh
+NAME                                                     READY   STATUS    RESTARTS   AGE
+inferno-autoscaler-controller-manager-78677ddc5b-cgtd8   1/1     Running   0          55s
+inferno-autoscaler-controller-manager-78677ddc5b-vg9pg   1/1     Running   0          55s
+```
+
+**Check the configmap is installed:**
+
+```sh
+kubectl get cm -n inferno-autoscaler-system
+```
+
+```sh
+NAME                                           DATA   AGE
+inferno-autoscaler-variantautoscaling-config   3      92s
+```
 
 ### To Uninstall
 
@@ -107,9 +129,17 @@ make destroy-kind-cluster
 
 Local development will need emulated vllm server, prometheus installed in KinD cluster. 
 
-This script already deploys emulated vllm server:
+#### Note: The above script already deploys emulated vllm server:
+
 ```sh
-make deploy-inferno-emulated-on-kind
+# Check if vllme is deployed and prometheus is setup
+kubectl get pods -A | grep -E "(inferno|vllme|prometheus)"
+```
+
+If you dont have vllme deployed, run:
+
+```sh
+bash hack/deploy-emulated-vllme-server.sh
 ```
 
 **Expose the prometheus server**
@@ -136,7 +166,7 @@ vllme-deployment   1/1     1            1           35s
 **Expose the vllme server**
 ```sh
 # Note: Ensure pods are ready before port forwarding (see Prometheus section above)
-kubectl port-forward svc/vllme-service 8000:80
+kubectl port-forward svc/vllme-service 8000:80 -n llm-d-sim
 ```
 
 **Sanity checks**
@@ -148,24 +178,37 @@ Go to http://localhost:8000/metrics and check if you see metrics starting with v
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 
 # view status of the variant autoscaling object to get status of optimization
-kubectl get variantautoscaling vllme-deployment -o yaml
+kubectl get variantautoscaling vllme-deployment -n llm-d-sim -o yaml
 ```
 
 **Load generation**
 
-- Generates synthetic load by launching client.py repeatedly
-- Takes requests-per-minute (RPM) as input
-- Default = 20 RPM
+- Generates synthetic load
+- Takes server url, model name, requests-per-minute (RPM) and content length as input
+- Default = 60 RPM
 - Can be overridden by running:
 
 ```sh
 #run script
 cd ./hack/vllme/vllm_emulator
-pip install -r requirements.txt
-sh loadgen.sh 40
+pip install -r requirements.txt # if the requirements are not installed on your machine
+python3 loadgen.py # to run the load gen script  
 
-# rpm - request per minute (default = 20)
+# rpm - request per minute (default = 60)
 
+# Select the server base URL:
+# 1: http://localhost:30000/v1
+# 2: http://localhost:30010/v1
+# 3: http://localhost:8000/v1
+# Enter the option number (1/2): 3
+# Enter the model name (e.g., gpt-1337-turbo-pro-max): gpt-1337-turbo-pro-max
+# Enter the rate (requests per minute): 60
+# Enter the content length (e.g., 100-200): 150
+# Starting load generator...
+# Server Address: http://localhost:8000/v1
+# Request Rate = 60
+# Model: gpt-1337-turbo-pro-max
+# Content Length: 150
 ```
 
 **Run sample query**

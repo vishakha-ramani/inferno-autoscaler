@@ -151,8 +151,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
-		logger.Log.Error(err, "unable to perform model optimization, retrying")
-		return ctrl.Result{}, err
+		logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
+		return ctrl.Result{}, nil
 	}
 
 	logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
@@ -162,8 +162,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
+		// If we fail to apply optimized allocations, we log the error but do not return it.
+		// In next tick, the controller will retry.
 		logger.Log.Error(err, "failed to apply optimized allocations")
-		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -176,7 +177,7 @@ func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.Vari
 		if va.DeletionTimestamp.IsZero() {
 			active = append(active, va)
 		} else {
-			logger.Log.Info("Skipping deleted VariantAutoscaling", "name", va.Name)
+			logger.Log.Info("skipping deleted VariantAutoscaling", "name", va.Name)
 		}
 	}
 	return active
@@ -505,7 +506,7 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
 
 	for {
 		cm := &corev1.ConfigMap{}
-		err := r.Get(context.Background(), types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      configMapName,
 			Namespace: configMapNamespace,
 		}, cm)

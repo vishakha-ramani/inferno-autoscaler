@@ -49,8 +49,6 @@ The default set up:
 - Installs the [llm-d core infrastructure for simulation purposes](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/sim/README.md)
 - Includes vLLM emulator and load generator (OpenAI-based)
 
-To target 
-
 To curl the Gateway:
 1. Find the gateway service:
 ```sh
@@ -69,7 +67,7 @@ kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
 **Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
 
 ### Showing Inferno-autoscaler scaling replicas up and down
-1. Target the deployed vLLM-emulator servers by deploy the VariantAutoscaling object:
+1. Target the deployed vLLM-emulator servers by deploying the VariantAutoscaling object:
 ```sh
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 ``` 
@@ -213,7 +211,7 @@ vllme-deployment   default   A100          1                 1           16m
 - To change this behaviour, add more GPUs to the cluster when launching the Make target. Here is an example that creates 3 nodes, 4 GPUs per node, from mixed vendors:
 
 ```sh
-make deploy-llm-d--inferno-emulated-on-kind -n 3 -g 4
+make deploy-llm-d-inferno-emulated-on-kind -n 3 -g 4
 ```
 
 ### Uninstalling llm-d and Inferno-autoscaler 

@@ -33,7 +33,195 @@ For more details please refer to the community proposal [here](https://docs.goog
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
-## Quickstart: Emulated Deployment on Kind
+## Quickstart guide: installing llm-d along with Inferno-autoscaler emulated deployment on Kind
+
+Use this target to spin up a local test environment integrated with llm-d core components:
+
+```sh
+make deploy-llm-d-inferno-emulated-on-kind
+```
+
+This target deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno-autoscaler.
+
+The default set up:
+- Deploys a Kind cluster with nodes, 2 GPUs per node, mixed vendors with fake GPU resources
+- Includes the Inferno autoscaler
+- Installs the [llm-d core infrastructure for simulation purposes](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/sim/README.md)
+- Includes vLLM emulator and load generator (OpenAI-based)
+
+To curl the Gateway:
+1. Find the gateway service:
+```sh
+kubectl get service -n llm-d-sim 
+NAME                          TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)             AGE
+gaie-sim-epp                  ClusterIP   10.96.158.61   <none>        9002/TCP,9090/TCP   2m17s
+infra-sim-inference-gateway   NodePort    10.96.1.46     <none>        80:31214/TCP        2m12s
+vllme-service                 NodePort    10.96.90.51    <none>        80:30000/TCP        4m3s
+```
+
+2. Then `port-forward` the gateway service to we can curl it:
+```sh
+kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
+```
+
+**Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
+
+### Showing Inferno-autoscaler scaling replicas up and down
+1. Target the deployed vLLM-emulator servers by deploying the VariantAutoscaling object:
+```sh
+kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
+``` 
+
+2. Before starting the load generator, we can see that the Inferno-autoscaler is not scaling up existing deployments:
+
+```sh
+kubectl get deployments -n llm-d-sim
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+gaie-sim-epp                  1/1     1            1           5m12s
+infra-sim-inference-gateway   1/1     1            1           5m7s
+vllme-deployment              1/1     1            1           5m58s
+
+kubectl get variantautoscalings.llmd.ai -n llm-d-sim 
+NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default   A100          1                 1           4m31s
+```
+
+3. Launch the `loadgen.py` load generator to send requests to the `v1/chat/completions` endpoint:
+```sh
+cd hack/vllme/vllm_emulator
+pip install -r requirements.txt # if not already installed
+python loadgen.py
+```
+
+- To request the port-forwarded gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
+- As '*model name*', insert: "**vllm**"
+
+4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and context length (such as **RPM=40** and **context length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
+
+```sh
+kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager
+#...
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+{"level":"INFO","ts":"2025-08-04T19:18:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65} {A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {22.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=22.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=0, servTime=21.555601, waitTime=110.798096, rho=0.7630596}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:18:16.484006425 +0000 UTC m=+1380.284253535 A100 1}"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
+{"level":"INFO","ts":"2025-08-04T19:18:16.487Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 1"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"EmitReplicaMetrics completed"}
+{"level":"INFO","ts":"2025-08-04T19:18:16.493Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"Completed variant processing loop"}
+{"level":"INFO","ts":"2025-08-04T19:18:16.493Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+# New round:
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+{"level":"INFO","ts":"2025-08-04T19:19:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {44 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=44; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=40, servTime=21.540192, waitTime=99.1626, rho=0.7524011}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation mapkeys1updateList_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:19:16.48370162 +0000 UTC m=+1440.283948730 A100 2}"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
+{"level":"INFO","ts":"2025-08-04T19:19:16.488Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 2"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"EmitReplicaMetrics completed"}
+{"level":"INFO","ts":"2025-08-04T19:19:16.494Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"Completed variant processing loop"}
+{"level":"INFO","ts":"2025-08-04T19:19:16.494Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+```
+
+Checking the deployments and the currently applied VAs: 
+
+```sh
+kubectl get deployments -n llm-d-sim 
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+gaie-sim-epp                  1/1     1            1           7m8s
+infra-sim-inference-gateway   1/1     1            1           7m3s
+vllme-deployment              2/2     2            2           7m58s
+
+kubectl get variantautoscalings.llmd.ai -n llm-d-sim 
+NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default   A100          2                 2           6m31s
+```
+
+5. **Scaling down**: by stopping the load generator script with a keyboard interrupt, we can see that the Inferno-autoscaler effectively scales down the replicas:
+```sh
+kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager
+# ...
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+{"level":"INFO","ts":"2025-08-04T19:20:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {37.76 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=37.76; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=0, servTime=21.466858, waitTime=56.422607, rho=0.6966711}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:20:16.484244316 +0000 UTC m=+1500.284491425 A100 2}"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
+{"level":"INFO","ts":"2025-08-04T19:20:16.487Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 2"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"EmitReplicaMetrics completed"}
+{"level":"INFO","ts":"2025-08-04T19:20:16.492Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"Completed variant processing loop"}
+{"level":"INFO","ts":"2025-08-04T19:20:16.492Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+# New round:
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+{"level":"INFO","ts":"2025-08-04T19:21:16.482Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0} {Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {2.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=2.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=-40, servTime=21.058374, waitTime=0.032958984, rho=0.15340477}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:21:16.484650177 +0000 UTC m=+1560.284897245 A100 1}"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
+{"level":"INFO","ts":"2025-08-04T19:21:16.490Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 1"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"EmitReplicaMetrics completed"}
+{"level":"INFO","ts":"2025-08-04T19:21:16.494Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"Completed variant processing loop"}
+{"level":"INFO","ts":"2025-08-04T19:21:16.494Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+```
+
+This can be verified by checking the deployments and VA status too:
+```sh 
+kubectl get deployments -n llm-d-sim                
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+gaie-sim-epp                  1/1     1            1           18m
+infra-sim-inference-gateway   1/1     1            1           17m
+vllme-deployment              1/1     1            1           18m
+
+kubectl get variantautoscalings.llmd.ai -n llm-d-sim
+NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default   A100          1                 1           16m
+```
+
+**Note**:
+- With the default installation, the Inferno-autoscaler will not scale up to more than 2 replicas due to the default number of GPUs created into the cluster.
+- To change this behaviour, add more GPUs to the cluster when launching the Make target. Here is an example that creates 3 nodes, 4 GPUs per node, from mixed vendors:
+
+```sh
+make deploy-llm-d-inferno-emulated-on-kind -n 3 -g 4
+```
+
+### Uninstalling llm-d and Inferno-autoscaler 
+Use this target to undeploy the integrated test environment and related resources:
+
+```sh
+make undeploy-llm-d-inferno-emulated-on-kind
+```
+
+## Quickstart: Standalone Inferno-autoscaler emulated deployment on Kind
 - Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).
 
 ### To Deploy on the cluster
@@ -382,53 +570,6 @@ The controller's metrics endpoint is currently configured for HTTP access on por
 - op: replace
   path: /spec/template/spec/containers/0/args/1
   value: --metrics-secure=true
-
-## Integration with llm-d 
-
-Use this target to spin up a local test environment integrated with llm-d core components:
-
-```sh
-make deploy-llm-d-inferno-emulated-on-kind
-```
-
-This target deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno-autoscaler.
-
-The default set up:
-- Deploys a 3 Kind nodes, 2 GPUs per node, mixed vendors with fake GPU resources
-- Includes the Inferno autoscaler
-- Installs the [llm-d core infrastructure for simulation purposes](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/sim/README.md)
-- Includes vLLM emulator and load generator (OpenAI-based)
-
-To curl the Gateway:
-1. Find the gateway service:
-```sh
-kubectl get services -n llm-d-sim
-NAME                          TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)             AGE
-gaie-sim-epp                  ClusterIP   10.16.2.6     <none>        9002/TCP,9090/TCP   42s
-infra-sim-inference-gateway   NodePort    10.16.2.157   <none>        80:37479/TCP        64s
-```
-
-2. Then `port-forward` the gateway service to we can curl it:
-```sh
-kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
-```
-
-3. Launch the `loadgen.py` load generator to send requests to the `v1/chat/completions` endpoint:
-```sh
-cd hack/vllme/vllm_emulator
-python loadgen.py
-```
-
-- To request the gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
-- As '*model name*', insert: "**vllm**"
-
-**Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
-
-### Uninstalling llm-d and Inferno-autoscaler 
-Use this target to undeploy the integrated test environment and related resources:
-
-```sh
-make undeploy-llm-d-inferno-emulated-on-kind
 ```
 
 ## Contributing

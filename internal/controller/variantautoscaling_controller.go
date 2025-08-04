@@ -461,8 +461,8 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		case <-mgr.Elected():
 			// Now leader — safe to run loop
 			logger.Log.Info("Elected as leader, starting optimization loop")
-			r.watchAndRunLoop(ctx)
-			return nil
+			err := r.watchAndRunLoop(ctx)
+			return err
 		}
 	})); err != nil {
 		return fmt.Errorf("failed to add watchAndRunLoop: %w", err)
@@ -501,7 +501,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Complete(r)
 }
 
-func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
+func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) error {
 	var lastInterval string
 
 	for {
@@ -513,7 +513,7 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
 		if err != nil {
 			logger.Log.Error(err, "Unable to read optimization config")
 			time.Sleep(30 * time.Second)
-			continue
+			return err
 		}
 
 		interval := cm.Data["GLOBAL_OPT_INTERVAL"]
@@ -546,7 +546,7 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) {
 				if err != nil {
 					logger.Log.Error(err, "Invalid GLOBAL_OPT_INTERVAL")
 					r.mu.Unlock()
-					continue
+					return err
 				}
 
 				r.stopTicker = make(chan struct{})

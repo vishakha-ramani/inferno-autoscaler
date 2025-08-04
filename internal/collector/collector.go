@@ -57,7 +57,7 @@ func CollectInventoryK8S(ctx context.Context, r client.Client) (map[string]map[s
 					Count:  count,
 					Memory: mem,
 				}
-				logger.Log.Debug("found inventory", "nodeName", nodeName, "model", model, "count", count, "mem", mem)
+				logger.Log.Debug("Found inventory: ", "nodeName - ", nodeName, " , model - ", model, " , count - ", count, " , mem - ", mem)
 			}
 		}
 	}

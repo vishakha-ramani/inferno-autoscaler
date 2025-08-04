@@ -93,8 +93,6 @@ func initMetricsEmitter() {
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	logger.Log.Debug("Reconcile function called", "request_name", req.Name, "request_namespace", req.Namespace)
-
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
@@ -145,7 +143,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
 	}
-	logger.Log.Debug("System data prepared for optimization", "systemData", systemData)
+	logger.Log.Debug("System data prepared for optimization: ", "systemData - ", systemData)
 
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
 
@@ -418,7 +416,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		prom_addr = "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
 	}
 
-	logger.Log.Info("Initializing Prometheus client", "address", prom_addr)
+	logger.Log.Info("Initializing Prometheus client -> ", "address", prom_addr)
 	promClient, err := api.NewClient(api.Config{
 		Address: prom_addr,
 	})
@@ -641,7 +639,7 @@ func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName,
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
 	// First, try environment variable
 	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
-		logger.Log.Info("Using Prometheus address from environment variable -", "address: ", promAddr)
+		logger.Log.Info("Using Prometheus address from environment variable -> ", "address: ", promAddr)
 		return promAddr, nil
 	}
 

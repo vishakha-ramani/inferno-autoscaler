@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -63,10 +62,6 @@ import (
 type VariantAutoscalingReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	mu         sync.Mutex
-	ticker     *time.Ticker
-	stopTicker chan struct{}
 
 	PromAPI promv1.API
 }
@@ -113,6 +108,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
+
+	if len(activeVAs) == 0 {
+		logger.Log.Info("No active VariantAutoscalings found, skipping optimization")
+		return ctrl.Result{}, nil
+	}
 
 	newInventory, err := collector.CollectInventoryK8S(ctx, r.Client)
 	if err != nil {
@@ -501,8 +501,18 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 
 func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) error {
 	var lastInterval string
+	var lastTick time.Time
+	var intervalDuration time.Duration
 
 	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Context cancelled, stopping watch loop")
+			return nil
+		default:
+			// Continue
+		}
+
 		cm := &corev1.ConfigMap{}
 		err := r.Get(ctx, types.NamespacedName{
 			Name:      configMapName,
@@ -510,7 +520,7 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) erro
 		}, cm)
 		if err != nil {
 			logger.Log.Error(err, "Unable to read optimization config")
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 			return err
 		}
 
@@ -520,62 +530,46 @@ func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) erro
 		// Handle manual trigger
 		if trigger == "true" {
 			logger.Log.Info("Manual optimization trigger received")
-			_, err := r.Reconcile(context.Background(), ctrl.Request{})
+			_, err := r.Reconcile(ctx, ctrl.Request{})
 			if err != nil {
 				logger.Log.Error(err, "Manual reconcile failed")
 			}
 
-			// Reset trigger in ConfigMap
+			// Reset the trigger
 			cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
-			if err := r.Update(context.Background(), cm); err != nil {
+			if err := r.Update(ctx, cm); err != nil {
 				logger.Log.Error(err, "Failed to reset GLOBAL_OPT_TRIGGER")
 			}
 		}
 
-		r.mu.Lock()
+		// Handle interval change
 		if interval != lastInterval {
-			// Stop previous ticker if any
-			if r.stopTicker != nil {
-				close(r.stopTicker)
-			}
-
 			if interval != "" {
-				d, err := time.ParseDuration(interval)
+				dur, err := time.ParseDuration(interval)
 				if err != nil {
 					logger.Log.Error(err, "Invalid GLOBAL_OPT_INTERVAL")
-					r.mu.Unlock()
+					time.Sleep(10 * time.Second)
 					return err
 				}
-
-				r.stopTicker = make(chan struct{})
-				ticker := time.NewTicker(d)
-				r.ticker = ticker
-
-				go func(stopCh <-chan struct{}, tick <-chan time.Time) {
-					for {
-						select {
-						case <-tick:
-							_, err := r.Reconcile(ctx, ctrl.Request{})
-							if err != nil {
-								logger.Log.Error(err, "Manual reconcile failed")
-							}
-						case <-stopCh:
-							return
-						case <-ctx.Done():
-							logger.Log.Info("Context cancelled, stopping ticker loop")
-							return
-						}
-					}
-				}(r.stopTicker, ticker.C)
-
-				logger.Log.Info("Started periodic optimization ticker", "interval", interval)
+				intervalDuration = dur
+				logger.Log.Info("Updated periodic optimization interval", "interval", interval)
 			} else {
-				r.ticker = nil
+				intervalDuration = 0
 				logger.Log.Info("GLOBAL_OPT_INTERVAL unset, disabling periodic optimization")
 			}
 			lastInterval = interval
+			lastTick = time.Time{} // Reset ticker
 		}
-		r.mu.Unlock()
+
+		// Run periodic reconcile
+		if intervalDuration > 0 && time.Since(lastTick) >= intervalDuration {
+			_, err := r.Reconcile(ctx, ctrl.Request{})
+			if err != nil {
+				logger.Log.Error(err, "Periodic reconcile failed")
+			} else {
+				lastTick = time.Now()
+			}
+		}
 
 		time.Sleep(10 * time.Second)
 	}

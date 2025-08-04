@@ -77,7 +77,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	promAPI promv1.API) (llmdVariantAutoscalingV1alpha1.Allocation, error) {
 
 	deployNamespace := deployment.Namespace
-	modelName := opt.Labels["inference.optimization/modelName"]
+	modelName := opt.Spec.ModelID
 
 	// Setup Prometheus client
 	// TODO: agree on using standard vllm metrics

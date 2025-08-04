@@ -8,7 +8,7 @@ data:
     name: Premium
     priority: 1
     data:
-      - model: default
+      - model: default/default
         slo-itl: 24
         slo-ttw: 500
       - model: llama0-70b

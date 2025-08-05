@@ -122,6 +122,23 @@ vllme-deployment   default   A100          1                 1           4m31s
 cd hack/vllme/vllm_emulator
 pip install -r requirements.txt # if not already installed
 python loadgen.py
+
+# Default parameters
+# Starting load generator with deterministic mode
+# Server Address: http://localhost:8000/v1
+# Request Rate = 60.0
+# Model: gpt-1337-turbo-pro-max
+# Content Length: 150
+
+# for deterministic dynamically changing rate
+python loadgen.py --model default  --rate '[[120, 60], [120, 80]]' --url http://localhost:8000/v1
+
+# First 120 seconds (2 minutes): Send 60 requests per minute
+# Next 120 seconds (2 minutes): Send 80 requests per minute
+# Can use any combination of rates such as [[120, 60], [120, 80], [120, 40]]
+
+# for poisson arrivals
+python loadgen.py --model default --seed 42 --rate '[[120, 60], [120, 80], [120, 40]]' --mode poisson --url http://localhost:8000/v1
 ```
 
 - To request the port-forwarded gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]

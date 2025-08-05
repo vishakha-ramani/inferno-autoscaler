@@ -148,7 +148,7 @@ def main():
     parser.add_argument(
         "--url",
         type=str,
-        default="http://localhost:30000/v1",
+        default="http://localhost:8000/v1",
         help="Base URL for the OpenAI-compatible server (default: http://localhost:30000/v1)"
     )
     parser.add_argument(
@@ -177,7 +177,7 @@ def main():
     parser.add_argument(
         "--rate",
         type=parse_request_rate,
-        default=float("inf"),
+        default=float("60"), # Default to 60 requests per minute
         help=(
             "Number of requests per second. Can be either:\n"
             "  - A single float (e.g., '4.0') for a constant rate.\n"

@@ -1,5 +1,15 @@
-# inferno-autoscaler
+<p style="font-size: 25px" align="center"><b>Inferno-Autoscaler</b></p>
+
 The inferno-autoscaler assigns GPU types to inference model servers and decides on the number of replicas for each model for a given request traffic load and classes of service, as well as the batch size.
+
+**Table of contents**
+
+- [Description](#description)
+- [Getting Started](#getting-started)
+  - [Building & deploying inferno with llmd infrastructure](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
+  - [Building & deploying inferno in emulated mode](#details-on-emulated-mode-deployment-on-kind)
+- [Contributing](#contributing)
+
 
 ## Description
 
@@ -33,12 +43,15 @@ For more details please refer to the community proposal [here](https://docs.goog
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
-## Quickstart guide: installing llm-d along with Inferno-autoscaler emulated deployment on Kind
+## Quickstart Guide: Installation of Inferno-autoscaler along with llm-d infrastructure emulated deployment on a Kind cluster
 
 Use this target to spin up a local test environment integrated with llm-d core components:
 
 ```sh
 make deploy-llm-d-inferno-emulated-on-kind
+
+# prebuilt image
+# IMG=quay.io/infernoautoscaler/inferno-controller:latest
 ```
 
 This target deploys an environment ready for testing, integrating the llm-d infrastructure and the Inferno-autoscaler.
@@ -48,6 +61,24 @@ The default set up:
 - Includes the Inferno autoscaler
 - Installs the [llm-d core infrastructure for simulation purposes](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/sim/README.md)
 - Includes vLLM emulator and load generator (OpenAI-based)
+
+**Optionally: Build and push your image to the location specified by `IMG`:**
+
+```sh
+make docker-build docker-push IMG=<some-registry>/inferno-controller:tag
+```
+
+Cross-platform or multi-arch images can be built using `make docker-buildx`. When using Docker as your container tool, make
+sure to create a builder instance. Refer to [Multi-platform images](https://docs.docker.com/build/building/multi-platform/)
+for documentation on building mutli-platform images with Docker. You can change the destination platform(s) by setting `PLATFORMS`, e.g.:
+
+```sh
+PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
+
+# prebuilt image
+# IMG=quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch
+# Built for: linux/arm64, linux/amd64, linux/s390x, linux/ppc64le
+```
 
 To curl the Gateway:
 1. Find the gateway service:
@@ -59,15 +90,15 @@ infra-sim-inference-gateway   NodePort    10.96.1.46     <none>        80:31214/
 vllme-service                 NodePort    10.96.90.51    <none>        80:30000/TCP        4m3s
 ```
 
-2. Then `port-forward` the gateway service to we can curl it:
+2. Then `port-forward` the gateway service:
 ```sh
 kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
 ```
 
-**Note**: since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
+**Note**: Since the environment uses vllm-emulator, the **Criticality** parameter is set to `critical` for emulation purposes.
 
 ### Showing Inferno-autoscaler scaling replicas up and down
-1. Target the deployed vLLM-emulator servers by deploying the VariantAutoscaling object:
+1. Target the deployed vLLM-emulator servers by deploying the VariantAutoscaling (Va) object:
 ```sh
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 ``` 
@@ -217,17 +248,7 @@ make undeploy-llm-d-inferno-emulated-on-kind
 
 - Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).
 
-### Deploy on the cluster
-
-**Build and push your image to the location specified by `IMG`:**
-
-```sh
-make docker-build docker-push IMG=<some-registry>/inferno-controller:tag
-```
-
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+### Deployment
 
 Use this target to spin up a complete local test environment:
 

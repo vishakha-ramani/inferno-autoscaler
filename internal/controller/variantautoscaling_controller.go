@@ -35,8 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
 	actuator "github.com/llm-d-incubation/inferno-autoscaler/internal/actuator"
 	collector "github.com/llm-d-incubation/inferno-autoscaler/internal/collector"
@@ -88,17 +86,63 @@ func initMetricsEmitter() {
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	interval, trigger, err := r.readOptimizationConfig(ctx)
+	if err != nil {
+		logger.Log.Error(err, "Unable to read optimization config")
+		return ctrl.Result{}, err
+	}
+
+	backoff := wait.Backoff{
+		Duration: 500 * time.Millisecond,
+		Factor:   2.0,
+		Steps:    5,
+	}
+
+	if trigger == "true" {
+		logger.Log.Info("Manual optimization trigger received")
+		// Reset the trigger
+		err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+			cm := &corev1.ConfigMap{}
+			if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: configMapNamespace}, cm); err != nil {
+				logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
+				return false, nil // retry
+			}
+
+			cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
+			if err := r.Update(ctx, cm); err != nil {
+				logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
+				return false, nil // retry
+			}
+
+			return true, nil // success
+		})
+
+		if err != nil {
+			logger.Log.Error(err, "Failed to reset GLOBAL_OPT_TRIGGER after retries")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// default requeue duration
+	requeueDuration := 60 * time.Second
+
+	if interval != "" {
+		if requeueDuration, err = time.ParseDuration(interval); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimizing")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", "default")
 	if err != nil {
 		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimizing")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
@@ -150,22 +194,23 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
 	logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
 	logger.Log.Debug("Optimized allocation map", "keys", len(optimizedAllocation), "updateList_count", len(updateList.Items))
 	for key, value := range optimizedAllocation {
-		logger.Log.Debug("Optimized allocation entry", "key", key, "value", value)
+		logger.Log.Debug("Optimized allocation entry ", "key: ", key, "value: ", value)
 	}
 
 	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
-		// If we fail to apply optimized allocations, we log the error but do not return it.
-		// In next tick, the controller will retry.
+		// If we fail to apply optimized allocations, we log the error
+		// In next reconcile, the controller will retry.
 		logger.Log.Error(err, "failed to apply optimized allocations")
+		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: requeueDuration}, nil
 }
 
 // filterActiveVariantAutoscalings returns only those VAs not marked for deletion.
@@ -449,23 +494,6 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
 
-	// Start watching ConfigMap and ticker logic
-	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		select {
-		case <-ctx.Done():
-			// Controller shutdown before becoming leader
-			logger.Log.Info("Shutdown before leader election")
-			return nil
-		case <-mgr.Elected():
-			// Now leader — safe to run loop
-			logger.Log.Info("Elected as leader, starting optimization loop")
-			err := r.watchAndRunLoop(ctx)
-			return err
-		}
-	})); err != nil {
-		return fmt.Errorf("failed to add watchAndRunLoop: %w", err)
-	}
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
 		Watches(
@@ -480,6 +508,20 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				DeleteFunc:  func(_ event.DeleteEvent) bool { return false },
 				GenericFunc: func(_ event.GenericEvent) bool { return false },
 			}), // never trigger reconciliation
+		).
+		// Watch the specific ConfigMap to trigger global reconcile
+		Watches(
+			&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				if obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace {
+					return []reconcile.Request{{}}
+				}
+				return nil
+			}),
+			// Predicate to filter only the target configmap
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace
+			})),
 		).
 		Named("variantAutoscaling").
 		WithEventFilter(predicate.Funcs{
@@ -497,82 +539,6 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 			},
 		}).
 		Complete(r)
-}
-
-func (r *VariantAutoscalingReconciler) watchAndRunLoop(ctx context.Context) error {
-	var lastInterval string
-	var lastTick time.Time
-	var intervalDuration time.Duration
-
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Info("Context cancelled, stopping watch loop")
-			return nil
-		default:
-			// Continue
-		}
-
-		cm := &corev1.ConfigMap{}
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      configMapName,
-			Namespace: configMapNamespace,
-		}, cm)
-		if err != nil {
-			logger.Log.Error(err, "Unable to read optimization config")
-			time.Sleep(10 * time.Second)
-			return err
-		}
-
-		interval := cm.Data["GLOBAL_OPT_INTERVAL"]
-		trigger := cm.Data["GLOBAL_OPT_TRIGGER"]
-
-		// Handle manual trigger
-		if trigger == "true" {
-			logger.Log.Info("Manual optimization trigger received")
-			_, err := r.Reconcile(ctx, ctrl.Request{})
-			if err != nil {
-				logger.Log.Error(err, "Manual reconcile failed")
-			}
-
-			// Reset the trigger
-			cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
-			if err := r.Update(ctx, cm); err != nil {
-				logger.Log.Error(err, "Failed to reset GLOBAL_OPT_TRIGGER")
-			}
-		}
-
-		// Handle interval change
-		if interval != lastInterval {
-			if interval != "" {
-				dur, err := time.ParseDuration(interval)
-				if err != nil {
-					logger.Log.Error(err, "Invalid GLOBAL_OPT_INTERVAL")
-					time.Sleep(10 * time.Second)
-					return err
-				}
-				intervalDuration = dur
-				logger.Log.Info("Updated periodic optimization interval", "interval", interval)
-			} else {
-				intervalDuration = 0
-				logger.Log.Info("GLOBAL_OPT_INTERVAL unset, disabling periodic optimization")
-			}
-			lastInterval = interval
-			lastTick = time.Time{} // Reset ticker
-		}
-
-		// Run periodic reconcile
-		if intervalDuration > 0 && time.Since(lastTick) >= intervalDuration {
-			_, err := r.Reconcile(ctx, ctrl.Request{})
-			if err != nil {
-				logger.Log.Error(err, "Periodic reconcile failed")
-			} else {
-				lastTick = time.Now()
-			}
-		}
-
-		time.Sleep(10 * time.Second)
-	}
 }
 
 func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Context, cmName, cmNamespace string) (map[string]string, error) {
@@ -675,4 +641,38 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 	defaultAddr := "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
 	logger.Log.Info("Using default Prometheus address", "address", defaultAddr)
 	return defaultAddr, nil
+}
+
+func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, trigger string, err error) {
+	var cm *corev1.ConfigMap
+
+	backoff := wait.Backoff{
+		Duration: 500 * time.Millisecond,
+		Factor:   2.0,
+		Steps:    5,
+	}
+
+	err = wait.ExponentialBackoff(backoff, func() (bool, error) {
+		temp := &corev1.ConfigMap{}
+		getErr := r.Get(ctx, types.NamespacedName{
+			Name:      configMapName,
+			Namespace: configMapNamespace,
+		}, temp)
+
+		if getErr != nil {
+			logger.Log.Error(getErr, "Retrying fetch of optimization configmap")
+			return false, nil // retry
+		}
+
+		cm = temp
+		return true, nil
+	})
+
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get optimization configmap after retries: %w", err)
+	}
+
+	interval = cm.Data["GLOBAL_OPT_INTERVAL"]
+	trigger = cm.Data["GLOBAL_OPT_TRIGGER"]
+	return interval, trigger, nil
 }

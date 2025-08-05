@@ -133,13 +133,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
-	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", "default")
+	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
 	if err != nil {
 		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimizing")
 		return ctrl.Result{}, err
 	}
 
-	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", "default")
+	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
 	if err != nil {
 		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimizing")
 		return ctrl.Result{}, err

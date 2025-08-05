@@ -136,9 +136,6 @@ python loadgen.py --model default  --rate '[[120, 60], [120, 80]]' --url http://
 # First 120 seconds (2 minutes): Send 60 requests per minute
 # Next 120 seconds (2 minutes): Send 80 requests per minute
 # Can use any combination of rates such as [[120, 60], [120, 80], [120, 40]]
-
-# for poisson arrivals
-python loadgen.py --model default --seed 42 --rate '[[120, 60], [120, 80], [120, 40]]' --mode poisson --url http://localhost:8000/v1
 ```
 
 - To request the port-forwarded gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]

@@ -47,7 +47,7 @@ func CollectInventoryK8S(ctx context.Context, r client.Client) (map[string]map[s
 				// found a GPU of this vendor
 				mem := node.Labels[memKey]
 				count := 0
-				if cap, ok := node.Status.Capacity[corev1.ResourceName(vendor+"/gpu")]; ok {
+				if cap, ok := node.Status.Allocatable[corev1.ResourceName(vendor+"/gpu")]; ok {
 					count = int(cap.Value())
 				}
 				if inv[nodeName] == nil {

@@ -101,4 +101,4 @@ echo "kubectl port-forward -n $LLMD_NAMESPACE svc/$INFRA_RELEASE_NAME-inference-
 echo ">>> Then launch the load generator:"
 echo "cd $PROJ_ROOT_DIR/hack/vllme/vllm_emulator"
 echo "pip install -r requirements.txt"
-echo "python loadgen.py --model vllm  --rate '[[120, 40], [120, 50]]' --url http://localhost:8000/v1"
+echo "python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50"

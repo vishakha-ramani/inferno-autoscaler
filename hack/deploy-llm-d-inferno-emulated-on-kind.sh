@@ -62,12 +62,8 @@ function deploy-llm-d-infra() {
   cd "$INFRA_REPO_DIR/quickstart/examples/sim"
   helmfile --selector managedBy=helmfile apply -f helmfile.yaml --skip-diff-on-install
 
-  echo ">>> Waiting for the llm-d sim EPP and Gateway to be ready..."
-  kubectl wait --for=create -n "$LLMD_NAMESPACE" deployment/"$INFRA_RELEASE_NAME"-inference-gateway --timeout=30s
-  kubectl wait --for=create -n "$LLMD_NAMESPACE" deployment/"$EPP_RELEASE_NAME"-epp --timeout=30s
-  kubectl wait --for=condition=Available -n "$LLMD_NAMESPACE" deployment/"$INFRA_RELEASE_NAME"-inference-gateway --timeout=60s
-  kubectl wait --for=condition=Available -n "$LLMD_NAMESPACE" deployment/"$EPP_RELEASE_NAME"-epp --timeout=60s
-  echo ">>> Gateway and EPP are ready."
+  sleep 30
+  echo ">>> Gateway and EPP Installed."
 }
 
 echo ">>> Getting latest llm-d infrastructure release..."

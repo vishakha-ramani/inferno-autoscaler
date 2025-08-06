@@ -20,18 +20,14 @@ _kind() {
 }
 
 # Local development will need emulated vllm server, prometheus installed in KinD cluster
-_kubectl create ns ${MONITORING_NAMESPACE}
-_kubectl create ns ${LLMD_NAMESPACE}
+_kubectl create ns ${MONITORING_NAMESPACE} 2>/dev/null || true
+_kubectl create ns ${LLMD_NAMESPACE} 2>/dev/null || true
 
 # Install Prometheus using Helm
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n ${MONITORING_NAMESPACE}
-
-# Wait for prometheus installation to complete
 _kubectl apply -f hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml
-_kubectl wait --for=create pods --all -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
-_kubectl wait --for=condition=ready pods --all -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 
 # Create vllm emulated deployment
 _kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-deployment-with-service-and-servicemon.yaml

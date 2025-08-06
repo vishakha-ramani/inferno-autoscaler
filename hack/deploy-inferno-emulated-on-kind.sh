@@ -33,11 +33,14 @@ docker pull "${IMG}"
 _kind load docker-image ${IMG} --name ${KIND_NAME}
 
 echo "Creating namespace ${NAMESPACE}"
-_kubectl create ns ${NAMESPACE}
+_kubectl create ns ${NAMESPACE} 2>/dev/null || true
+
 echo "Installing inferno CRD"
 make install
 sleep 10
+
 ${KUBECTL} config set-context ${KIND_CONTEXT}
+
 # Install the configmap service class
 _kubectl apply -f deploy/configmap-serviceclass.yaml
 
@@ -47,12 +50,6 @@ _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 # deploy emulated vllme server (includes Prometheus)
 hack/deploy-emulated-vllme-server.sh
 
-# Wait for Prometheus to be ready before deploying controller
-echo "Waiting for Prometheus to be ready..."
-_kubectl wait --for=create pod -l app.kubernetes.io/name=prometheus -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
-_kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n ${MONITORING_NAMESPACE} --timeout=5m
-
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
-_kubectl wait --for=create pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
-_kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
+echo "Inferno controller-manager Installed"

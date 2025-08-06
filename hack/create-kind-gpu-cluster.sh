@@ -11,6 +11,7 @@ DEFAULT_GPUS_PER_NODE=2
 DEFAULT_GPU_TYPE="mix"
 DEFAULT_GPU_MODEL="NVIDIA-A100-PCIE-80GB"
 DEFAULT_GPU_MEMORY=81920
+DEFAULT_K8S_VERSION="v1.32.0"
 
 # Initialize variables
 cluster_name="$DEFAULT_CLUSTER_NAME"
@@ -19,6 +20,7 @@ gpus_per_node="$DEFAULT_GPUS_PER_NODE"
 gpu_type="$DEFAULT_GPU_TYPE"
 gpu_model="$DEFAULT_GPU_MODEL"
 gpu_memory="$DEFAULT_GPU_MEMORY"
+k8s_version="${K8S_VERSION:-$DEFAULT_K8S_VERSION}"
 
 # --------------------------------------------------------------------
 # Cleanup on exit
@@ -49,6 +51,9 @@ Options:
     -d MODEL           GPU model (default: $DEFAULT_GPU_MODEL)
     -m MEMORY          GPU memory in MB (default: $DEFAULT_GPU_MEMORY)
     -h                 Show this help message
+
+Environment Variables:
+    K8S_VERSION        Kubernetes version to use (default: $DEFAULT_K8S_VERSION)
 EOF
 }
 
@@ -88,13 +93,15 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
+  image: kindest/node:${k8s_version}
 EOF
 
 for ((i=1; i<nodes; i++)); do
     echo "- role: worker" >> kind-config.yaml
+    echo "  image: kindest/node:${k8s_version}" >> kind-config.yaml
 done
 
-kind create cluster --name "${cluster_name}" --config kind-config.yaml --image kindest/node:v1.30.0
+kind create cluster --name "${cluster_name}" --config kind-config.yaml
 
 control_plane_node="${cluster_name}-control-plane"
 echo "[2/6] Waiting for node ${control_plane_node} to be ready..."

@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: vllme
-        image: quay.io/infernoautoscaler/vllme:0.2.1
+        image: quay.io/infernoautoscaler/vllme:0.2.1-multi-arch
         imagePullPolicy: Always
         env: 
         - name: MODEL_NAME

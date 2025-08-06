@@ -94,7 +94,7 @@ for ((i=1; i<nodes; i++)); do
     echo "- role: worker" >> kind-config.yaml
 done
 
-kind create cluster --name "${cluster_name}" --config kind-config.yaml
+kind create cluster --name "${cluster_name}" --config kind-config.yaml --image kindest/node:v1.30.0
 
 control_plane_node="${cluster_name}-control-plane"
 echo "[2/6] Waiting for node ${control_plane_node} to be ready..."

@@ -88,6 +88,7 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
+  image: kindest/node:v1.28.0
 EOF
 
 for ((i=1; i<nodes; i++)); do

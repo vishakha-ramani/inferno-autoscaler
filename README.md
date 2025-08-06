@@ -101,6 +101,8 @@ vllme-service                 NodePort    10.96.90.51    <none>        80:30000/
 ```
 
 2. Then `port-forward` the gateway service:
+
+**Note**: Make sure the `infra-sim-inference-gateway` pod is in running state
 ```sh
 kubectl port-forward -n llm-d-sim service/infra-sim-inference-gateway 8000:80
 ```

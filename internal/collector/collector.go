@@ -90,7 +90,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 			arrivalVal = float64(vec[0].Value)
 		}
 		if warn != nil {
-			logger.Log.Warn("Prometheus warnings", "warnings", warn)
+			logger.Log.Warn("Prometheus warnings - ", "warnings: ", warn)
 		}
 	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
@@ -122,7 +122,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 			waitAverageTime = float64(vec[0].Value) * 1000 //msec
 		}
 	} else {
-		logger.Log.Warn("failed to get avg wait time, using 0", "model", modelName)
+		logger.Log.Warn("failed to get avg wait time, using 0: ", "model: ", modelName)
 	}
 	FixValue(&waitAverageTime)
 
@@ -136,7 +136,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 			itlAverage = float64(vec[0].Value) * 1000 //msec
 		}
 	} else {
-		logger.Log.Warn("failed to get avg itl time, using 0", "model", modelName)
+		logger.Log.Warn("failed to get avg itl time, using 0: ", "model: ", modelName)
 	}
 	FixValue(&itlAverage)
 
@@ -147,7 +147,7 @@ func AddMetricsToOptStatus(ctx context.Context,
 	acc := ""
 	var ok bool
 	if acc, ok = opt.Labels["inference.optimization/acceleratorName"]; !ok {
-		logger.Log.Warn("acceleratorName label not found on deployment", "deployment", deployment.Name)
+		logger.Log.Warn("acceleratorName label not found on deployment - ", "deployment-name: ", deployment.Name)
 	}
 
 	// cost

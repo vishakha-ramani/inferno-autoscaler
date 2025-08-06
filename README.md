@@ -133,7 +133,7 @@ vllme-deployment   default/default   A100          1                 1          
 ```sh
 cd hack/vllme/vllm_emulator
 pip install -r requirements.txt # if not already installed
-python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50
+python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 100
 
 # Default parameters
 # Starting load generator with deterministic mode
@@ -153,46 +153,56 @@ python loadgen.py --model vllm  --rate '[[120, 60], [120, 80]]' --url http://loc
 - To request the port-forwarded gateway, use **--url http://localhost:8000/v1**
 - To request the vLLM emulator servers, insert: "**--model vllm**"
 
-1. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and content length (such as **RPM=40** and **content length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
+4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and content length (such as **RPM=40** and **content length** equal to **100**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
 
 ```sh
 kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager
 #...
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
-{"level":"INFO","ts":"2025-08-04T19:18:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65} {A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {22.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=22.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=0, servTime=21.555601, waitTime=110.798096, rho=0.7630596}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:18:16.484006425 +0000 UTC m=+1380.284253535 A100 1}"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
-{"level":"INFO","ts":"2025-08-04T19:18:16.487Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 1"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"EmitReplicaMetrics completed"}
-{"level":"INFO","ts":"2025-08-04T19:18:16.493Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.493Z","msg":"Completed variant processing loop"}
-{"level":"INFO","ts":"2025-08-04T19:18:16.493Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
-# New round:
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
-{"level":"INFO","ts":"2025-08-04T19:19:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {44 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=44; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=40, servTime=21.540192, waitTime=99.1626, rho=0.7524011}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization completed successfully, emitting optimization metrics"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation mapkeys1updateList_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:19:16.48370162 +0000 UTC m=+1440.283948730 A100 2}"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
-{"level":"INFO","ts":"2025-08-04T19:19:16.488Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 2"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"EmitReplicaMetrics completed"}
-{"level":"INFO","ts":"2025-08-04T19:19:16.494Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.494Z","msg":"Completed variant processing loop"}
-{"level":"INFO","ts":"2025-08-04T19:19:16.494Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+2025-08-06T23:31:26.139995629Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.139Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+2025-08-06T23:31:26.140015545Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.139Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+2025-08-06T23:31:26.140017129Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.139Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+2025-08-06T23:31:26.140022254Z {"level":"INFO","ts":"2025-08-06T23:31:26.139Z","msg":"Found SLO for model - model: default/default, class: Premium, slo-itl: 24, slo-ttw: 500"}
+2025-08-06T23:31:26.142040795Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.141Z","msg":"System data prepared for optimization: - { count: [  {   type: NVIDIA-A100-PCIE-80GB,   count: 2  },  {   type: AMD-MI300X-192G,   count: 2  },  {   type: Intel-Gaudi-2-96GB,   count: 2  } ]}"}
+2025-08-06T23:31:26.142069962Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.141Z","msg":"System data prepared for optimization: - { accelerators: [  {   name: A100,   type: NVIDIA-A100-PCIE-80GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 40  },  {   name: G2,   type: Intel-Gaudi-2-96GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 23  },  {   name: MI300X,   type: AMD-MI300X-192GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 65  } ]}"}
+2025-08-06T23:31:26.142073545Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"System data prepared for optimization: - { serviceClasses: [  {   name: Freemium,   model: granite-13b,   priority: 10,   slo-itl: 200,   slo-ttw: 2000,   slo-tps: 0  },  {   name: Freemium,   model: llama0-7b,   priority: 10,   slo-itl: 150,   slo-ttw: 1500,   slo-tps: 0  },  {   name: Premium,   model: default/default,   priority: 1,   slo-itl: 24,   slo-ttw: 500,   slo-tps: 0  },  {   name: Premium,   model: llama0-70b,   priority: 1,   slo-itl: 80,   slo-ttw: 500,   slo-tps: 0  } ]}"}
+2025-08-06T23:31:26.142080629Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"System data prepared for optimization: - { models: [  {   name: default/default,   acc: A100,   accCount: 1,   alpha: 20.58,   beta: 0.41,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: MI300X,   accCount: 1,   alpha: 7.77,   beta: 0.15,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: G2,   accCount: 1,   alpha: 17.15,   beta: 0.34,   maxBatchSize: 4,   atTokens: 128  } ]}"}
+2025-08-06T23:31:26.142083754Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"System data prepared for optimization: - { optimizer: {  unlimited: false,  heterogeneous: false }}"}
+2025-08-06T23:31:26.142105212Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"System data prepared for optimization: - { servers: [  {   name: vllme-deployment:llm-d-sim,   class: Premium,   model: default/default,   keepAccelerator: true,   minNumReplicas: 1,   maxBatchSize: 4,   currentAlloc: {    accelerator: A100,    numReplicas: 1,    maxBatch: 256,    cost: 40,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   },   desiredAlloc: {    accelerator: ,    numReplicas: 0,    maxBatch: 0,    cost: 0,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   }  } ]}"}
+2025-08-06T23:31:26.142208837Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Optimization solution - system: Solution: \nc=Premium; m=default/default; rate=0; tk=0; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=0, servTime=20.99, waitTime=0, rho=0}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+2025-08-06T23:31:26.142222212Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+2025-08-06T23:31:26.142223295Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Optimized allocation map - numKeys: 1, updateList_count: 1"}
+2025-08-06T23:31:26.142224754Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Optimized allocation entry - key: vllme-deployment, value: {2025-08-06 23:31:26.142137212 +0000 UTC m=+387.845486645 A100 1}"}
+2025-08-06T23:31:26.142225754Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Optimization metrics emitted, starting to process variants - variant_count: 1"}
+2025-08-06T23:31:26.142226545Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.142Z","msg":"Processing variant - index: 0, variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim, has_optimized_alloc: true"}
+2025-08-06T23:31:26.145731920Z {"level":"INFO","ts":"2025-08-06T23:31:26.145Z","msg":"Patched Deployment: name: vllme-deployment, num-replicas: 1"}
+2025-08-06T23:31:26.151932254Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.151Z","msg":"EmitReplicaMetrics completed"}
+2025-08-06T23:31:26.151941254Z {"level":"INFO","ts":"2025-08-06T23:31:26.151Z","msg":"Emitted metrics for variantAutoscaling - variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim"}
+2025-08-06T23:31:26.151942462Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.151Z","msg":"EmitMetrics call completed successfully for variantAutoscaling - variantAutoscaling-name: vllme-deployment"}
+2025-08-06T23:31:26.151943379Z {"level":"DEBUG","ts":"2025-08-06T23:31:26.151Z","msg":"Completed variant processing loop"}
+2025-08-06T23:31:26.151945212Z {"level":"INFO","ts":"2025-08-06T23:31:26.151Z","msg":"Reconciliation completed - variants_processed: 1, optimization_successful: true"}
+# New reconciliation round:
+2025-08-06T23:32:26.152241949Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.152Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+2025-08-06T23:32:26.152258199Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.152Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+2025-08-06T23:32:26.152259574Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.152Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+2025-08-06T23:32:26.152261282Z {"level":"INFO","ts":"2025-08-06T23:32:26.152Z","msg":"Found SLO for model - model: default/default, class: Premium, slo-itl: 24, slo-ttw: 500"}
+2025-08-06T23:32:26.154625074Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { count: [  {   type: NVIDIA-A100-PCIE-80GB,   count: 2  },  {   type: AMD-MI300X-192G,   count: 2  },  {   type: Intel-Gaudi-2-96GB,   count: 2  } ]}"}
+2025-08-06T23:32:26.154632824Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { accelerators: [  {   name: G2,   type: Intel-Gaudi-2-96GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 23  },  {   name: MI300X,   type: AMD-MI300X-192GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 65  },  {   name: A100,   type: NVIDIA-A100-PCIE-80GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 40  } ]}"}
+2025-08-06T23:32:26.154643657Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { serviceClasses: [  {   name: Premium,   model: default/default,   priority: 1,   slo-itl: 24,   slo-ttw: 500,   slo-tps: 0  },  {   name: Premium,   model: llama0-70b,   priority: 1,   slo-itl: 80,   slo-ttw: 500,   slo-tps: 0  },  {   name: Freemium,   model: granite-13b,   priority: 10,   slo-itl: 200,   slo-ttw: 2000,   slo-tps: 0  },  {   name: Freemium,   model: llama0-7b,   priority: 10,   slo-itl: 150,   slo-ttw: 1500,   slo-tps: 0  } ]}"}
+2025-08-06T23:32:26.154647366Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { models: [  {   name: default/default,   acc: A100,   accCount: 1,   alpha: 20.58,   beta: 0.41,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: MI300X,   accCount: 1,   alpha: 7.77,   beta: 0.15,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: G2,   accCount: 1,   alpha: 17.15,   beta: 0.34,   maxBatchSize: 4,   atTokens: 128  } ]}"}
+2025-08-06T23:32:26.154650407Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { optimizer: {  unlimited: false,  heterogeneous: false }}"}
+2025-08-06T23:32:26.154702032Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"System data prepared for optimization: - { servers: [  {   name: vllme-deployment:llm-d-sim,   class: Premium,   model: default/default,   keepAccelerator: true,   minNumReplicas: 1,   maxBatchSize: 4,   currentAlloc: {    accelerator: A100,    numReplicas: 1,    maxBatch: 256,    cost: 40,    itlAverage: 20,    waitAverage: 0,    load: {     arrivalRate: 20,     avgLength: 228,     arrivalCOV: 0,     serviceCOV: 0    }   },   desiredAlloc: {    accelerator: ,    numReplicas: 0,    maxBatch: 0,    cost: 0,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   }  } ]}"}
+2025-08-06T23:32:26.154796032Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Optimization solution - system: Solution: \nc=Premium; m=default/default; rate=20; tk=228; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=40, servTime=21.317732, waitTime=17.216309, rho=0.55267274}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+2025-08-06T23:32:26.154799074Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+2025-08-06T23:32:26.154799949Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Optimized allocation map - numKeys: 1, updateList_count: 1"}
+2025-08-06T23:32:26.154801116Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Optimized allocation entry - key: vllme-deployment, value: {2025-08-06 23:32:26.154735407 +0000 UTC m=+447.858084798 A100 2}"}
+2025-08-06T23:32:26.154803074Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Optimization metrics emitted, starting to process variants - variant_count: 1"}
+2025-08-06T23:32:26.154803866Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.154Z","msg":"Processing variant - index: 0, variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim, has_optimized_alloc: true"}
+2025-08-06T23:32:26.163030824Z {"level":"INFO","ts":"2025-08-06T23:32:26.162Z","msg":"Patched Deployment: name: vllme-deployment, num-replicas: 2"}
+2025-08-06T23:32:26.170715241Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.170Z","msg":"EmitReplicaMetrics completed"}
+2025-08-06T23:32:26.170728241Z {"level":"INFO","ts":"2025-08-06T23:32:26.170Z","msg":"Emitted metrics for variantAutoscaling - variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim"}
+2025-08-06T23:32:26.170729324Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.170Z","msg":"EmitMetrics call completed successfully for variantAutoscaling - variantAutoscaling-name: vllme-deployment"}
+2025-08-06T23:32:26.170735991Z {"level":"DEBUG","ts":"2025-08-06T23:32:26.170Z","msg":"Completed variant processing loop"}
+2025-08-06T23:32:26.170736991Z {"level":"INFO","ts":"2025-08-06T23:32:26.170Z","msg":"Reconciliation completed - variants_processed: 1, optimization_successful: true"}
 ```
 
 Checking the deployments and the currently applied VAs: 
@@ -206,48 +216,58 @@ vllme-deployment              2/2     2            2           7m58s
 
 kubectl get variantautoscalings.llmd.ai -n llm-d-sim 
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
-vllme-deployment   default/default   A100          2                 2           6m31s
+vllme-deployment   default/default   A100          1                 2           6m31s
 ```
 
 5. **Scaling down**: by stopping the load generator script with a keyboard interrupt, we can see that the Inferno-autoscaler effectively scales down the replicas:
 ```sh
 kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager
 # ...
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
-{"level":"INFO","ts":"2025-08-04T19:20:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {37.76 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=37.76; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=0, servTime=21.466858, waitTime=56.422607, rho=0.6966711}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:20:16.484244316 +0000 UTC m=+1500.284491425 A100 2}"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
-{"level":"INFO","ts":"2025-08-04T19:20:16.487Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 2"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"EmitReplicaMetrics completed"}
-{"level":"INFO","ts":"2025-08-04T19:20:16.492Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.492Z","msg":"Completed variant processing loop"}
-{"level":"INFO","ts":"2025-08-04T19:20:16.492Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
-# New round:
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
-{"level":"INFO","ts":"2025-08-04T19:21:16.482Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0} {Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {2.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=2.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=-40, servTime=21.058374, waitTime=0.032958984, rho=0.15340477}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:21:16.484650177 +0000 UTC m=+1560.284897245 A100 1}"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization metrics emitted, starting to process variantsvariant_count1"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Processing variantindex0namevllme-deploymentnamespacellm-d-simhas_optimized_alloctrue"}
-{"level":"INFO","ts":"2025-08-04T19:21:16.490Z","msg":"Patched Deployment: name: vllme-deployment num-replicas: 1"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"EmitReplicaMetrics completed"}
-{"level":"INFO","ts":"2025-08-04T19:21:16.494Z","msg":"Emitted metrics for variantnamevllme-deploymentnamespacellm-d-sim"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"EmitMetrics call completed successfullynamevllme-deployment"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.494Z","msg":"Completed variant processing loop"}
-{"level":"INFO","ts":"2025-08-04T19:21:16.494Z","msg":"Reconciliation completedvariants_processed1optimization_successfultrue"}
+2025-08-06T23:33:26.171291853Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.171Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+2025-08-06T23:33:26.171304769Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.171Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+2025-08-06T23:33:26.171306186Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.171Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+2025-08-06T23:33:26.171338519Z {"level":"INFO","ts":"2025-08-06T23:33:26.171Z","msg":"Found SLO for model - model: default/default, class: Premium, slo-itl: 24, slo-ttw: 500"}
+2025-08-06T23:33:26.173425769Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { count: [  {   type: NVIDIA-A100-PCIE-80GB,   count: 2  },  {   type: AMD-MI300X-192G,   count: 2  },  {   type: Intel-Gaudi-2-96GB,   count: 2  } ]}"}
+2025-08-06T23:33:26.173956561Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { accelerators: [  {   name: A100,   type: NVIDIA-A100-PCIE-80GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 40  },  {   name: G2,   type: Intel-Gaudi-2-96GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 23  },  {   name: MI300X,   type: AMD-MI300X-192GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 65  } ]}"}
+2025-08-06T23:33:26.173962019Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { serviceClasses: [  {   name: Freemium,   model: granite-13b,   priority: 10,   slo-itl: 200,   slo-ttw: 2000,   slo-tps: 0  },  {   name: Freemium,   model: llama0-7b,   priority: 10,   slo-itl: 150,   slo-ttw: 1500,   slo-tps: 0  },  {   name: Premium,   model: default/default,   priority: 1,   slo-itl: 24,   slo-ttw: 500,   slo-tps: 0  },  {   name: Premium,   model: llama0-70b,   priority: 1,   slo-itl: 80,   slo-ttw: 500,   slo-tps: 0  } ]}"}
+2025-08-06T23:33:26.173963728Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { models: [  {   name: default/default,   acc: A100,   accCount: 1,   alpha: 20.58,   beta: 0.41,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: MI300X,   accCount: 1,   alpha: 7.77,   beta: 0.15,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: G2,   accCount: 1,   alpha: 17.15,   beta: 0.34,   maxBatchSize: 4,   atTokens: 128  } ]}"}
+2025-08-06T23:33:26.173965269Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { optimizer: {  unlimited: false,  heterogeneous: false }}"}
+2025-08-06T23:33:26.173967394Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"System data prepared for optimization: - { servers: [  {   name: vllme-deployment:llm-d-sim,   class: Premium,   model: default/default,   keepAccelerator: true,   minNumReplicas: 1,   maxBatchSize: 4,   currentAlloc: {    accelerator: A100,    numReplicas: 2,    maxBatch: 256,    cost: 80,    itlAverage: 20,    waitAverage: 0,    load: {     arrivalRate: 35.61,     avgLength: 228,     arrivalCOV: 0,     serviceCOV: 0    }   },   desiredAlloc: {    accelerator: ,    numReplicas: 0,    maxBatch: 0,    cost: 0,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   }  } ]}"}
+2025-08-06T23:33:26.173976478Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Optimization solution - system: Solution: \nc=Premium; m=default/default; rate=35.61; tk=228; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=0, servTime=21.558723, waitTime=145.10791, rho=0.7651774}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+2025-08-06T23:33:26.173977811Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+2025-08-06T23:33:26.173978686Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Optimized allocation map - numKeys: 1, updateList_count: 1"}
+2025-08-06T23:33:26.173979686Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Optimized allocation entry - key: vllme-deployment, value: {2025-08-06 23:33:26.173570394 +0000 UTC m=+507.876919827 A100 2}"}
+2025-08-06T23:33:26.173980853Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Optimization metrics emitted, starting to process variants - variant_count: 1"}
+2025-08-06T23:33:26.173981686Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.173Z","msg":"Processing variant - index: 0, variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim, has_optimized_alloc: true"}
+2025-08-06T23:33:26.179465894Z {"level":"INFO","ts":"2025-08-06T23:33:26.179Z","msg":"Patched Deployment: name: vllme-deployment, num-replicas: 2"}
+2025-08-06T23:33:26.182775436Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.182Z","msg":"EmitReplicaMetrics completed"}
+2025-08-06T23:33:26.182780978Z {"level":"INFO","ts":"2025-08-06T23:33:26.182Z","msg":"Emitted metrics for variantAutoscaling - variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim"}
+2025-08-06T23:33:26.182781978Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.182Z","msg":"EmitMetrics call completed successfully for variantAutoscaling - variantAutoscaling-name: vllme-deployment"}
+2025-08-06T23:33:26.182782811Z {"level":"DEBUG","ts":"2025-08-06T23:33:26.182Z","msg":"Completed variant processing loop"}
+2025-08-06T23:33:26.182784019Z {"level":"INFO","ts":"2025-08-06T23:33:26.182Z","msg":"Reconciliation completed - variants_processed: 1, optimization_successful: true"}
+# New reconciliation round:
+2025-08-06T23:34:26.183953423Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.183Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
+2025-08-06T23:34:26.183969506Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.183Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker , model - AMD-MI300X-192G , count - 2 , mem - 196608"}
+2025-08-06T23:34:26.183971006Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.183Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
+2025-08-06T23:34:26.184120256Z {"level":"INFO","ts":"2025-08-06T23:34:26.183Z","msg":"Found SLO for model - model: default/default, class: Premium, slo-itl: 24, slo-ttw: 500"}
+2025-08-06T23:34:26.186380464Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { count: [  {   type: NVIDIA-A100-PCIE-80GB,   count: 2  },  {   type: AMD-MI300X-192G,   count: 2  },  {   type: Intel-Gaudi-2-96GB,   count: 2  } ]}"}
+2025-08-06T23:34:26.186387881Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { accelerators: [  {   name: A100,   type: NVIDIA-A100-PCIE-80GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 40  },  {   name: G2,   type: Intel-Gaudi-2-96GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 23  },  {   name: MI300X,   type: AMD-MI300X-192GB,   multiplicity: 1,   memSize: 0,   memBW: 0,   power: {    idle: 0,    full: 0,    midPower: 0,    midUtil: 0   },   cost: 65  } ]}"}
+2025-08-06T23:34:26.186396548Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { serviceClasses: [  {   name: Freemium,   model: granite-13b,   priority: 10,   slo-itl: 200,   slo-ttw: 2000,   slo-tps: 0  },  {   name: Freemium,   model: llama0-7b,   priority: 10,   slo-itl: 150,   slo-ttw: 1500,   slo-tps: 0  },  {   name: Premium,   model: default/default,   priority: 1,   slo-itl: 24,   slo-ttw: 500,   slo-tps: 0  },  {   name: Premium,   model: llama0-70b,   priority: 1,   slo-itl: 80,   slo-ttw: 500,   slo-tps: 0  } ]}"}
+2025-08-06T23:34:26.186473589Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { models: [  {   name: default/default,   acc: A100,   accCount: 1,   alpha: 20.58,   beta: 0.41,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: MI300X,   accCount: 1,   alpha: 7.77,   beta: 0.15,   maxBatchSize: 4,   atTokens: 128  },  {   name: default/default,   acc: G2,   accCount: 1,   alpha: 17.15,   beta: 0.34,   maxBatchSize: 4,   atTokens: 128  } ]}"}
+2025-08-06T23:34:26.186476006Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { optimizer: {  unlimited: false,  heterogeneous: false }}"}
+2025-08-06T23:34:26.186477631Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"System data prepared for optimization: - { servers: [  {   name: vllme-deployment:llm-d-sim,   class: Premium,   model: default/default,   keepAccelerator: true,   minNumReplicas: 1,   maxBatchSize: 4,   currentAlloc: {    accelerator: A100,    numReplicas: 2,    maxBatch: 256,    cost: 80,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   },   desiredAlloc: {    accelerator: ,    numReplicas: 0,    maxBatch: 0,    cost: 0,    itlAverage: 0,    waitAverage: 0,    load: {     arrivalRate: 0,     avgLength: 0,     arrivalCOV: 0,     serviceCOV: 0    }   }  } ]}"}
+2025-08-06T23:34:26.186479131Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Optimization solution - system: Solution: \nc=Premium; m=default/default; rate=0; tk=0; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=-40, servTime=20.99, waitTime=0, rho=0}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+2025-08-06T23:34:26.186480381Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Optimization completed successfully, emitting optimization metrics"}
+2025-08-06T23:34:26.186481131Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Optimized allocation map - numKeys: 1, updateList_count: 1"}
+2025-08-06T23:34:26.186482548Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Optimized allocation entry - key: vllme-deployment, value: {2025-08-06 23:34:26.186409548 +0000 UTC m=+567.889758980 A100 1}"}
+2025-08-06T23:34:26.186484756Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Optimization metrics emitted, starting to process variants - variant_count: 1"}
+2025-08-06T23:34:26.186485548Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.186Z","msg":"Processing variant - index: 0, variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim, has_optimized_alloc: true"}
+2025-08-06T23:34:26.193515381Z {"level":"INFO","ts":"2025-08-06T23:34:26.192Z","msg":"Patched Deployment: name: vllme-deployment, num-replicas: 1"}
+2025-08-06T23:34:26.198893548Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.198Z","msg":"EmitReplicaMetrics completed"}
+2025-08-06T23:34:26.198910048Z {"level":"INFO","ts":"2025-08-06T23:34:26.198Z","msg":"Emitted metrics for variantAutoscaling - variantAutoscaling-name: vllme-deployment, namespace: llm-d-sim"}
+2025-08-06T23:34:26.198958964Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.198Z","msg":"EmitMetrics call completed successfully for variantAutoscaling - variantAutoscaling-name: vllme-deployment"}
+2025-08-06T23:34:26.198960756Z {"level":"DEBUG","ts":"2025-08-06T23:34:26.198Z","msg":"Completed variant processing loop"}
+2025-08-06T23:34:26.198961714Z {"level":"INFO","ts":"2025-08-06T23:34:26.198Z","msg":"Reconciliation completed - variants_processed: 1, optimization_successful: true"}
 ```
 
 This can be verified by checking the deployments and VA status too:
@@ -260,7 +280,7 @@ vllme-deployment              1/1     1            1           18m
 
 kubectl get variantautoscalings.llmd.ai -n llm-d-sim
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
-vllme-deployment   default/default   A100          1                 1           16m
+vllme-deployment   default/default   A100          2                 1           16m
 ```
 
 ### Uninstalling llm-d and Inferno-autoscaler 

@@ -135,13 +135,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
 	acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
 	if err != nil {
-		logger.Log.Error(err, "unable to read accelerator configmap, skipping optimizing")
+		logger.Log.Error(err, "unable to read accelerator configMap, skipping optimizing")
 		return ctrl.Result{}, err
 	}
 
 	serviceClassCm, err := r.readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
 	if err != nil {
-		logger.Log.Error(err, "unable to read serviceclass configmap, skipping optimizing")
+		logger.Log.Error(err, "unable to read serviceclass configMap, skipping optimizing")
 		return ctrl.Result{}, err
 	}
 
@@ -182,12 +182,17 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	for _, s := range system.Servers() {
 		modelAnalyzeResponse := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
 		if len(modelAnalyzeResponse.Allocations) == 0 {
-			logger.Log.Info("No allocations found for server", "serverName", s.Name())
+			logger.Log.Info("No allocations found for server - ", "serverName: ", s.Name())
 			continue
 		}
 		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
 	}
-	logger.Log.Debug("System data prepared for optimization: ", "systemData - ", systemData)
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Capacity))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Accelerators))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.ServiceClasses))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Models))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Optimizer))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Servers))
 
 	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
 
@@ -198,9 +203,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
-	logger.Log.Debug("Optimized allocation map", "keys", len(optimizedAllocation), "updateList_count", len(updateList.Items))
+	logger.Log.Debug("Optimized allocation map - ", "numKeys: ", len(optimizedAllocation), ", updateList_count: ", len(updateList.Items))
 	for key, value := range optimizedAllocation {
-		logger.Log.Debug("Optimized allocation entry ", "key: ", key, "value: ", value)
+		logger.Log.Debug("Optimized allocation entry - ", "key: ", key, ", value: ", value)
 	}
 
 	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
@@ -220,7 +225,7 @@ func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.Vari
 		if va.DeletionTimestamp.IsZero() {
 			active = append(active, va)
 		} else {
-			logger.Log.Info("skipping deleted VariantAutoscaling", "name", va.Name)
+			logger.Log.Info("skipping deleted variantAutoscaling - ", "variantAutoscaling-name: ", va.Name)
 		}
 	}
 	return active
@@ -247,20 +252,20 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 	for _, va := range activeVAs {
 		modelName := va.Spec.ModelID
 		if modelName == "" {
-			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization", "name", va.Name)
+			logger.Log.Info("variantAutoscaling missing modelName label, skipping optimization - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 
 		entry, className, err := findModelSLO(serviceClassCm, modelName)
 		if err != nil {
-			logger.Log.Error(err, "failed to locate SLO for model", "variantAutoscaling-name", va.Name, "modelName", modelName)
+			logger.Log.Error(err, "failed to locate SLO for model - ", "variantAutoscaling-name: ", va.Name, "modelName: ", modelName)
 			continue
 		}
-		logger.Log.Info("Found SLO", "model", entry.Model, "class", className, "slo-itl", entry.SLOITL, "slo-ttw", entry.SLOTTW)
+		logger.Log.Info("Found SLO for model - ", "model: ", modelName, ", class: ", className, ", slo-itl: ", entry.SLOITL, ", slo-ttw: ", entry.SLOTTW)
 
 		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
 			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {
-				logger.Log.Error("variantAutoscaling bad model accelerator profile data, skipping optimization", "variantAutoscaling-name", va.Name)
+				logger.Log.Error("variantAutoscaling bad model accelerator profile data, skipping optimization - ", "variantAutoscaling-name: ", va.Name)
 				continue
 			}
 		}
@@ -268,12 +273,12 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 		accName := va.Labels["inference.optimization/acceleratorName"]
 		acceleratorCostVal, ok := acceleratorCm[accName]["cost"]
 		if !ok {
-			logger.Log.Error("variantAutoscaling missing accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			logger.Log.Error("variantAutoscaling missing accelerator cost in configMap, skipping optimization - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 		acceleratorCostValFloat, err := strconv.ParseFloat(acceleratorCostVal, 32)
 		if err != nil {
-			logger.Log.Error("variantAutoscaling unable to parse accelerator cost in configmap, skipping optimization", "variantAutoscaling-name", va.Name)
+			logger.Log.Error("variantAutoscaling unable to parse accelerator cost in configMap, skipping optimization - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 
@@ -289,20 +294,20 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			if apierrors.IsNotFound(err) {
 				return false, err
 			}
-			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			logger.Log.Error(err, "transient error getting Deployment, retrying - ", "variantAutoscaling-name: ", va.Name)
 			return false, nil
 		})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling-name", va.Name)
+			logger.Log.Error(err, "failed to get Deployment after retries - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
-			logger.Log.Error(err, "unable to get variantAutoscaling", "deployment-name", deploy.Name, "namespace", deploy.Namespace)
+			logger.Log.Error(err, "unable to get variantAutoscaling for deployment - ", "deployment-name: ", deploy.Name, ", namespace: ", deploy.Namespace)
 			continue
 		}
 
@@ -314,7 +319,7 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 		updateVA.Status.CurrentAlloc = currentAllocation
 
 		if err := utils.AddServerInfoToSystemData(systemData, &updateVA, className); err != nil {
-			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization", "variantAutoscaling-name", updateVA.Name)
+			logger.Log.Info("variantAutoscaling bad deployment server data, skipping optimization - ", "variantAutoscaling-name: ", updateVA.Name)
 			continue
 		}
 
@@ -338,20 +343,20 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		Steps:    5,
 	}
 
-	logger.Log.Debug("Optimization metrics emitted, starting to process variants", "variant_count", len(updateList.Items))
+	logger.Log.Debug("Optimization metrics emitted, starting to process variants - ", "variant_count: ", len(updateList.Items))
 
 	for i := range updateList.Items {
 		va := &updateList.Items[i]
 		_, ok := optimizedAllocation[va.Name]
-		logger.Log.Debug("Processing variant", "index", i, "name", va.Name, "namespace", va.Namespace, "has_optimized_alloc", ok)
+		logger.Log.Debug("Processing variant - ", "index: ", i, ", variantAutoscaling-name: ", va.Name, ", namespace: ", va.Namespace, ", has_optimized_alloc: ", ok)
 		if !ok {
-			logger.Log.Debug("No optimized allocation found for variant", "name", va.Name)
+			logger.Log.Debug("No optimized allocation found for variant - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 		// Fetch the latest version from API server
 		var updateVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		if err := r.Get(ctx, client.ObjectKeyFromObject(va), &updateVa); err != nil {
-			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server", "name", va.Name)
+			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server: ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 		original := updateVa.DeepCopy()
@@ -370,15 +375,15 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			if apierrors.IsNotFound(err) {
 				return false, err
 			}
-			logger.Log.Error(err, "transient error getting Deployment, retrying", "variantAutoscaling", va.Name)
+			logger.Log.Error(err, "transient error getting Deployment, retrying - ", "variantAutoscaling-name: ", va.Name)
 			return false, nil
 		})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.Log.Info("Deployment not found, skipping", "variantAutoscaling", updateVa.Name)
+				logger.Log.Info("Deployment not found, skipping - ", "variantAutoscaling-name: ", updateVa.Name)
 				continue
 			}
-			logger.Log.Error(err, "failed to get Deployment after retries", "variantAutoscaling", updateVa.Name)
+			logger.Log.Error(err, "failed to get Deployment after retries - ", "variantAutoscaling-name: ", updateVa.Name)
 			return err
 		}
 
@@ -395,7 +400,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			// Patch metadata change (ownerReferences)
 			patch := client.MergeFrom(original)
 			if err := r.Client.Patch(ctx, &updateVa, patch); err != nil {
-				logger.Log.Error(err, "failed to patch ownerReference", "name", updateVa.Name)
+				logger.Log.Error(err, "failed to patch ownerReference - ", "variantAutoscaling-name: ", updateVa.Name)
 				return err
 			}
 		}
@@ -412,10 +417,10 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 			if updateErr := r.Client.Status().Update(ctx, &updateVa); updateErr != nil {
 				if apierrors.IsInvalid(updateErr) || apierrors.IsForbidden(updateErr) {
-					logger.Log.Error(updateErr, "permanent error while patching status", "name", updateVa.Name)
+					logger.Log.Error(updateErr, "permanent error while patching status for variantAutoscaling - ", "variantAutoscaling-name: ", updateVa.Name)
 					return false, updateErr
 				}
-				logger.Log.Error(updateErr, "transient error while patching status, will retry", "name", updateVa.Name)
+				logger.Log.Error(updateErr, "transient error while patching status for variantAutoscaling, will retry - ", "variantAutoscaling-name: ", updateVa.Name)
 				return false, nil
 			}
 			return true, nil
@@ -423,13 +428,13 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 
 		// Emit metrics for the variant autoscaling
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
-			logger.Log.Error(err, "failed to emit metrics", "name", updateVa.Name)
+			logger.Log.Error(err, "failed to emit metrics for variantAutoscaling - ", "variantAutoscaling-name: ", updateVa.Name)
 		} else {
-			logger.Log.Debug("EmitMetrics call completed successfully", "name", updateVa.Name)
+			logger.Log.Debug("EmitMetrics call completed successfully for variantAutoscaling - ", "variantAutoscaling-name: ", updateVa.Name)
 		}
 
 		if err != nil {
-			logger.Log.Error(err, "failed to patch status after retries", "name", updateVa.Name)
+			logger.Log.Error(err, "failed to patch status for variantAutoscaling after retries - ", "variantAutoscaling-name: ", updateVa.Name)
 			continue
 		}
 	}
@@ -438,9 +443,9 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 
 	// Log summary of reconciliation
 	if len(updateList.Items) > 0 {
-		logger.Log.Info("Reconciliation completed",
-			"variants_processed", len(updateList.Items),
-			"optimization_successful", true)
+		logger.Log.Info("Reconciliation completed - ",
+			"variants_processed: ", len(updateList.Items),
+			", optimization_successful: ", true)
 	}
 
 	return nil
@@ -456,12 +461,12 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	// TODO: If configuration changes become a concern, implement a configuration watcher rather than per-cycle initialization.
 	prom_addr, err := r.getPrometheusConfig(context.Background())
 	if err != nil {
-		logger.Log.Warn("Failed to get Prometheus config, using default", "error", err)
+		logger.Log.Warn("Failed to get Prometheus config, using default - ", "error: ", err)
 		// Use default as fallback
 		prom_addr = "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
 	}
 
-	logger.Log.Info("Initializing Prometheus client -> ", "address", prom_addr)
+	logger.Log.Info("Initializing Prometheus client -> ", "address: ", prom_addr)
 	promClient, err := api.NewClient(api.Config{
 		Address: prom_addr,
 	})
@@ -482,7 +487,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	err = wait.ExponentialBackoffWithContext(context.Background(), backoff, func(ctx context.Context) (bool, error) {
 		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
 		if err != nil {
-			logger.Log.Warn("Prometheus API validation failed, retrying...", "error", err)
+			logger.Log.Warn("Prometheus API validation failed, retrying - ", "error: ", err)
 			return false, nil // Continue retrying
 		}
 		return true, nil // Success
@@ -582,11 +587,11 @@ func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName,
 		}
 
 		if apierrors.IsNotFound(err) {
-			logger.Log.Error(err, "ConfigMap not found, will not retry", "name", cmName, "namespace", cmNamespace)
+			logger.Log.Error(err, "ConfigMap not found, will not retry - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
 			return false, err
 		}
 
-		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying...")
+		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
 		return false, nil
 	})
 
@@ -622,24 +627,24 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 		}
 
 		if apierrors.IsNotFound(err) {
-			logger.Log.Warn("ConfigMap not found for Prometheus config, will not retry", "name", configMapName, "namespace", configMapNamespace)
+			logger.Log.Warn("ConfigMap not found for Prometheus config, will not retry - ", "configMapName: ", configMapName, " namespace: ", configMapNamespace)
 			return false, err
 		}
 
-		logger.Log.Warn("Transient error fetching ConfigMap for Prometheus config, retrying...", "error", err)
+		logger.Log.Warn("Transient error fetching ConfigMap for Prometheus config, retrying - ", "error: ", err)
 		return false, nil
 	})
 
 	if err != nil {
-		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default", "error", err)
+		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default - ", "error: ", err)
 	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
-		logger.Log.Info("Using Prometheus address from ConfigMap", "address", promAddr)
+		logger.Log.Info("Using Prometheus address from ConfigMap -> ", "address: ", promAddr)
 		return promAddr, nil
 	}
 
 	// Default in-cluster address
 	defaultAddr := "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
-	logger.Log.Info("Using default Prometheus address", "address", defaultAddr)
+	logger.Log.Info("Using default Prometheus address -> ", "address: ", defaultAddr)
 	return defaultAddr, nil
 }
 

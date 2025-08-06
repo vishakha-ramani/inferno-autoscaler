@@ -8,7 +8,7 @@ KIND_NAME=${KIND_NAME:-"kind-inferno-gpu-cluster"}
 KIND_CONTEXT=kind-${KIND_NAME}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"inferno-autoscaler-monitoring"}
 KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-inferno-gpu-cluster-control-plane"}
-WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
+WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-3m}
 LLMD_NAMESPACE=${LLMD_NAMESPACE:-"llm-d-sim"}
 
 _kubectl() {
@@ -30,6 +30,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n
 
 # Wait for prometheus installation to complete
 _kubectl apply -f hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml
+_kubectl wait --for=create pods --all -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 _kubectl wait --for=condition=ready pods --all -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 
 # Create vllm emulated deployment

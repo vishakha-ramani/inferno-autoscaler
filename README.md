@@ -6,8 +6,16 @@ The inferno-autoscaler assigns GPU types to inference model servers and decides 
 
 - [Description](#description)
 - [Getting Started](#getting-started)
-  - [Building & deploying inferno with llmd infrastructure](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
-  - [Building & deploying inferno in emulated mode](#details-on-emulated-mode-deployment-on-kind)
+  - [Prerequisites](#prerequisites)
+- [Quickstart Guide: Installation of Inferno-autoscaler along with llm-d infrastructure emulated deployment on a Kind cluster](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
+  - [Showing Inferno-autoscaler scaling replicas up and down](#showing-inferno-autoscaler-scaling-replicas-up-and-down)
+  - [Uninstalling llm-d and Inferno-autoscaler](#uninstalling-llm-d-and-inferno-autoscaler)
+- [Details on emulated mode deployment on Kind](#details-on-emulated-mode-deployment-on-kind)
+  - [Deployment](#deployment)
+  - [Uninstall](#uninstall)
+  - [Prometheus vllme setup](#prometheus-vllme-setup)
+    - [Note: The above script already deploys emulated vllm server:](#note-the-above-script-already-deploys-emulated-vllm-server)
+  - [Inferno custom metrics](#inferno-custom-metrics)
 - [Contributing](#contributing)
 
 
@@ -115,15 +123,15 @@ infra-sim-inference-gateway   1/1     1            1           5m7s
 vllme-deployment              1/1     1            1           5m58s
 
 kubectl get variantautoscalings.llmd.ai -n llm-d-sim 
-NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
-vllme-deployment   default   A100          1                 1           4m31s
+NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default/default   A100          1                 1           4m31s
 ```
 
 3. Launch the `loadgen.py` load generator to send requests to the `v1/chat/completions` endpoint:
 ```sh
 cd hack/vllme/vllm_emulator
 pip install -r requirements.txt # if not already installed
-python loadgen.py
+python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50
 
 # Default parameters
 # Starting load generator with deterministic mode
@@ -133,17 +141,17 @@ python loadgen.py
 # Content Length: 150
 
 # for deterministic dynamically changing rate
-python loadgen.py --model default  --rate '[[120, 60], [120, 80]]' --url http://localhost:8000/v1
+python loadgen.py --model vllm  --rate '[[120, 60], [120, 80]]' --url http://localhost:8000/v1
 
 # First 120 seconds (2 minutes): Send 60 requests per minute
 # Next 120 seconds (2 minutes): Send 80 requests per minute
 # Can use any combination of rates such as [[120, 60], [120, 80], [120, 40]]
 ```
 
-- To request the port-forwarded gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
-- As '*model name*', insert: "**vllm**"
+- To request the port-forwarded gateway, use **--url http://localhost:8000/v1**
+- To request the vLLM emulator servers, insert: "**--model vllm**"
 
-4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and context length (such as **RPM=40** and **context length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
+1. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and content length (such as **RPM=40** and **content length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
 
 ```sh
 kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager
@@ -153,7 +161,7 @@ kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-control
 {"level":"DEBUG","ts":"2025-08-04T19:18:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
 {"level":"INFO","ts":"2025-08-04T19:18:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
 {"level":"DEBUG","ts":"2025-08-04T19:18:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65} {A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {22.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=22.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=0, servTime=21.555601, waitTime=110.798096, rho=0.7630596}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=22.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=0, servTime=21.555601, waitTime=110.798096, rho=0.7630596}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
 {"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
 {"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
 {"level":"DEBUG","ts":"2025-08-04T19:18:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:18:16.484006425 +0000 UTC m=+1380.284253535 A100 1}"}
@@ -171,7 +179,7 @@ kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-control
 {"level":"DEBUG","ts":"2025-08-04T19:19:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
 {"level":"INFO","ts":"2025-08-04T19:19:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
 {"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 1 256 40 20 0 {44 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=44; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=40, servTime=21.540192, waitTime=99.1626, rho=0.7524011}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=44; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=40, servTime=21.540192, waitTime=99.1626, rho=0.7524011}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
 {"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimization completed successfully, emitting optimization metrics"}
 {"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation mapkeys1updateList_count1"}
 {"level":"DEBUG","ts":"2025-08-04T19:19:16.483Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:19:16.48370162 +0000 UTC m=+1440.283948730 A100 2}"}
@@ -195,8 +203,8 @@ infra-sim-inference-gateway   1/1     1            1           7m3s
 vllme-deployment              2/2     2            2           7m58s
 
 kubectl get variantautoscalings.llmd.ai -n llm-d-sim 
-NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
-vllme-deployment   default   A100          2                 2           6m31s
+NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default/default   A100          2                 2           6m31s
 ```
 
 5. **Scaling down**: by stopping the load generator script with a keyboard interrupt, we can see that the Inferno-autoscaler effectively scales down the replicas:
@@ -208,7 +216,7 @@ kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-control
 {"level":"DEBUG","ts":"2025-08-04T19:20:16.481Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-worker2 , model - Intel-Gaudi-2-96GB , count - 2 , mem - 98304"}
 {"level":"INFO","ts":"2025-08-04T19:20:16.481Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
 {"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0} {Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {37.76 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{NVIDIA-A100-PCIE-80GB 2} {AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=37.76; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=0, servTime=21.466858, waitTime=56.422607, rho=0.6966711}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=37.76; tk=178; sol=1, alloc={acc=A100; num=2; maxBatch=4; cost=80, val=0, servTime=21.466858, waitTime=56.422607, rho=0.6966711}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=2, limit=2, cost=80 \ntotalCost=80 \n"}
 {"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
 {"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
 {"level":"DEBUG","ts":"2025-08-04T19:20:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:20:16.484244316 +0000 UTC m=+1500.284491425 A100 2}"}
@@ -226,7 +234,7 @@ kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-control
 {"level":"DEBUG","ts":"2025-08-04T19:21:16.482Z","msg":"Found inventory: nodeName - kind-inferno-gpu-cluster-control-plane , model - NVIDIA-A100-PCIE-80GB , count - 2 , mem - 81920"}
 {"level":"INFO","ts":"2025-08-04T19:21:16.482Z","msg":"Found SLOmodeldefaultclassPremiumslo-itl24slo-ttw500"}
 {"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"System data prepared for optimization: systemData - &{{{[{A100 NVIDIA-A100-PCIE-80GB 1 0 0 {0 0 0 0} 40} {G2 Intel-Gaudi-2-96GB 1 0 0 {0 0 0 0} 23} {MI300X AMD-MI300X-192GB 1 0 0 {0 0 0 0} 65}]} {[{default A100 1 20.58 0.41 4 128} {default MI300X 1 7.77 0.15 4 128} {default G2 1 17.15 0.34 4 128}]} {[{Premium default 1 24 500 0} {Premium llama0-70b 1 80 500 0} {Freemium granite-13b 10 200 2000 0} {Freemium llama0-7b 10 150 1500 0}]} {[{vllme-deployment:llm-d-sim Premium default true 1 4 {A100 2 256 80 20 0 {2.67 178 0 0}} { 0 0 0 0 0 {0 0 0 0}}}]} {{false false}} {[{AMD-MI300X-192G 2} {Intel-Gaudi-2-96GB 2} {NVIDIA-A100-PCIE-80GB 2}]}}}"}
-{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default; rate=2.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=-40, servTime=21.058374, waitTime=0.032958984, rho=0.15340477}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
+{"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization solutionsystemSolution: \nc=Premium; m=default/default; rate=2.67; tk=178; sol=1, alloc={acc=A100; num=1; maxBatch=4; cost=40, val=-40, servTime=21.058374, waitTime=0.032958984, rho=0.15340477}; slo-itl=24, slo-ttw=500, slo-tps=0 \nAllocationByType: \nname=NVIDIA-A100-PCIE-80GB, count=1, limit=2, cost=40 \ntotalCost=40 \n"}
 {"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimization completed successfully, emitting optimization metrics"}
 {"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation mapkeys1updateList_count1"}
 {"level":"DEBUG","ts":"2025-08-04T19:21:16.484Z","msg":"Optimized allocation entrykeyvllme-deploymentvalue{2025-08-04 19:21:16.484650177 +0000 UTC m=+1560.284897245 A100 1}"}
@@ -249,8 +257,8 @@ infra-sim-inference-gateway   1/1     1            1           17m
 vllme-deployment              1/1     1            1           18m
 
 kubectl get variantautoscalings.llmd.ai -n llm-d-sim
-NAME               MODEL     ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
-vllme-deployment   default   A100          1                 1           16m
+NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
+vllme-deployment   default/default   A100          1                 1           16m
 ```
 
 ### Uninstalling llm-d and Inferno-autoscaler 

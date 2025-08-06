@@ -49,8 +49,10 @@ hack/deploy-emulated-vllme-server.sh
 
 # Wait for Prometheus to be ready before deploying controller
 echo "Waiting for Prometheus to be ready..."
+_kubectl wait --for=create pod -l app.kubernetes.io/name=prometheus -n ${MONITORING_NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 _kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n ${MONITORING_NAMESPACE} --timeout=5m
 
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
+_kubectl wait --for=create pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
 _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}

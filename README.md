@@ -6,8 +6,16 @@ The inferno-autoscaler assigns GPU types to inference model servers and decides 
 
 - [Description](#description)
 - [Getting Started](#getting-started)
-  - [Building & deploying inferno with llmd infrastructure](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
-  - [Building & deploying inferno in emulated mode](#details-on-emulated-mode-deployment-on-kind)
+  - [Prerequisites](#prerequisites)
+- [Quickstart Guide: Installation of Inferno-autoscaler along with llm-d infrastructure emulated deployment on a Kind cluster](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
+  - [Showing Inferno-autoscaler scaling replicas up and down](#showing-inferno-autoscaler-scaling-replicas-up-and-down)
+  - [Uninstalling llm-d and Inferno-autoscaler](#uninstalling-llm-d-and-inferno-autoscaler)
+- [Details on emulated mode deployment on Kind](#details-on-emulated-mode-deployment-on-kind)
+  - [Deployment](#deployment)
+  - [Uninstall](#uninstall)
+  - [Prometheus vllme setup](#prometheus-vllme-setup)
+    - [Note: The above script already deploys emulated vllm server:](#note-the-above-script-already-deploys-emulated-vllm-server)
+  - [Inferno custom metrics](#inferno-custom-metrics)
 - [Contributing](#contributing)
 
 
@@ -133,17 +141,17 @@ python loadgen.py
 # Content Length: 150
 
 # for deterministic dynamically changing rate
-python loadgen.py --model default  --rate '[[120, 60], [120, 80]]' --url http://localhost:8000/v1
+python loadgen.py --model vllm  --rate '[[120, 60], [120, 80]]' --url http://localhost:8000/v1
 
 # First 120 seconds (2 minutes): Send 60 requests per minute
 # Next 120 seconds (2 minutes): Send 80 requests per minute
 # Can use any combination of rates such as [[120, 60], [120, 80], [120, 40]]
 ```
 
-- To request the port-forwarded gateway, as '*server base URL*' use **http://localhost:8000/v1** [**option 3**]
-- As '*model name*', insert: "**vllm**"
+- To request the port-forwarded gateway, use **--url http://localhost:8000/v1**
+- To request the vLLM emulator servers, insert: "**--model vllm**"
 
-4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and context length (such as **RPM=40** and **context length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
+1. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and context length (such as **RPM=40** and **context length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
 
 ```sh
 kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager

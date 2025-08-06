@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -250,4 +252,13 @@ func GetZapLevelFromEnv() zapcore.Level {
 	default:
 		return zapcore.InfoLevel // fallback
 	}
+}
+
+func MarshalStructToJsonString(t any) string {
+	jsonBytes, err := json.MarshalIndent(t, "", " ")
+	if err != nil {
+		return fmt.Sprintf("error marshalling: %v", err)
+	}
+	re := regexp.MustCompile("\"|\n")
+	return re.ReplaceAllString(string(jsonBytes), "")
 }

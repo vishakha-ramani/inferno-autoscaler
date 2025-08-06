@@ -51,12 +51,12 @@ func (a *Actuator) ApplyReplicaTargets(ctx context.Context, VariantAutoscaling *
 	// Emit metrics for replica scaling
 	if replicas > *original.Spec.Replicas {
 		if err := a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_up", "load_increase"); err != nil {
-			logger.Log.Error(err, "Failed to emit scale-up metrics", "name", VariantAutoscaling.Name)
+			logger.Log.Error(err, "Failed to emit scale-up metrics for variantAutoscaling - ", "variantAutoscaling-name: ", VariantAutoscaling.Name)
 			// Don't fail the deployment patch for metric emission errors
 		}
 	} else if replicas < *original.Spec.Replicas {
 		if err := a.MetricsEmitter.EmitReplicaScalingMetrics(ctx, VariantAutoscaling, "scale_down", "load_decrease"); err != nil {
-			logger.Log.Error(err, "Failed to emit scale-down metrics", "name", VariantAutoscaling.Name)
+			logger.Log.Error(err, "Failed to emit scale-down metrics for variantAutoscaling - ", "variantAutoscaling-name: ", VariantAutoscaling.Name)
 			// Don't fail the deployment patch for metric emission errors
 		}
 	}
@@ -74,7 +74,7 @@ func (a *Actuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv
 			int32(VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas),
 			VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator,
 		); err != nil {
-			logger.Log.Error(err, "Failed to emit replica metrics", "name", VariantAutoscaling.Name)
+			logger.Log.Error(err, "Failed to emit replica metrics for variantAutoscaling - ", "variantAutoscaling-name: ", VariantAutoscaling.Name)
 			// Don't fail the reconciliation for metric emission errors
 			// Metrics are critical for HPA, but emission failures shouldn't break core functionality
 		} else {
@@ -84,6 +84,6 @@ func (a *Actuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv
 		logger.Log.Debug("Skipping EmitReplicaMetrics - NumReplicas is 0")
 	}
 
-	logger.Log.Info("Emitted metrics for variant", "name", VariantAutoscaling.Name, "namespace", VariantAutoscaling.Namespace)
+	logger.Log.Info("Emitted metrics for variantAutoscaling - ", "variantAutoscaling-name: ", VariantAutoscaling.Name, ", namespace: ", VariantAutoscaling.Namespace)
 	return nil
 }

@@ -92,16 +92,10 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	backoff := wait.Backoff{
-		Duration: 500 * time.Millisecond,
-		Factor:   2.0,
-		Steps:    5,
-	}
-
 	if trigger == "true" {
 		logger.Log.Info("Manual optimization trigger received")
 		// Reset the trigger
-		err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		err := wait.ExponentialBackoff(utils.ReconcileBackoff, func() (bool, error) {
 			cm := &corev1.ConfigMap{}
 			if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: configMapNamespace}, cm); err != nil {
 				logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
@@ -242,12 +236,6 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 	var updateList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
 	allAnalyzerResponses := make(map[string]*interfaces.ModelAnalyzeResponse)
 	vaMap := make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
-	}
 
 	for _, va := range activeVAs {
 		modelName := va.Spec.ModelID
@@ -283,30 +271,15 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 		}
 
 		var deploy appsv1.Deployment
-		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-			err := r.Get(ctx, types.NamespacedName{
-				Name:      va.Name,
-				Namespace: va.Namespace,
-			}, &deploy)
-			if err == nil {
-				return true, nil
-			}
-			if apierrors.IsNotFound(err) {
-				return false, err
-			}
-			logger.Log.Error(err, "transient error getting Deployment, retrying - ", "variantAutoscaling-name: ", va.Name)
-			return false, nil
-		})
+		err = utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
 			logger.Log.Error(err, "failed to get Deployment after retries - ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
 
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, &updateVA); err != nil {
+		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, deploy.Name, deploy.Namespace, &updateVA)
+		if err != nil {
 			logger.Log.Error(err, "unable to get variantAutoscaling for deployment - ", "deployment-name: ", deploy.Name, ", namespace: ", deploy.Namespace)
 			continue
 		}
@@ -336,13 +309,6 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 	updateList *llmdVariantAutoscalingV1alpha1.VariantAutoscalingList,
 	optimizedAllocation map[string]llmdVariantAutoscalingV1alpha1.OptimizedAlloc,
 ) error {
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
-	}
-
 	logger.Log.Debug("Optimization metrics emitted, starting to process variants - ", "variant_count: ", len(updateList.Items))
 
 	for i := range updateList.Items {
@@ -364,20 +330,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		//TODO: remove calling duplicate deployment calls
 		// Check if Deployment exists for this variantAutoscaling
 		var deploy appsv1.Deployment
-		err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-			err := r.Get(ctx, types.NamespacedName{
-				Name:      va.Name,
-				Namespace: va.Namespace,
-			}, &deploy)
-			if err == nil {
-				return true, nil
-			}
-			if apierrors.IsNotFound(err) {
-				return false, err
-			}
-			logger.Log.Error(err, "transient error getting Deployment, retrying - ", "variantAutoscaling-name: ", va.Name)
-			return false, nil
-		})
+		err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.Log.Info("Deployment not found, skipping - ", "variantAutoscaling-name: ", updateVa.Name)
@@ -414,17 +367,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			logger.Log.Error(err, "failed to apply replicas")
 		}
 
-		err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-			if updateErr := r.Client.Status().Update(ctx, &updateVa); updateErr != nil {
-				if apierrors.IsInvalid(updateErr) || apierrors.IsForbidden(updateErr) {
-					logger.Log.Error(updateErr, "permanent error while patching status for variantAutoscaling - ", "variantAutoscaling-name: ", updateVa.Name)
-					return false, updateErr
-				}
-				logger.Log.Error(updateErr, "transient error while patching status for variantAutoscaling, will retry - ", "variantAutoscaling-name: ", updateVa.Name)
-				return false, nil
-			}
-			return true, nil
-		})
+		err = utils.UpdateStatusWithBackoff(ctx, r.Client, &updateVa, utils.StandardBackoff, "VariantAutoscaling")
 
 		// Emit metrics for the variant autoscaling
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
@@ -477,14 +420,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	r.PromAPI = promv1.NewAPI(promClient)
 
 	// Validate that the API is working by testing a simple query with retry logic
-	backoff := wait.Backoff{
-		Duration: 5 * time.Second,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    6, // 5s, 10s, 20s, 40s, 80s, 160s = ~5 minutes total
-	}
-
-	err = wait.ExponentialBackoffWithContext(context.Background(), backoff, func(ctx context.Context) (bool, error) {
+	err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
 		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
 		if err != nil {
 			logger.Log.Warn("Prometheus API validation failed, retrying - ", "error: ", err)
@@ -547,21 +483,22 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 }
 
 func (r *VariantAutoscalingReconciler) readServiceClassConfig(ctx context.Context, cmName, cmNamespace string) (map[string]string, error) {
-	if cmPtr, err := r.getConfigMap(ctx, cmName, cmNamespace); err == nil {
-		return (*cmPtr).Data, nil
-	} else {
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm)
+	if err != nil {
 		return nil, err
 	}
+	return cm.Data, nil
 }
 
 func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context, cmName, cmNamespace string) (map[string]map[string]string, error) {
-	var cmPtr *corev1.ConfigMap
-	var err error
-	if cmPtr, err = r.getConfigMap(ctx, cmName, cmNamespace); err != nil {
-		return nil, err
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
 	}
 	out := make(map[string]map[string]string)
-	for acc, accInfoStr := range (*cmPtr).Data {
+	for acc, accInfoStr := range cm.Data {
 		accInfoMap := make(map[string]string)
 		if err := json.Unmarshal([]byte(accInfoStr), &accInfoMap); err != nil {
 			return nil, fmt.Errorf("failed to read entry %s in ConfigMap %s/%s: %w", acc, cmNamespace, cmName, err)
@@ -569,36 +506,6 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 		out[acc] = accInfoMap
 	}
 	return out, nil
-}
-
-func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
-	var cm corev1.ConfigMap
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
-	}
-
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
-		if err == nil {
-			return true, nil
-		}
-
-		if apierrors.IsNotFound(err) {
-			logger.Log.Error(err, "ConfigMap not found, will not retry - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
-			return false, err
-		}
-
-		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
-	}
-	return &cm, nil
 }
 
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
@@ -609,32 +516,8 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 	}
 
 	// Then, try to get from ConfigMap with retry logic
-	cm := &corev1.ConfigMap{}
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    3, // Fewer retries since we have a default fallback
-	}
-
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      configMapName,
-			Namespace: configMapNamespace,
-		}, cm)
-		if err == nil {
-			return true, nil
-		}
-
-		if apierrors.IsNotFound(err) {
-			logger.Log.Warn("ConfigMap not found for Prometheus config, will not retry - ", "configMapName: ", configMapName, " namespace: ", configMapNamespace)
-			return false, err
-		}
-
-		logger.Log.Warn("Transient error fetching ConfigMap for Prometheus config, retrying - ", "error: ", err)
-		return false, nil
-	})
-
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
 	if err != nil {
 		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default - ", "error: ", err)
 	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
@@ -649,29 +532,8 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 }
 
 func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, trigger string, err error) {
-	var cm *corev1.ConfigMap
-
-	backoff := wait.Backoff{
-		Duration: 500 * time.Millisecond,
-		Factor:   2.0,
-		Steps:    5,
-	}
-
-	err = wait.ExponentialBackoff(backoff, func() (bool, error) {
-		temp := &corev1.ConfigMap{}
-		getErr := r.Get(ctx, types.NamespacedName{
-			Name:      configMapName,
-			Namespace: configMapNamespace,
-		}, temp)
-
-		if getErr != nil {
-			logger.Log.Error(getErr, "Retrying fetch of optimization configmap")
-			return false, nil // retry
-		}
-
-		cm = temp
-		return true, nil
-	})
+	cm := corev1.ConfigMap{}
+	err = utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
 
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get optimization configmap after retries: %w", err)

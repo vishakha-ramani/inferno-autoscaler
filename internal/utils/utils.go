@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -17,8 +18,89 @@ import (
 	infernoConfig "github.com/llm-inferno/optimizer-light/pkg/config"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// Global backoff configurations
+var (
+	// Standard backoff for most operations
+	StandardBackoff = wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
+	// Slow backoff for operations that need more time
+	ReconcileBackoff = wait.Backoff{
+		Duration: 500 * time.Millisecond,
+		Factor:   2.0,
+		Steps:    5,
+	}
+
+	// Prometheus validation backoff with longer intervals
+	// TODO: investigate why Prometheus needs longer backoff durations
+	PrometheusBackoff = wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    6, // 5s, 10s, 20s, 40s, 80s, 160s = ~5 minutes total
+	}
+)
+
+// GetResourceWithBackoff performs a Get operation with exponential backoff retry logic
+func GetResourceWithBackoff[T client.Object](ctx context.Context, c client.Client, objKey client.ObjectKey, obj T, backoff wait.Backoff, resourceType string) error {
+	return wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := c.Get(ctx, objKey, obj)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, err // Don't retry on notFound errors
+			}
+
+			logger.Log.Error(err, "transient error getting resource, retrying - ",
+				"resourceType: ", resourceType,
+				" name: ", objKey.Name,
+				" namespace: ", objKey.Namespace)
+			return false, nil // Retry on transient errors
+		}
+
+		return true, nil
+	})
+}
+
+// Helper functions for common resource types with standard backoff
+func GetDeploymentWithBackoff(ctx context.Context, c client.Client, name, namespace string, deploy *appsv1.Deployment) error {
+	return GetResourceWithBackoff(ctx, c, client.ObjectKey{Name: name, Namespace: namespace}, deploy, StandardBackoff, "Deployment")
+}
+
+func GetConfigMapWithBackoff(ctx context.Context, c client.Client, name, namespace string, cm *corev1.ConfigMap) error {
+	return GetResourceWithBackoff(ctx, c, client.ObjectKey{Name: name, Namespace: namespace}, cm, StandardBackoff, "ConfigMap")
+}
+
+func GetVariantAutoscalingWithBackoff(ctx context.Context, c client.Client, name, namespace string, va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
+	return GetResourceWithBackoff(ctx, c, client.ObjectKey{Name: name, Namespace: namespace}, va, StandardBackoff, "VariantAutoscaling")
+}
+
+// UpdateStatusWithBackoff performs a Status Update operation with exponential backoff retry logic
+func UpdateStatusWithBackoff[T client.Object](ctx context.Context, c client.Client, obj T, backoff wait.Backoff, resourceType string) error {
+	return wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := c.Status().Update(ctx, obj)
+		if err != nil {
+			if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) {
+				logger.Log.Error(err, "permanent error updating status for resource ", resourceType, ", name: ", obj.GetName())
+				return false, err // Don't retry on permanent errors
+			}
+			logger.Log.Error(err, "transient error updating status, retrying for resource ", resourceType, ", name: ", obj.GetName())
+			return false, nil // Retry on transient errors
+		}
+		return true, nil
+	})
+}
 
 // Adapter to create inferno system data types from config maps and cluster inventory data
 func CreateSystemData(

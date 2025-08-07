@@ -133,7 +133,7 @@ vllme-deployment   default/default   A100          1                 1          
 ```sh
 cd hack/vllme/vllm_emulator
 pip install -r requirements.txt # if not already installed
-python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 100
+python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50
 
 # Default parameters
 # Starting load generator with deterministic mode
@@ -153,7 +153,7 @@ python loadgen.py --model vllm  --rate '[[120, 60], [120, 80]]' --url http://loc
 - To request the port-forwarded gateway, use **--url http://localhost:8000/v1**
 - To request the vLLM emulator servers, insert: "**--model vllm**"
 
-4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and content length (such as **RPM=40** and **content length** equal to **100**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
+4. **Scaling up**: after launching the load generator script `loadgen.py` with related RPM and content length (such as **RPM=40** and **content length** equal to **50**), we can see the logs from the Inferno-autoscaler controller effectively computing the optimal resource allocation and scaling up the deployments:
 
 ```sh
 kubectl logs -n inferno-autoscaler-system deployments/inferno-autoscaler-controller-manager

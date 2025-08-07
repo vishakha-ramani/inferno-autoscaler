@@ -36,7 +36,7 @@ var (
 		Steps:    5,
 	}
 
-	// Slow backoff for operations that need more patience
+	// Slow backoff for operations that need more time
 	ReconcileBackoff = wait.Backoff{
 		Duration: 500 * time.Millisecond,
 		Factor:   2.0,
@@ -44,6 +44,7 @@ var (
 	}
 
 	// Prometheus validation backoff with longer intervals
+	// TODO: investigate why Prometheus needs longer backoff durations
 	PrometheusBackoff = wait.Backoff{
 		Duration: 5 * time.Second,
 		Factor:   2.0,

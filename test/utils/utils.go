@@ -280,7 +280,7 @@ func checkKubernetesVersion(expectedVersion string) {
 	fmt.Fprintf(GinkgoWriter, "Actual Kubernetes server version: v%s\n", serverVersion)
 
 	// Check if actual version is >= expected version
-	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor <= expectedMinor) {
+	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor < expectedMinor) {
 		Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
 	}
 	fmt.Fprintf(GinkgoWriter, "Kubernetes version v%s meets minimum requirement %s\n", serverVersion, expectedVersion)

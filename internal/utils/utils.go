@@ -90,8 +90,10 @@ func CreateSystemData(
 				Name:     sc.Name,
 				Priority: sc.Priority,
 				Model:    entry.Model,
-				SLO_ITL:  float32(entry.SLOITL),
-				SLO_TTW:  float32(entry.SLOTTW),
+				//TODO: change inferno config to use SLOTPOT and SLOTTFT
+				// SLO_ITL and SLO_TTW are deprecated
+				SLO_ITL: float32(entry.SLOTPOT),
+				SLO_TTW: float32(entry.SLOTTFT),
 			}
 			serviceClassData = append(serviceClassData, serviceClassSpec)
 		}

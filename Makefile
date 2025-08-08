@@ -4,7 +4,7 @@ IMG_TAG ?= 0.0.1-multi-arch
 IMG ?= $(IMAGE_TAG_BASE)/inferno-controller:$(IMG_TAG)
 KIND_ARGS ?= -t mix -n 3 -g 2   # Default: 3 nodes, 2 GPUs per node, mixed vendors
 KUBECONFIG ?= $(HOME)/.kube/config
-K8S_DEFAULT_VERSION ?= v1.32.0
+K8S_VERSION ?= v1.32.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -122,7 +122,7 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$${K8S_VERSION:-$(K8S_DEFAULT_VERSION)} && go test ./test/e2e/ -v -ginkgo.v
+	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

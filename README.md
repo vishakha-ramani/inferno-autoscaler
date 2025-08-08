@@ -10,6 +10,7 @@ The inferno-autoscaler assigns GPU types to inference model servers and decides 
 - [Quickstart Guide: Installation of Inferno-autoscaler along with llm-d infrastructure emulated deployment on a Kind cluster](#quickstart-guide-installation-of-inferno-autoscaler-along-with-llm-d-infrastructure-emulated-deployment-on-a-kind-cluster)
   - [Showing Inferno-autoscaler scaling replicas up and down](#showing-inferno-autoscaler-scaling-replicas-up-and-down)
   - [Uninstalling llm-d and Inferno-autoscaler](#uninstalling-llm-d-and-inferno-autoscaler)
+- [Running E2E tests](#running-e2e-tests)
 - [Details on emulated mode deployment on Kind](#details-on-emulated-mode-deployment-on-kind)
   - [Deployment](#deployment)
   - [Uninstall](#uninstall)
@@ -50,8 +51,8 @@ Modeling and optimization techniques used in the inferno-autoscaler are describe
 ### Prerequisites
 - go version v1.23.0+
 - docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- kubectl version v1.32.0+.
+- Access to a Kubernetes v1.32.0+ cluster.
 
 ## Quickstart Guide: Installation of Inferno-autoscaler along with llm-d infrastructure emulated deployment on a Kind cluster
 
@@ -288,6 +289,18 @@ Use this target to undeploy the integrated test environment and related resource
 
 ```sh
 make undeploy-llm-d-inferno-emulated-on-kind
+```
+
+## Running E2E tests
+Use this target to run E2E tests:
+
+```sh
+make test-e2e
+```
+
+You can change Kubernetes configuration file (default: **$HOME/.kube/config**) and the minimum required version (default: **v1.32.0**) by setting the corresponding environment variables:
+```sh
+make test-e2e KUBECONFIG="path/to/your/config" K8S_VERSION="vX.y.z"
 ```
 
 ## Details on emulated mode deployment on Kind

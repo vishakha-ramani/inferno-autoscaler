@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +25,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
 )
@@ -41,9 +45,63 @@ var (
 	// with the code source changes to be tested.
 	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
 
-	serviceclassConfigmap        = "test/e2e/manifests/test-configmap-serviceclass.yaml"
-	acceleratorUnitCostConfigmap = "test/e2e/manifests/test-configmap-accelerator-unitcost.yaml"
+	// k8s client
+	suiteK8sClient *kubernetes.Clientset
 )
+
+// createServiceClassConfigMap creates the serviceclass ConfigMap
+func createServiceClassConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service-classes-config",
+			Namespace: controllerNamespace,
+		},
+		Data: map[string]string{
+			"premium.yaml": `name: Premium
+priority: 1
+data:
+  - model: default/default
+    slo-itl: 24
+    slo-ttw: 500
+  - model: llama0-70b
+    slo-itl: 80
+    slo-ttw: 500`,
+			"freemium.yaml": `name: Freemium
+priority: 10
+data:
+  - model: granite-13b
+    slo-itl: 200
+    slo-ttw: 2000
+  - model: llama0-7b
+    slo-itl: 150
+    slo-ttw: 1500`,
+		},
+	}
+}
+
+// createAcceleratorUnitCostConfigMap creates the accelerator unitcost ConfigMap
+func createAcceleratorUnitCostConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "accelerator-unit-costs",
+			Namespace: controllerNamespace,
+		},
+		Data: map[string]string{
+			"A100": `{
+"device": "NVIDIA-A100-PCIE-80GB",
+"cost": "40.00"
+}`,
+			"MI300X": `{
+"device": "AMD-MI300X-192GB",
+"cost": "65.00"
+}`,
+			"G2": `{
+"device": "Intel-Gaudi-2-96GB",
+"cost": "23.00"
+}`,
+		},
+	}
+}
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
 // temporary environment to validate project changes with the purposed to be used in CI jobs.
@@ -67,6 +125,8 @@ var _ = BeforeSuite(func() {
 	err = utils.LoadImageToKindClusterWithName(projectImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
 
+	initializeK8sClient()
+
 	By("creating Inferno-autoscaler-system namespace")
 	cmd = exec.Command("kubectl", "create", "ns", controllerNamespace)
 	_, err = utils.Run(cmd)
@@ -85,17 +145,15 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
 
-	By("applying the serviceclass ConfigMap")
-	cmd = exec.Command("kubectl", "apply",
-		"-f", serviceclassConfigmap)
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to apply serviceclass ConfigMap")
+	By("creating the serviceclass ConfigMap")
+	serviceclassConfigMap := createServiceClassConfigMap()
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), serviceclassConfigMap, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create serviceclass ConfigMap")
 
-	By("applying the accelerator unitcost ConfigMap")
-	cmd = exec.Command("kubectl", "apply",
-		"-f", acceleratorUnitCostConfigmap)
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to apply accelerator unitcost ConfigMap")
+	By("creating the accelerator unitcost ConfigMap")
+	acceleratorConfigMap := createAcceleratorUnitCostConfigMap()
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
 
 	By("deploying the controller-manager")
 	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))

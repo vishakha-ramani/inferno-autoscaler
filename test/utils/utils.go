@@ -22,15 +22,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
 )
 
 const (
-	prometheusOperatorVersion = "v0.77.1"
-	prometheusOperatorURL     = "https://github.com/prometheus-operator/prometheus-operator/" +
-		"releases/download/%s/bundle.yaml"
+	clusterName         = "kind-inferno-gpu-cluster"
+	prometheusHelmChart = "https://prometheus-community.github.io/helm-charts"
+	monitoringNamespace = "inferno-autoscaler-monitoring"
 
 	certmanagerVersion = "v1.16.3"
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
@@ -62,16 +63,36 @@ func Run(cmd *exec.Cmd) (string, error) {
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 func InstallPrometheusOperator() error {
-	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "create", "-f", url)
-	_, err := Run(cmd)
-	return err
+	cmd := exec.Command("kubectl", "create", "ns", monitoringNamespace)
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("helm", "repo", "add", "prometheus-community", prometheusHelmChart)
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("helm", "repo", "update")
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("helm", "upgrade", "-i", "kube-prometheus-stack", "prometheus-community/kube-prometheus-stack", "-n", monitoringNamespace)
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UninstallPrometheusOperator uninstalls the prometheus
 func UninstallPrometheusOperator() {
-	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
+	cmd := exec.Command("helm", "uninstall", "kube-prometheus-stack", "-n", monitoringNamespace)
+	if _, err := Run(cmd); err != nil {
+		warnError(err)
+	}
+
+	cmd = exec.Command("kubectl", "delete", "ns", monitoringNamespace)
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -108,9 +129,7 @@ func IsPrometheusCRDsInstalled() bool {
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
-	if _, err := Run(cmd); err != nil {
-		warnError(err)
-	}
+	_, _ = Run(cmd)
 }
 
 // InstallCertManager installs the cert manager bundle.
@@ -167,14 +186,104 @@ func IsCertManagerCRDsInstalled() bool {
 
 // LoadImageToKindClusterWithName loads a local docker image to the kind cluster
 func LoadImageToKindClusterWithName(name string) error {
-	cluster := "kind"
-	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
-		cluster = v
+	cluster, err := CheckIfClusterExistsOrCreate()
+	if err != nil {
+		return err
 	}
 	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	cmd := exec.Command("kind", kindOptions...)
-	_, err := Run(cmd)
+	_, err = Run(cmd)
 	return err
+}
+
+func CheckIfClusterExistsOrCreate() (string, error) {
+	// Check if the kind cluster exists
+	existsCmd := exec.Command("kind", "get", "clusters")
+	output, err := Run(existsCmd)
+	if err != nil {
+		return "", err
+	}
+	clusterExists := false
+	clusters := GetNonEmptyLines(output)
+	for _, c := range clusters {
+		if c == clusterName {
+			clusterExists = true
+			break
+		}
+	}
+
+	// Create the kind cluster if it doesn't exist
+	expectedVersion := os.Getenv("K8S_EXPECTED_VERSION")
+	if !clusterExists {
+		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "K8S_VERSION="+expectedVersion)
+		if _, err := Run(scriptCmd); err != nil {
+			return "", fmt.Errorf("failed to create kind cluster: %v", err)
+		}
+	} else {
+		checkKubernetesVersion(expectedVersion)
+	}
+
+	return clusterName, nil
+}
+
+// checkKubernetesVersion verifies that the cluster is running the expected Kubernetes version
+func checkKubernetesVersion(expectedVersion string) {
+	By("checking Kubernetes cluster version")
+
+	// Get expected version from environment variable
+	expectedVersionClean := strings.TrimPrefix(expectedVersion, "v")
+
+	cmd := exec.Command("kubectl", "version")
+	output, err := Run(cmd)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
+	}
+
+	// Extract server version using simple string parsing
+	// Look for "Server Version: v1.32.0" pattern
+	lines := strings.Split(string(output), "\n")
+	var serverVersion string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Server Version: v") {
+			serverVersion = strings.TrimPrefix(line, "Server Version: v")
+			break
+		}
+	}
+
+	// Parse expected version (e.g., "1.32.0" -> major=1, minor=32)
+	expectedParts := strings.Split(expectedVersionClean, ".")
+
+	expectedMajor, err := strconv.Atoi(expectedParts[0])
+	if err != nil {
+		Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
+	}
+
+	expectedMinor, err := strconv.Atoi(expectedParts[1])
+	if err != nil {
+		Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
+	}
+
+	// Parse actual server version (e.g., "1.32.0" -> major=1, minor=32)
+	serverParts := strings.Split(serverVersion, ".")
+
+	serverMajor, err := strconv.Atoi(serverParts[0])
+	if err != nil {
+		Fail(fmt.Sprintf("failed to parse server major version: %v", err))
+	}
+
+	serverMinor, err := strconv.Atoi(serverParts[1])
+	if err != nil {
+		Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
+	}
+
+	fmt.Fprintf(GinkgoWriter, "Expected Kubernetes version: %s\n", expectedVersion)
+	fmt.Fprintf(GinkgoWriter, "Actual Kubernetes server version: v%s\n", serverVersion)
+
+	// Check if actual version is >= expected version
+	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor <= expectedMinor) {
+		Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
+	}
+	fmt.Fprintf(GinkgoWriter, "Kubernetes version v%s meets minimum requirement %s\n", serverVersion, expectedVersion)
 }
 
 // GetNonEmptyLines converts given command output string into individual objects

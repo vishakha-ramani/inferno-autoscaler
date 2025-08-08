@@ -39,7 +39,10 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/inferno-autoscaler:v0.0.1"
+	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
+
+	serviceclassConfigmap        = "test/e2e/manifests/test-configmap-serviceclass.yaml"
+	acceleratorUnitCostConfigmap = "test/e2e/manifests/test-configmap-accelerator-unitcost.yaml"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -64,6 +67,41 @@ var _ = BeforeSuite(func() {
 	err = utils.LoadImageToKindClusterWithName(projectImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
 
+	By("creating Inferno-autoscaler-system namespace")
+	cmd = exec.Command("kubectl", "create", "ns", controllerNamespace)
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
+
+	By("creating llm-d-sim namespace")
+	cmd = exec.Command("kubectl", "create", "ns", llmDNamespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create namespace", llmDNamespace)
+
+	By("installing Prometheus")
+	Expect(utils.InstallPrometheusOperator()).To(Succeed(), "Failed to install Prometheus Operator")
+
+	By("installing CRDs")
+	cmd = exec.Command("make", "install")
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+	By("applying the serviceclass ConfigMap")
+	cmd = exec.Command("kubectl", "apply",
+		"-f", serviceclassConfigmap)
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to apply serviceclass ConfigMap")
+
+	By("applying the accelerator unitcost ConfigMap")
+	cmd = exec.Command("kubectl", "apply",
+		"-f", acceleratorUnitCostConfigmap)
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to apply accelerator unitcost ConfigMap")
+
+	By("deploying the controller-manager")
+	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
 	// we check for its presence before execution.
@@ -86,4 +124,9 @@ var _ = AfterSuite(func() {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
 		utils.UninstallCertManager()
 	}
+
+	// Destroy the Kind cluster
+	cmd := exec.Command("bash", "hack/destroy-kind-cluster.sh")
+	_, err := utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to destroy Kind cluster")
 })

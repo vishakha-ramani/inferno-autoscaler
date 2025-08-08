@@ -249,7 +249,7 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			logger.Log.Error(err, "failed to locate SLO for model - ", "variantAutoscaling-name: ", va.Name, "modelName: ", modelName)
 			continue
 		}
-		logger.Log.Info("Found SLO for model - ", "model: ", modelName, ", class: ", className, ", slo-itl: ", entry.SLOITL, ", slo-ttw: ", entry.SLOTTW)
+		logger.Log.Info("Found SLO for model - ", "model: ", modelName, ", class: ", className, ", slo-tpot: ", entry.SLOTPOT, ", slo-ttft: ", entry.SLOTTFT)
 
 		for _, modelAcceleratorProfile := range va.Spec.ModelProfile.Accelerators {
 			if utils.AddModelAcceleratorProfileToSystemData(systemData, modelName, &modelAcceleratorProfile) != nil {

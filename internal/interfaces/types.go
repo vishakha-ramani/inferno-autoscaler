@@ -18,9 +18,9 @@ type ModelAcceleratorAllocation struct {
 }
 
 type ServiceClassEntry struct {
-	Model  string `yaml:"model"`
-	SLOITL int    `yaml:"slo-itl"`
-	SLOTTW int    `yaml:"slo-ttw"`
+	Model   string `yaml:"model"`
+	SLOTPOT int    `yaml:"slo-tpot"`
+	SLOTTFT int    `yaml:"slo-ttft"`
 }
 
 type ServiceClass struct {

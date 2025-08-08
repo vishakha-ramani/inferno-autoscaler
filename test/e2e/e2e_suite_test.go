@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +25,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
 )
@@ -39,8 +43,65 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/inferno-autoscaler:v0.0.1"
+	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
+
+	// k8s client
+	suiteK8sClient *kubernetes.Clientset
 )
+
+// createServiceClassConfigMap creates the serviceclass ConfigMap
+func createServiceClassConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service-classes-config",
+			Namespace: controllerNamespace,
+		},
+		Data: map[string]string{
+			"premium.yaml": `name: Premium
+priority: 1
+data:
+  - model: default/default
+    slo-itl: 24
+    slo-ttw: 500
+  - model: llama0-70b
+    slo-itl: 80
+    slo-ttw: 500`,
+			"freemium.yaml": `name: Freemium
+priority: 10
+data:
+  - model: granite-13b
+    slo-itl: 200
+    slo-ttw: 2000
+  - model: llama0-7b
+    slo-itl: 150
+    slo-ttw: 1500`,
+		},
+	}
+}
+
+// createAcceleratorUnitCostConfigMap creates the accelerator unitcost ConfigMap
+func createAcceleratorUnitCostConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "accelerator-unit-costs",
+			Namespace: controllerNamespace,
+		},
+		Data: map[string]string{
+			"A100": `{
+"device": "NVIDIA-A100-PCIE-80GB",
+"cost": "40.00"
+}`,
+			"MI300X": `{
+"device": "AMD-MI300X-192GB",
+"cost": "65.00"
+}`,
+			"G2": `{
+"device": "Intel-Gaudi-2-96GB",
+"cost": "23.00"
+}`,
+		},
+	}
+}
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
 // temporary environment to validate project changes with the purposed to be used in CI jobs.
@@ -64,6 +125,41 @@ var _ = BeforeSuite(func() {
 	err = utils.LoadImageToKindClusterWithName(projectImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
 
+	initializeK8sClient()
+
+	By("creating Inferno-autoscaler-system namespace")
+	cmd = exec.Command("kubectl", "create", "ns", controllerNamespace)
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
+
+	By("creating llm-d-sim namespace")
+	cmd = exec.Command("kubectl", "create", "ns", llmDNamespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create namespace", llmDNamespace)
+
+	By("installing Prometheus")
+	Expect(utils.InstallPrometheusOperator()).To(Succeed(), "Failed to install Prometheus Operator")
+
+	By("installing CRDs")
+	cmd = exec.Command("make", "install")
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+	By("creating the serviceclass ConfigMap")
+	serviceclassConfigMap := createServiceClassConfigMap()
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), serviceclassConfigMap, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create serviceclass ConfigMap")
+
+	By("creating the accelerator unitcost ConfigMap")
+	acceleratorConfigMap := createAcceleratorUnitCostConfigMap()
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
+
+	By("deploying the controller-manager")
+	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
 	// we check for its presence before execution.
@@ -86,4 +182,9 @@ var _ = AfterSuite(func() {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
 		utils.UninstallCertManager()
 	}
+
+	// Destroy the Kind cluster
+	cmd := exec.Command("bash", "hack/destroy-kind-cluster.sh")
+	_, err := utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to destroy Kind cluster")
 })

@@ -13,7 +13,7 @@ data:
         slo-ttft: 500
       - model: llama0-70b
         slo-tpot: 80
-        slo-ttw: 500
+        slo-ttft: 500
   freemium.yaml: |
     name: Freemium
     priority: 10

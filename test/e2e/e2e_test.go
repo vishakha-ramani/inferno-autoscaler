@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -348,14 +349,18 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 	AfterAll(func() {
 		By("deleting Deployment resource")
-		cmd := exec.Command("kubectl", "delete", "-f", deploymentManifest)
+		cmd := exec.Command("kubectl", "delete", "-f", deploymentManifest, "--ignore-not-found=true")
 		_, err := utils.Run(cmd)
-		client.IgnoreNotFound(err)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete deployment: %v\n", err)
+		}
 
 		By("deleting VariantAutoscaling resource")
-		cmd = exec.Command("kubectl", "delete", "-f", vaManifest)
+		cmd = exec.Command("kubectl", "delete", "-f", vaManifest, "--ignore-not-found=true")
 		_, err = utils.Run(cmd)
-		client.IgnoreNotFound(err)
+		if err != nil {
+			fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete variant autoscaling: %v\n", err)
+		}
 
 	})
 })

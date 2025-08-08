@@ -230,7 +230,6 @@ func CheckIfClusterExistsOrCreate() (string, error) {
 func checkKubernetesVersion(expectedVersion string) {
 	By("checking Kubernetes cluster version")
 
-	// Get expected version from environment variable
 	expectedVersionClean := strings.TrimPrefix(expectedVersion, "v")
 
 	cmd := exec.Command("kubectl", "version")
@@ -239,8 +238,7 @@ func checkKubernetesVersion(expectedVersion string) {
 		Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
 	}
 
-	// Extract server version using simple string parsing
-	// Look for "Server Version: v1.32.0" pattern
+	// Extract server version
 	lines := strings.Split(string(output), "\n")
 	var serverVersion string
 	for _, line := range lines {

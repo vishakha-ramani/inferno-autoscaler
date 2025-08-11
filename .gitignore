@@ -20,6 +20,9 @@ vendor/
 # Kind config file
 kind-config.yaml
 
+# Kubernetes manifests
+gpu.cluster
+
 # Miscellaneous
 .DS_Store
 ~*

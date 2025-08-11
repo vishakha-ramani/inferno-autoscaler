@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
 )
@@ -44,9 +43,6 @@ var (
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
-
-	// k8s client
-	suiteK8sClient *kubernetes.Clientset
 )
 
 // createServiceClassConfigMap creates the serviceclass ConfigMap

@@ -48,8 +48,7 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog *zap.Logger
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -93,7 +92,13 @@ func main() {
 	if err != nil {
 		panic("unable to initialize logger: " + err.Error())
 	}
-	defer setupLog.Sync()
+	defer func() {
+		if err := setupLog.Sync(); err != nil {
+			// Optionally log the error or handle it as needed
+			// For now, just print to stderr
+			_, _ = os.Stderr.WriteString("error syncing logger: " + err.Error() + "\n")
+		}
+	}()
 
 	ctrllog.SetLogger(ctrlzap.New(ctrlzap.UseDevMode(false), ctrlzap.WriteTo(os.Stdout)))
 
@@ -255,7 +260,9 @@ func main() {
 
 	// Sync the custom logger before starting the manager
 	if logger.Log != nil {
-		logger.Log.Sync()
+		if err := logger.Log.Sync(); err != nil {
+			setupLog.Error("error syncing custom logger", zap.Error(err))
+		}
 	}
 
 	// Register custom metrics with the controller-runtime Prometheus registry

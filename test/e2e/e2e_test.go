@@ -135,9 +135,37 @@ func startLoadGenerator() *exec.Cmd {
 	return loadGenCmd
 }
 
-func stopCmd(cmd *exec.Cmd) {
-	if cmd != nil && cmd.Process != nil {
-		cmd.Process.Signal(os.Interrupt)
+func stopCmd(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return fmt.Errorf("command or process is nil")
+	}
+
+	// Try graceful shutdown with SIGINT
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		return fmt.Errorf("failed to send interrupt signal: %w", err)
+	}
+
+	// Wait for graceful shutdown with timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		// Process exited gracefully, return any error from Wait()
+		if err != nil {
+			return fmt.Errorf("process exited with error: %w", err)
+		}
+		return nil
+	case <-time.After(5 * time.Second):
+		// Timeout - force kill
+		if err := cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill process: %w", err)
+		}
+		// Wait for the kill to complete
+		<-done
+		return nil
 	}
 }
 
@@ -615,7 +643,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			Expect(err).NotTo(HaveOccurred())
 			g.Expect(deployment.Status.Replicas).To(BeNumerically(">", 1), "Deployment should have scaled up")
 
-		}, 6*time.Minute, 1*time.Minute).Should(Succeed())
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -643,11 +671,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			deployment.Status.Replicas)
 	})
 
-	It("should scale down as load stops", func() {
-		By("stopping the load generation script")
-		err := loadGenCmd.Process.Kill()
-		Expect(err).NotTo(HaveOccurred(), "Failed to stop load generator")
-
+	It("should scale down with no load", func() {
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -665,11 +689,11 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			Expect(err).NotTo(HaveOccurred())
 			g.Expect(deployment.Status.Replicas).To(BeNumerically("==", 1), "Deployment should have scaled down to one replica")
 
-		}, 6*time.Minute, 1*time.Minute).Should(Succeed())
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
+		err := crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      deployName,
 		}, finalVA)

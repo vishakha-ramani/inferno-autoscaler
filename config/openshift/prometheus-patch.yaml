@@ -10,7 +10,7 @@ spec:
       - name: manager
         env:
         - name: PROMETHEUS_BASE_URL
-          value: "https://prometheus-user-workload.openshift-user-workload-monitoring.svc.cluster.local:9091"
+          value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
         - name: PROMETHEUS_TLS_ENABLED
           value: "true"
         - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
@@ -18,6 +18,21 @@ spec:
         - name: PROMETHEUS_TOKEN_PATH
           value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - name: PROMETHEUS_CA_CERT_PATH
-          value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          value: "/etc/openshift-ca/ca.crt"
+        - name: PROMETHEUS_CLIENT_CERT_PATH
+          value: ""
+        - name: PROMETHEUS_CLIENT_KEY_PATH
+          value: ""
         - name: PROMETHEUS_SERVER_NAME
-          value: "prometheus-user-workload.openshift-user-workload-monitoring.svc" 
+          value: "thanos-querier.openshift-monitoring.svc"
+        volumeMounts:
+        - name: openshift-service-ca
+          mountPath: /etc/openshift-ca
+          readOnly: true
+      volumes:
+      - name: openshift-service-ca
+        secret:
+          secretName: openshift-service-ca
+          items:
+          - key: ca.crt
+            path: ca.crt 

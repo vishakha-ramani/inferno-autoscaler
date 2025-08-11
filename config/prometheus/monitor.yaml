@@ -2,34 +2,21 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
+  name: controller-manager-metrics-monitor
+  namespace: system
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: inferno-autoscaler
     app.kubernetes.io/managed-by: kustomize
-  name: controller-manager-metrics-monitor
-  namespace: system
 spec:
   endpoints:
-    - path: /metrics
-      port: https # Ensure this is the name of the port that exposes HTTPS metrics
-      scheme: https
-      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      tlsConfig:
-        # Secure TLS configuration using certificates managed by cert-manager
-        serverName: inferno-autoscaler-controller-manager-metrics-service.inferno-autoscaler-system.svc
-        insecureSkipVerify: false
-        ca:
-          secret:
-            name: prometheus-client-cert
-            key: ca.crt
-        cert:
-          secret:
-            name: prometheus-client-cert
-            key: tls.crt
-        keySecret:
-          name: prometheus-client-cert
-          key: tls.key
+  - port: https
+    path: /metrics
+    interval: 10s
   selector:
     matchLabels:
       control-plane: controller-manager
       app.kubernetes.io/name: inferno-autoscaler
+  namespaceSelector:
+    matchNames:
+    - system

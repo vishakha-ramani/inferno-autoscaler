@@ -62,6 +62,13 @@ check_user_workload_monitoring() {
         log_success "OpenShift Prometheus is running"
     fi
     
+    # Check if Thanos querier is available
+    if ! ${KUBECTL} get svc thanos-querier -n openshift-monitoring &>/dev/null; then
+        log_warning "Thanos querier service not found. Please check OpenShift monitoring setup."
+    else
+        log_success "Thanos querier service is available"
+    fi
+    
     log_success "OpenShift user workload monitoring is enabled"
 }
 
@@ -70,18 +77,64 @@ check_prerequisites() {
     log_info "Checking prerequisites..."
     
     # Check if kustomize is available
-    if ! command -v ../../bin/kustomize &>/dev/null; then
+    if ! command -v bin/kustomize &>/dev/null; then
         log_error "kustomize not found. Please run 'make kustomize' first."
         exit 1
     fi
     
     # Check if controller-gen is available
-    if ! command -v ../../bin/controller-gen &>/dev/null; then
+    if ! command -v bin/controller-gen &>/dev/null; then
         log_error "controller-gen not found. Please run 'make controller-gen' first."
         exit 1
     fi
     
     log_success "All prerequisites are available"
+}
+
+# Create OpenShift service CA secret
+create_openshift_service_ca_secret() {
+    log_info "Creating OpenShift service CA secret..."
+    
+    # Check if secret already exists
+    if ${KUBECTL} get secret openshift-service-ca -n ${NAMESPACE} &>/dev/null; then
+        log_info "OpenShift service CA secret already exists"
+        return 0
+    fi
+    
+    # Get the service CA certificate from OpenShift
+    if ! ${KUBECTL} get configmap openshift-service-ca.crt -n openshift-config-managed &>/dev/null; then
+        log_error "OpenShift service CA configmap not found. Please check OpenShift installation."
+        exit 1
+    fi
+    
+    # Extract and create the secret
+    log_info "Extracting OpenShift service CA certificate..."
+    ${KUBECTL} get configmap openshift-service-ca.crt -n openshift-config-managed -o jsonpath='{.data.service-ca\.crt}' | \
+    ${KUBECTL} create secret generic openshift-service-ca \
+        --from-literal=ca.crt="$(cat)" \
+        -n ${NAMESPACE}
+    
+    log_success "OpenShift service CA secret created"
+}
+
+# Update cluster role binding for correct service account
+update_cluster_role_binding() {
+    log_info "Updating cluster role binding for correct service account..."
+    
+    # Check if the cluster role binding exists
+    if ! ${KUBECTL} get clusterrolebinding inferno-autoscaler-monitoring-view &>/dev/null; then
+        log_warning "Cluster role binding inferno-autoscaler-monitoring-view not found. Creating it..."
+        ${KUBECTL} create clusterrolebinding inferno-autoscaler-monitoring-view \
+            --clusterrole=cluster-monitoring-view \
+            --serviceaccount=${NAMESPACE}:inferno-autoscaler-controller-manager
+    else
+        # Update the existing cluster role binding
+        log_info "Updating existing cluster role binding..."
+        ${KUBECTL} patch clusterrolebinding inferno-autoscaler-monitoring-view --type='json' \
+            -p="[{\"op\": \"replace\", \"path\": \"/subjects/0/name\", \"value\": \"inferno-autoscaler-controller-manager\"}, {\"op\": \"replace\", \"path\": \"/subjects/0/namespace\", \"value\": \"${NAMESPACE}\"}]"
+    fi
+    
+    log_success "Cluster role binding updated"
 }
 
 # Deploy Inferno Autoscaler
@@ -102,49 +155,30 @@ deploy_inferno() {
     ${KUBECTL} apply -f deploy/configmap-serviceclass.yaml
     ${KUBECTL} apply -f deploy/configmap-accelerator-unitcost.yaml
     
-    # Create ServiceAccount for Prometheus access
-    log_info "Creating ServiceAccount for Prometheus access..."
-    ${KUBECTL} apply -f - <<EOF
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: inferno-autoscaler-prometheus
-  namespace: ${NAMESPACE}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: inferno-autoscaler-prometheus-reader
-rules:
-- apiGroups: [""]
-  resources: ["pods", "services", "endpoints", "nodes"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get"]
-- nonResourceURLs: ["/metrics"]
-  verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: inferno-autoscaler-prometheus-reader
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: inferno-autoscaler-prometheus-reader
-subjects:
-- kind: ServiceAccount
-  name: inferno-autoscaler-prometheus
-  namespace: ${NAMESPACE}
-EOF
+    # Create OpenShift service CA secret
+    create_openshift_service_ca_secret
     
-    # Deploy Inferno controller using Make target
+    # Update cluster role binding
+    update_cluster_role_binding
+    
+    # Deploy Inferno controller using Kustomize directly
     log_info "Deploying Inferno controller-manager with OpenShift Prometheus..."
     log_info "Using image: ${IMG}"
     
-    # Use the Make target for deployment
-    NAMESPACE=${NAMESPACE} IMG=${IMG} make deploy-inferno-on-openshift
+    # Get the project root directory
+    PROJECT_ROOT=$(pwd)
+    
+    # Set image and namespace in Kustomize
+    cd config/manager && ${PROJECT_ROOT}/bin/kustomize edit set image controller=${IMG}
+    cd ../openshift && ${PROJECT_ROOT}/bin/kustomize edit set namespace ${NAMESPACE}
+    
+    # Build and apply the manifests
+    log_info "Applying manifests..."
+    ${PROJECT_ROOT}/bin/kustomize build . | ${KUBECTL} apply -f -
+    
+    # Wait for deployment rollout
+    log_info "Waiting for deployment rollout..."
+    ${KUBECTL} rollout status deployment inferno-autoscaler-controller-manager -n ${NAMESPACE} --timeout=300s
     
     log_success "Inferno Autoscaler deployed successfully!"
 }
@@ -160,6 +194,15 @@ verify_deployment() {
     else
         log_error "Inferno controller is not running properly"
         ${KUBECTL} get pods -n ${NAMESPACE} -l app.kubernetes.io/name=inferno-autoscaler
+        return 1
+    fi
+    
+    # Check if OpenShift service CA secret exists
+    log_info "Checking OpenShift service CA secret..."
+    if ${KUBECTL} get secret openshift-service-ca -n ${NAMESPACE} &>/dev/null; then
+        log_success "OpenShift service CA secret exists"
+    else
+        log_error "OpenShift service CA secret is missing"
         return 1
     fi
     
@@ -188,12 +231,29 @@ verify_deployment() {
         ${KUBECTL} get pods -n openshift-user-workload-monitoring
     fi
     
+    # Check Thanos querier
+    log_info "Checking Thanos querier availability..."
+    if ${KUBECTL} get svc thanos-querier -n openshift-monitoring &>/dev/null; then
+        log_success "Thanos querier service is available"
+    else
+        log_warning "Thanos querier service not found"
+    fi
+    
     # Check ServiceMonitor
     log_info "Checking ServiceMonitor configuration..."
     if ${KUBECTL} get servicemonitor -n ${NAMESPACE} &>/dev/null; then
         log_success "ServiceMonitor is configured"
     else
         log_warning "ServiceMonitor not found"
+    fi
+    
+    # Check controller logs for Prometheus connection
+    log_info "Checking controller logs for Prometheus connection..."
+    if ${KUBECTL} logs -n ${NAMESPACE} -l app.kubernetes.io/name=inferno-autoscaler --tail=10 | grep -q "Prometheus API validation successful"; then
+        log_success "Prometheus API validation successful"
+    else
+        log_warning "Prometheus API validation status unclear. Check logs manually:"
+        log_warning "kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/name=inferno-autoscaler --tail=20"
     fi
     
     log_success "Deployment verification completed!"
@@ -235,14 +295,12 @@ main() {
     echo " Check Inferno controller logs:"
     echo "   kubectl logs -n $NAMESPACE -l app.kubernetes.io/name=inferno-autoscaler"
     echo ""
-    echo " OpenShift Prometheus endpoint:"
-    echo "   https://prometheus-user-workload.openshift-user-workload-monitoring.svc.cluster.local:9091"
+    echo " OpenShift Prometheus endpoint (Thanos Querier):"
+    echo "   https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     echo ""
-    echo " For production TLS setup:"
-    echo "   1. Install cert-manager: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml"
-    echo "   2. Create certificates: kubectl apply -f config/certmanager/prometheus_client_certificate.yaml"
-    echo "   3. Apply certificate patch: kubectl apply -f config/default/cert_prometheus_client_patch.yaml"
-    echo "   4. Restart controller: kubectl rollout restart deployment inferno-autoscaler-controller-manager -n $NAMESPACE"
+    echo " Verify Prometheus connection:"
+    echo "   kubectl logs -n $NAMESPACE -l app.kubernetes.io/name=inferno-autoscaler | grep 'Prometheus API validation'"
+    echo ""
 }
 
 # Run main function

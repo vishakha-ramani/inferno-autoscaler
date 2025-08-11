@@ -11,6 +11,7 @@ The inferno-autoscaler assigns GPU types to inference model servers and decides 
   - [Showing Inferno-autoscaler scaling replicas up and down](#showing-inferno-autoscaler-scaling-replicas-up-and-down)
   - [Uninstalling llm-d and Inferno-autoscaler](#uninstalling-llm-d-and-inferno-autoscaler)
 - [Running E2E tests](#running-e2e-tests)
+- [OpenShift Deployment](#openshift-deployment)
 - [Details on emulated mode deployment on Kind](#details-on-emulated-mode-deployment-on-kind)
   - [Deployment](#deployment)
   - [Uninstall](#uninstall)
@@ -305,6 +306,9 @@ You can change Kubernetes configuration file (default: **$HOME/.kube/config**) a
 ```sh
 make test-e2e KUBECONFIG="path/to/your/config" K8S_VERSION="vX.y.z"
 ```
+## OpenShift Deployment
+
+For deploying on OpenShift clusters with OpenShift's built-in monitoring stack, see the [OpenShift TLS Configuration Guide](docs/tls-configuration-openshift.md) for specific configuration details.
 
 ## Details on emulated mode deployment on Kind
 

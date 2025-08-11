@@ -439,26 +439,26 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	r.PromAPI = promv1.NewAPI(promClient)
 
 	// Validate that the API is working by testing a simple query with retry logic
-	// err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
-	// 	// Try different queries that might work better with Thanos
-	// 	queries := []string{"up", "1", "prometheus_build_info"}
-	// 	for _, query := range queries {
-	// 		_, _, err := r.PromAPI.Query(ctx, query, time.Now())
-	// 		if err == nil {
-	// 			logger.Log.Info("Prometheus API validation successful with query", "query", query)
-	// 			return true, nil // Success
-	// 		}
-	// 		logger.Log.Warn("Prometheus API validation failed with query", "query", query, "error", err)
-	// 	}
-	// 	return false, nil // Continue retrying
-	// })
+	err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
+		// Try different queries that might work better with Thanos
+		queries := []string{"up", "1", "prometheus_build_info"}
+		for _, query := range queries {
+			_, _, err := r.PromAPI.Query(ctx, query, time.Now())
+			if err == nil {
+				logger.Log.Info("Prometheus API validation successful with query", "query", query)
+				return true, nil // Success
+			}
+			logger.Log.Warn("Prometheus API validation failed with query", "query", query, "error", err)
+		}
+		return false, nil // Continue retrying
+	})
 
-	// if err != nil {
-	// 	logger.Log.Warn("Failed to validate prometheus API connection after retries, continuing anyway", "error", err)
-	// 	// Don't fail the controller startup, just log a warning
-	// } else {
-	// 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
-	// }
+	if err != nil {
+		logger.Log.Warn("Failed to validate prometheus API connection after retries, continuing anyway", "error", err)
+		// Don't fail the controller startup, just log a warning
+	} else {
+		logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
+	}
 
 	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 

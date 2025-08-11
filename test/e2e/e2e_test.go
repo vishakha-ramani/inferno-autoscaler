@@ -479,10 +479,11 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 		By("verifying VariantAutoscaling is deleted")
 		variantAutoscaling := &v1alpha1.VariantAutoscaling{}
-		crClient.Get(ctx, client.ObjectKey{
+		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      deployName,
 		}, variantAutoscaling)
+		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
 			return crClient.Get(ctx, client.ObjectKey{
 				Namespace: namespace,
@@ -500,15 +501,18 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			},
 		}
 		err := crClient.Delete(ctx, variantAutoscaling)
-		client.IgnoreNotFound(err)
+		err = client.IgnoreNotFound(err)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("deleting vllme service")
 		err = k8sClient.CoreV1().Services(namespace).Delete(ctx, "vllme-service", metav1.DeleteOptions{})
-		client.IgnoreNotFound(err)
+		err = client.IgnoreNotFound(err)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("deleting vllme deployment")
 		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deployName, metav1.DeleteOptions{})
-		client.IgnoreNotFound(err)
+		err = client.IgnoreNotFound(err)
+		Expect(err).NotTo(HaveOccurred())
 
 	})
 })

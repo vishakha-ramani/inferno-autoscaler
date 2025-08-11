@@ -92,6 +92,55 @@ func initializeK8sClient() {
 	}
 }
 
+func startPortForwarding(service *corev1.Service, namespace string) *exec.Cmd {
+	portForwardCmd := exec.Command("kubectl", "port-forward",
+		fmt.Sprintf("service/%s", service.Name),
+		"8000:80", "-n", namespace)
+	err := portForwardCmd.Start()
+	Expect(err).NotTo(HaveOccurred(), "Port-forward command should start successfully")
+
+	// Check if the port-forward process is still running
+	Eventually(func() error {
+		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
+			return fmt.Errorf("port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(Succeed(), "Port-forward should keep running")
+
+	return portForwardCmd
+}
+
+func startLoadGenerator() *exec.Cmd {
+	// Install the load generator requirements
+	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
+	_, err := utils.Run(requirementsCmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to install loadgen requirements")
+	loadGenCmd = exec.Command("python",
+		"hack/vllme/vllm_emulator/loadgen.py",
+		"--url", "http://localhost:8000/v1",
+		"--rate", "50", // 50 requests per minute to trigger scaling up
+		"--content", "100", // 100 content-length per request
+		"--model", "vllm")
+	err = loadGenCmd.Start()
+	Expect(err).NotTo(HaveOccurred(), "Failed to start load generator")
+
+	// Check if the loadgen process is still running
+	Eventually(func() error {
+		if loadGenCmd.ProcessState != nil && loadGenCmd.ProcessState.Exited() {
+			return fmt.Errorf("load generator exited unexpectedly with code: %d", loadGenCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(Succeed(), "Load generator should keep running")
+
+	return loadGenCmd
+}
+
+func stopCmd(cmd *exec.Cmd) {
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Signal(os.Interrupt)
+	}
+}
+
 // creates a vllme deployment with the specified configuration
 func createVllmeDeployment(namespace, name string) *appsv1.Deployment {
 	return &appsv1.Deployment{
@@ -525,11 +574,8 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 		// Port-forward the vllme service to send requests to it
 		By("setting up port-forward to the vllme service")
-		portForwardCmd := exec.Command("kubectl", "port-forward",
-			fmt.Sprintf("service/%s", service.Name),
-			"8000:80", "-n", namespace)
-		portForwardCmd.Start()
-		defer portForwardCmd.Process.Kill()
+		portForwardCmd := startPortForwarding(service, namespace)
+		defer stopCmd(portForwardCmd)
 
 		By("waiting for port-forward to be ready")
 		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
@@ -545,15 +591,8 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
-		loadGenCmd = exec.Command("python",
-			"hack/vllme/vllm_emulator/loadgen.py",
-			"--url", "http://localhost:8000/v1",
-			"--rate", "50", // 50 requests per minute to trigger scaling up
-			"--content-length", "100", // 100 content-length per request
-			"--model", "vllm")
-		err = loadGenCmd.Start()
-		Expect(err).NotTo(HaveOccurred(), "Failed to start load generator")
-		defer loadGenCmd.Process.Signal(os.Interrupt) // Fallback in case scaling down tests fail
+		loadGenCmd = startLoadGenerator()
+		defer stopCmd(loadGenCmd)
 
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
@@ -606,7 +645,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 	It("should scale down as load stops", func() {
 		By("stopping the load generation script")
-		err := loadGenCmd.Process.Signal(os.Interrupt)
+		err := loadGenCmd.Process.Kill()
 		Expect(err).NotTo(HaveOccurred(), "Failed to stop load generator")
 
 		By("waiting for scaling down decision to be made")

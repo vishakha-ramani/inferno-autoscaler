@@ -26,8 +26,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -95,24 +93,15 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if trigger == "true" {
 		logger.Log.Info("Manual optimization trigger received")
 		// Reset the trigger
-		err := wait.ExponentialBackoff(utils.ReconcileBackoff, func() (bool, error) {
-			cm := &corev1.ConfigMap{}
-			if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: configMapNamespace}, cm); err != nil {
-				logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
-				return false, nil // retry
-			}
+		cm := &corev1.ConfigMap{}
+		if err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, cm); err != nil {
+			logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
+			return ctrl.Result{}, err
+		}
 
-			cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
-			if err := r.Update(ctx, cm); err != nil {
-				logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
-				return false, nil // retry
-			}
-
-			return true, nil // success
-		})
-
-		if err != nil {
-			logger.Log.Error(err, "Failed to reset GLOBAL_OPT_TRIGGER after retries")
+		cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
+		if err := r.Update(ctx, cm); err != nil {
+			logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
 			return ctrl.Result{}, err
 		}
 	}
@@ -321,7 +310,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		}
 		// Fetch the latest version from API server
 		var updateVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKeyFromObject(va), &updateVa); err != nil {
+		if err := utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, va.Name, va.Namespace, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server: ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
@@ -439,21 +428,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	r.PromAPI = promv1.NewAPI(promClient)
 
 	// Validate that the API is working by testing a simple query with retry logic
-	err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
-		// Try different queries that might work better with Thanos
-		queries := []string{"up", "1", "prometheus_build_info"}
-		for _, query := range queries {
-			_, _, err := r.PromAPI.Query(ctx, query, time.Now())
-			if err == nil {
-				logger.Log.Info("Prometheus API validation successful with query", "query", query)
-				return true, nil // Success
-			}
-			logger.Log.Warn("Prometheus API validation failed with query", "query", query, "error", err)
-		}
-		return false, nil // Continue retrying
-	})
-
-	if err != nil {
+	if err := utils.ValidatePrometheusAPI(context.Background(), r.PromAPI); err != nil {
 		logger.Log.Warn("Failed to validate prometheus API connection after retries, continuing anyway", "error", err)
 		// Don't fail the controller startup, just log a warning
 	} else {
@@ -537,29 +512,7 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 
 func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
 	var cm corev1.ConfigMap
-	backoff := wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-		Steps:    5,
-	}
-
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
-		if err == nil {
-			return true, nil
-		}
-
-		if apierrors.IsNotFound(err) {
-			logger.Log.Error(err, "ConfigMap not found, will not retry - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
-			return false, err
-		}
-
-		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
-		return false, nil
-	})
-
-	if err != nil {
+	if err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm); err != nil {
 		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
 	}
 	return &cm, nil

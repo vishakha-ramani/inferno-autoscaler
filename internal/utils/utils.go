@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 )
 
 // Global backoff configurations
@@ -365,4 +367,27 @@ func FindModelSLO(cmData map[string]string, targetModel string) (*interfaces.Ser
 
 func Ptr[T any](v T) *T {
 	return &v
+}
+
+// ValidatePrometheusAPIWithBackoff validates Prometheus API connectivity with retry logic
+func ValidatePrometheusAPIWithBackoff(ctx context.Context, promAPI promv1.API, backoff wait.Backoff) error {
+	return wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		// Test with a simple query that should always work
+		query := "up"
+		_, _, err := promAPI.Query(ctx, query, time.Now())
+		if err != nil {
+			logger.Log.Error(err, "Prometheus API validation failed, retrying - ",
+				"query: ", query,
+				"error: ", err.Error())
+			return false, nil // Retry on transient errors
+		}
+
+		logger.Log.Info("Prometheus API validation successful with query", "query", query)
+		return true, nil
+	})
+}
+
+// ValidatePrometheusAPI validates Prometheus API connectivity using standard Prometheus backoff
+func ValidatePrometheusAPI(ctx context.Context, promAPI promv1.API) error {
+	return ValidatePrometheusAPIWithBackoff(ctx, promAPI, PrometheusBackoff)
 }

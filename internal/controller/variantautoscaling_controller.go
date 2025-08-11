@@ -400,19 +400,38 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	// Initialize metrics
 	initMetricsEmitter()
 
-	// Configure Prometheus client using flexible configuration
-	// TODO: If configuration changes become a concern, implement a configuration watcher rather than per-cycle initialization.
-	prom_addr, err := r.getPrometheusConfig(context.Background())
+	// Configure Prometheus client using flexible configuration with TLS support
+	promConfig, err := r.getPrometheusConfig(context.Background())
 	if err != nil {
 		logger.Log.Warn("Failed to get Prometheus config, using default - ", "error: ", err)
 		// Use default as fallback
-		prom_addr = "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+		promConfig = &interfaces.PrometheusConfig{
+			BaseURL: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+			Timeout: 30 * time.Second,
+		}
 	}
 
-	logger.Log.Info("Initializing Prometheus client -> ", "address: ", prom_addr)
-	promClient, err := api.NewClient(api.Config{
-		Address: prom_addr,
-	})
+	// Validate TLS configuration if enabled
+	if promConfig.TLS != nil && promConfig.TLS.EnableTLS {
+		if err := utils.ValidateTLSConfig(promConfig.TLS); err != nil {
+			logger.Log.Error(err, "TLS configuration validation failed, falling back to HTTP")
+			promConfig.TLS = nil
+			// Ensure BaseURL is HTTP if TLS fails
+			if len(promConfig.BaseURL) > 8 && promConfig.BaseURL[:8] == "https://" {
+				promConfig.BaseURL = "http://" + promConfig.BaseURL[8:]
+			}
+		}
+	}
+
+	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: ", promConfig.TLS != nil && promConfig.TLS.EnableTLS)
+
+	// Create Prometheus client with TLS support
+	promClientConfig, err := utils.CreatePrometheusClientConfig(promConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create prometheus client config: %w", err)
+	}
+
+	promClient, err := api.NewClient(*promClientConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create prometheus client: %w", err)
 	}
@@ -508,11 +527,42 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 	return out, nil
 }
 
-func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
-	// First, try environment variable
+func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
+	var cm corev1.ConfigMap
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: cmNamespace}, &cm)
+		if err == nil {
+			return true, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Error(err, "ConfigMap not found, will not retry - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
+			return false, err
+		}
+
+		logger.Log.Error(err, "Transient error fetching ConfigMap, retrying - ", "configMapName: ", cmName, " namespace: ", cmNamespace)
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
+	}
+	return &cm, nil
+}
+
+func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (*interfaces.PrometheusConfig, error) {
+	// First, try environment variable configuration
 	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
 		logger.Log.Info("Using Prometheus address from environment variable -> ", "address: ", promAddr)
-		return promAddr, nil
+		config := utils.ParsePrometheusConfigFromEnv()
+		return config, nil
 	}
 
 	// Then, try to get from ConfigMap with retry logic
@@ -522,13 +572,48 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default - ", "error: ", err)
 	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
 		logger.Log.Info("Using Prometheus address from ConfigMap -> ", "address: ", promAddr)
-		return promAddr, nil
+
+		// Create config from ConfigMap data
+		config := &interfaces.PrometheusConfig{
+			BaseURL: promAddr,
+			Timeout: 30 * time.Second,
+		}
+
+		// Parse TLS configuration from ConfigMap
+		if tlsEnabled, exists := cm.Data["PROMETHEUS_TLS_ENABLED"]; exists && tlsEnabled == "true" {
+			config.TLS = &interfaces.PrometheusTLSConfig{
+				EnableTLS:          true,
+				InsecureSkipVerify: getConfigMapValue(cm, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true",
+				CACertPath:         getConfigMapValue(cm, "PROMETHEUS_CA_CERT_PATH"),
+				ClientCertPath:     getConfigMapValue(cm, "PROMETHEUS_CLIENT_CERT_PATH"),
+				ClientKeyPath:      getConfigMapValue(cm, "PROMETHEUS_CLIENT_KEY_PATH"),
+				ServerName:         getConfigMapValue(cm, "PROMETHEUS_SERVER_NAME"),
+			}
+		}
+
+		// Add bearer token if provided
+		if bearerToken, exists := cm.Data["PROMETHEUS_BEARER_TOKEN"]; exists && bearerToken != "" {
+			config.BearerToken = bearerToken
+		}
+
+		return config, nil
 	}
 
 	// Default in-cluster address
-	defaultAddr := "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
-	logger.Log.Info("Using default Prometheus address -> ", "address: ", defaultAddr)
-	return defaultAddr, nil
+	defaultConfig := &interfaces.PrometheusConfig{
+		BaseURL: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+		Timeout: 30 * time.Second,
+	}
+	logger.Log.Info("Using default Prometheus configuration -> ", "address: ", defaultConfig.BaseURL)
+	return defaultConfig, nil
+}
+
+// getConfigMapValue safely gets a value from ConfigMap data
+func getConfigMapValue(cm *corev1.ConfigMap, key string) string {
+	if value, exists := cm.Data[key]; exists {
+		return value
+	}
+	return ""
 }
 
 func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, trigger string, err error) {

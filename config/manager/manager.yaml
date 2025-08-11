@@ -69,6 +69,18 @@ spec:
             value: "debug"  # or "info", "warn", "error"
           - name: PROMETHEUS_BASE_URL
             value: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+          - name: PROMETHEUS_TLS_ENABLED
+            value: "false"  # Set to true for production with proper certificates
+          - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
+            value: "false"
+          - name: PROMETHEUS_CA_CERT_PATH
+            value: "/etc/prometheus-certs/ca.crt"
+          - name: PROMETHEUS_CLIENT_CERT_PATH
+            value: "/etc/prometheus-certs/tls.crt"
+          - name: PROMETHEUS_CLIENT_KEY_PATH
+            value: "/etc/prometheus-certs/tls.key"
+          - name: PROMETHEUS_SERVER_NAME
+            value: "kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local"
         name: manager
         ports: []
         securityContext:
@@ -97,7 +109,21 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+        - name: prometheus-client-certs
+          mountPath: /etc/prometheus-certs
+          readOnly: true
+      volumes:
+      - name: prometheus-client-certs
+        secret:
+          secretName: prometheus-client-cert
+          optional: true
+          items:
+          - key: ca.crt
+            path: ca.crt
+          - key: tls.crt
+            path: tls.crt
+          - key: tls.key
+            path: tls.key
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

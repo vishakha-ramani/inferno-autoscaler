@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
 )
@@ -44,9 +43,6 @@ var (
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
-
-	// k8s client
-	suiteK8sClient *kubernetes.Clientset
 )
 
 // createServiceClassConfigMap creates the serviceclass ConfigMap
@@ -154,6 +150,10 @@ var _ = BeforeSuite(func() {
 	acceleratorConfigMap := createAcceleratorUnitCostConfigMap()
 	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
+
+	cmd = exec.Command("kubectl", "apply", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml")
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to deploy Prometheus resources")
 
 	By("deploying the controller-manager")
 	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))

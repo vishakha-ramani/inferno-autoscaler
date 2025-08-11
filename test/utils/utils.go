@@ -215,7 +215,7 @@ func CheckIfClusterExistsOrCreate() (string, error) {
 	// Create the kind cluster if it doesn't exist
 	expectedVersion := os.Getenv("K8S_EXPECTED_VERSION")
 	if !clusterExists {
-		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "K8S_VERSION="+expectedVersion)
+		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "-g", "4", "K8S_VERSION="+expectedVersion)
 		if _, err := Run(scriptCmd); err != nil {
 			return "", fmt.Errorf("failed to create kind cluster: %v", err)
 		}

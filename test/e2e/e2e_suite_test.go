@@ -151,6 +151,10 @@ var _ = BeforeSuite(func() {
 	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
 
+	cmd = exec.Command("kubectl", "apply", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml")
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to deploy Prometheus resources")
+
 	By("deploying the controller-manager")
 	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(cmd)

@@ -7,8 +7,12 @@ metadata:
     app.kubernetes.io/name: inferno-autoscaler
     app.kubernetes.io/managed-by: kustomize
 data:
-  # Prometheus configuration
-  PROMETHEUS_BASE_URL: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+  # Prometheus configuration - REQUIRED: Set your Prometheus server URL
+  # Example: 
+  # General - "http://prometheus:9090" or 
+  # Openshift cluster - "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+  # KIND cluster promethues-stack deployment- "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+  PROMETHEUS_BASE_URL: ""
   
   # Optimization configuration
   GLOBAL_OPT_INTERVAL: "60s"

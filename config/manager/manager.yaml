@@ -69,7 +69,10 @@ spec:
           - name: LOG_LEVEL
             value: "debug"  # or "info", "warn", "error"
           - name: PROMETHEUS_BASE_URL
-            value: "http://prometheus:9090"  # Generic default, will be overridden by deployment scripts
+            valueFrom:
+              configMapKeyRef:
+                name: inferno-autoscaler-variantautoscaling-config
+                key: PROMETHEUS_BASE_URL
           - name: PROMETHEUS_TLS_ENABLED
             value: "false"  # Default to HTTP, will be overridden for HTTPS
           - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY

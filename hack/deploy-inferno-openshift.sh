@@ -4,8 +4,8 @@ set -euo pipefail
 
 # Configuration
 KUBECTL=${KUBECTL:-kubectl}
-NAMESPACE=${NAMESPACE:-"inferno-autoscaler-test"}
-IMG=${IMG:-"quay.io/mmunirab/inferno-autoscaler:multi-arch0.5tls"}
+NAMESPACE=${NAMESPACE:-"inferno-autoscaler-system"}
+IMG=${IMG:-"quay.io/infernoautoscaler:0.0.1-multi-arch"}
 
 # Colors for output
 RED='\033[0;31m'

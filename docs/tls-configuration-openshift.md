@@ -63,7 +63,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: inferno-autoscaler-controller-manager
-  namespace: inferno-autoscaler-test
+  namespace: inferno-autoscaler-system
 ```
 
 ### 3. Secret for OpenShift Service CA
@@ -75,7 +75,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: openshift-service-ca
-  namespace: inferno-autoscaler-test
+  namespace: inferno-autoscaler-system
 type: Opaque
 data:
   ca.crt: <base64-encoded-openshift-service-ca-cert>
@@ -161,7 +161,7 @@ kubectl create secret generic openshift-service-ca \
 ```bash
 kubectl create clusterrolebinding inferno-autoscaler-monitoring-view \
     --clusterrole=cluster-monitoring-view \
-    --serviceaccount=inferno-autoscaler-test:inferno-autoscaler-controller-manager
+    --serviceaccount=inferno-autoscaler-system:inferno-autoscaler-controller-manager
 ```
 
 3. **Deploy with OpenShift configuration**:

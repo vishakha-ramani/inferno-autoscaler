@@ -9,4 +9,4 @@ patches:
   target:
     kind: Deployment
     name: controller-manager
-namespace: inferno-autoscaler-test
+namespace: inferno-autoscaler-system

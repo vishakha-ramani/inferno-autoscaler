@@ -50,6 +50,10 @@ _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 # deploy emulated vllme server (includes Prometheus)
 hack/deploy-emulated-vllme-server.sh
 
+# Configure Prometheus URL for the Kind cluster deployment
+echo "Configuring Prometheus URL for Kind cluster deployment..."
+_kubectl patch configmap inferno-autoscaler-variantautoscaling-config -n ${NAMESPACE} --patch '{"data":{"PROMETHEUS_BASE_URL":"http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"}}' 2>/dev/null || echo "ConfigMap not found yet, will be created during deployment"
+
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
 echo "Inferno controller-manager Installed"

@@ -11,75 +11,75 @@ import (
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 )
 
-// CreateTLSConfig creates a TLS configuration from PrometheusTLSConfig
-func CreateTLSConfig(tlsConfig *interfaces.PrometheusTLSConfig) (*tls.Config, error) {
-	if tlsConfig == nil || !tlsConfig.EnableTLS {
+// CreateTLSConfig creates a TLS configuration from PrometheusConfig
+func CreateTLSConfig(promConfig *interfaces.PrometheusConfig) (*tls.Config, error) {
+	if promConfig == nil || !promConfig.EnableTLS {
 		return nil, nil
 	}
 
 	config := &tls.Config{
-		InsecureSkipVerify: tlsConfig.InsecureSkipVerify,
-		ServerName:         tlsConfig.ServerName,
+		InsecureSkipVerify: promConfig.InsecureSkipVerify,
+		ServerName:         promConfig.ServerName,
 		MinVersion:         tls.VersionTLS12, // Enforce minimum TLS version
 	}
 
 	// Load CA certificate if provided
-	if tlsConfig.CACertPath != "" {
-		caCert, err := os.ReadFile(tlsConfig.CACertPath)
+	if promConfig.CACertPath != "" {
+		caCert, err := os.ReadFile(promConfig.CACertPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read CA certificate from %s: %w", tlsConfig.CACertPath, err)
+			return nil, fmt.Errorf("failed to read CA certificate from %s: %w", promConfig.CACertPath, err)
 		}
 
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("failed to parse CA certificate from %s", tlsConfig.CACertPath)
+			return nil, fmt.Errorf("failed to parse CA certificate from %s", promConfig.CACertPath)
 		}
 		config.RootCAs = caCertPool
-		logger.Log.Info("CA certificate loaded successfully", "path", tlsConfig.CACertPath)
+		logger.Log.Info("CA certificate loaded successfully", "path", promConfig.CACertPath)
 	}
 
 	// Load client certificate and key if provided
-	if tlsConfig.ClientCertPath != "" && tlsConfig.ClientKeyPath != "" {
-		cert, err := tls.LoadX509KeyPair(tlsConfig.ClientCertPath, tlsConfig.ClientKeyPath)
+	if promConfig.ClientCertPath != "" && promConfig.ClientKeyPath != "" {
+		cert, err := tls.LoadX509KeyPair(promConfig.ClientCertPath, promConfig.ClientKeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate from %s and key from %s: %w",
-				tlsConfig.ClientCertPath, tlsConfig.ClientKeyPath, err)
+				promConfig.ClientCertPath, promConfig.ClientKeyPath, err)
 		}
 		config.Certificates = []tls.Certificate{cert}
 		logger.Log.Info("Client certificate loaded successfully",
-			"cert_path", tlsConfig.ClientCertPath, "key_path", tlsConfig.ClientKeyPath)
+			"cert_path", promConfig.ClientCertPath, "key_path", promConfig.ClientKeyPath)
 	}
 
 	return config, nil
 }
 
 // ValidateTLSConfig validates TLS configuration
-func ValidateTLSConfig(tlsConfig *interfaces.PrometheusTLSConfig) error {
-	if tlsConfig == nil || !tlsConfig.EnableTLS {
+func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
+	if promConfig == nil || !promConfig.EnableTLS {
 		return nil
 	}
 
 	// Check if certificate files exist
-	if tlsConfig.CACertPath != "" {
-		if _, err := os.Stat(tlsConfig.CACertPath); os.IsNotExist(err) {
-			return fmt.Errorf("CA certificate file not found: %s", tlsConfig.CACertPath)
+	if promConfig.CACertPath != "" {
+		if _, err := os.Stat(promConfig.CACertPath); os.IsNotExist(err) {
+			return fmt.Errorf("CA certificate file not found: %s", promConfig.CACertPath)
 		}
 	}
 
-	if tlsConfig.ClientCertPath != "" {
-		if _, err := os.Stat(tlsConfig.ClientCertPath); os.IsNotExist(err) {
-			return fmt.Errorf("client certificate file not found: %s", tlsConfig.ClientCertPath)
+	if promConfig.ClientCertPath != "" {
+		if _, err := os.Stat(promConfig.ClientCertPath); os.IsNotExist(err) {
+			return fmt.Errorf("client certificate file not found: %s", promConfig.ClientCertPath)
 		}
 	}
 
-	if tlsConfig.ClientKeyPath != "" {
-		if _, err := os.Stat(tlsConfig.ClientKeyPath); os.IsNotExist(err) {
-			return fmt.Errorf("client key file not found: %s", tlsConfig.ClientKeyPath)
+	if promConfig.ClientKeyPath != "" {
+		if _, err := os.Stat(promConfig.ClientKeyPath); os.IsNotExist(err) {
+			return fmt.Errorf("client key file not found: %s", promConfig.ClientKeyPath)
 		}
 	}
 
 	// Warn about insecure configuration
-	if tlsConfig.InsecureSkipVerify {
+	if promConfig.InsecureSkipVerify {
 		logger.Log.Warn("TLS certificate verification is disabled - this is not recommended for production")
 	}
 
@@ -98,14 +98,12 @@ func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 		(len(config.BaseURL) > 8 && config.BaseURL[:8] == "https://")
 
 	if enableTLS {
-		config.TLS = &interfaces.PrometheusTLSConfig{
-			EnableTLS:          true,
-			InsecureSkipVerify: getEnvOrDefault("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false") == "true",
-			CACertPath:         getEnvOrDefault("PROMETHEUS_CA_CERT_PATH", ""),
-			ClientCertPath:     getEnvOrDefault("PROMETHEUS_CLIENT_CERT_PATH", ""),
-			ClientKeyPath:      getEnvOrDefault("PROMETHEUS_CLIENT_KEY_PATH", ""),
-			ServerName:         getEnvOrDefault("PROMETHEUS_SERVER_NAME", ""),
-		}
+		config.EnableTLS = true
+		config.InsecureSkipVerify = getEnvOrDefault("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false") == "true"
+		config.CACertPath = getEnvOrDefault("PROMETHEUS_CA_CERT_PATH", "")
+		config.ClientCertPath = getEnvOrDefault("PROMETHEUS_CLIENT_CERT_PATH", "")
+		config.ClientKeyPath = getEnvOrDefault("PROMETHEUS_CLIENT_KEY_PATH", "")
+		config.ServerName = getEnvOrDefault("PROMETHEUS_SERVER_NAME", "")
 	}
 
 	// Support both direct bearer token and token path

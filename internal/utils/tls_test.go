@@ -17,24 +17,24 @@ func init() {
 func TestCreateTLSConfig(t *testing.T) {
 	tests := []struct {
 		name        string
-		tlsConfig   *interfaces.PrometheusTLSConfig
+		promConfig  *interfaces.PrometheusConfig
 		expectError bool
 	}{
 		{
 			name:        "nil config",
-			tlsConfig:   nil,
+			promConfig:  nil,
 			expectError: false,
 		},
 		{
 			name: "TLS disabled",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS: false,
 			},
 			expectError: false,
 		},
 		{
 			name: "TLS enabled with insecure skip verify",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:          true,
 				InsecureSkipVerify: true,
 			},
@@ -42,7 +42,7 @@ func TestCreateTLSConfig(t *testing.T) {
 		},
 		{
 			name: "TLS enabled with server name",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:  true,
 				ServerName: "prometheus.example.com",
 			},
@@ -52,13 +52,13 @@ func TestCreateTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config, err := CreateTLSConfig(tt.tlsConfig)
+			config, err := CreateTLSConfig(tt.promConfig)
 			if tt.expectError {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
-			if tt.tlsConfig != nil && tt.tlsConfig.EnableTLS {
+			if tt.promConfig != nil && tt.promConfig.EnableTLS {
 				assert.NotNil(t, config)
 			} else {
 				assert.Nil(t, config)
@@ -74,7 +74,7 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config := ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "http://prometheus:9090", config.BaseURL)
-	assert.Nil(t, config.TLS)
+	assert.False(t, config.EnableTLS)
 
 	// Test with HTTPS URL
 	os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090")
@@ -83,9 +83,8 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://prometheus:9090", config.BaseURL)
-	assert.NotNil(t, config.TLS)
-	assert.True(t, config.TLS.EnableTLS)
-	assert.True(t, config.TLS.InsecureSkipVerify)
+	assert.True(t, config.EnableTLS)
+	assert.True(t, config.InsecureSkipVerify)
 
 	// Test OpenShift configuration
 	os.Setenv("PROMETHEUS_BASE_URL", "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091")
@@ -99,13 +98,12 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091", config.BaseURL)
-	assert.NotNil(t, config.TLS)
-	assert.True(t, config.TLS.EnableTLS)
-	assert.False(t, config.TLS.InsecureSkipVerify)
-	assert.Equal(t, "/etc/openshift-ca/ca.crt", config.TLS.CACertPath)
-	assert.Equal(t, "", config.TLS.ClientCertPath)
-	assert.Equal(t, "", config.TLS.ClientKeyPath)
-	assert.Equal(t, "thanos-querier.openshift-monitoring.svc", config.TLS.ServerName)
+	assert.True(t, config.EnableTLS)
+	assert.False(t, config.InsecureSkipVerify)
+	assert.Equal(t, "/etc/openshift-ca/ca.crt", config.CACertPath)
+	assert.Equal(t, "", config.ClientCertPath)
+	assert.Equal(t, "", config.ClientKeyPath)
+	assert.Equal(t, "thanos-querier.openshift-monitoring.svc", config.ServerName)
 	assert.Equal(t, "/var/run/secrets/kubernetes.io/serviceaccount/token", config.TokenPath)
 
 	// Clean up
@@ -122,24 +120,24 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 func TestValidateTLSConfig(t *testing.T) {
 	tests := []struct {
 		name        string
-		tlsConfig   *interfaces.PrometheusTLSConfig
+		promConfig  *interfaces.PrometheusConfig
 		expectError bool
 	}{
 		{
 			name:        "nil config",
-			tlsConfig:   nil,
+			promConfig:  nil,
 			expectError: false,
 		},
 		{
 			name: "TLS disabled",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS: false,
 			},
 			expectError: false,
 		},
 		{
 			name: "TLS enabled with insecure skip verify",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:          true,
 				InsecureSkipVerify: true,
 			},
@@ -147,7 +145,7 @@ func TestValidateTLSConfig(t *testing.T) {
 		},
 		{
 			name: "TLS enabled with non-existent CA cert",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:  true,
 				CACertPath: "/non/existent/path",
 			},
@@ -155,7 +153,7 @@ func TestValidateTLSConfig(t *testing.T) {
 		},
 		{
 			name: "OpenShift TLS configuration",
-			tlsConfig: &interfaces.PrometheusTLSConfig{
+			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:          true,
 				InsecureSkipVerify: false,
 				CACertPath:         "/etc/openshift-ca/ca.crt",
@@ -167,7 +165,7 @@ func TestValidateTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTLSConfig(tt.tlsConfig)
+			err := ValidateTLSConfig(tt.promConfig)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {

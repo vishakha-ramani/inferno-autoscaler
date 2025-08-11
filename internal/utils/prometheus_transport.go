@@ -30,8 +30,8 @@ func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundT
 	}
 
 	// Configure TLS if enabled
-	if config.TLS != nil && config.TLS.EnableTLS {
-		tlsConfig, err := CreateTLSConfig(config.TLS)
+	if config.EnableTLS {
+		tlsConfig, err := CreateTLSConfig(config)
 		if err != nil {
 			return nil, err
 		}

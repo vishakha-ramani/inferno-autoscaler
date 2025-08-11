@@ -401,10 +401,10 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 
 	// Validate TLS configuration if enabled
-	if promConfig.TLS != nil && promConfig.TLS.EnableTLS {
-		if err := utils.ValidateTLSConfig(promConfig.TLS); err != nil {
+	if promConfig.EnableTLS {
+		if err := utils.ValidateTLSConfig(promConfig); err != nil {
 			logger.Log.Error(err, "TLS configuration validation failed, falling back to HTTP")
-			promConfig.TLS = nil
+			promConfig.EnableTLS = false
 			// Ensure BaseURL is HTTP if TLS fails
 			if len(promConfig.BaseURL) > 8 && promConfig.BaseURL[:8] == "https://" {
 				promConfig.BaseURL = "http://" + promConfig.BaseURL[8:]
@@ -412,7 +412,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		}
 	}
 
-	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: ", promConfig.TLS != nil && promConfig.TLS.EnableTLS)
+	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: ", promConfig.EnableTLS)
 
 	// Create Prometheus client with TLS support
 	promClientConfig, err := utils.CreatePrometheusClientConfig(promConfig)
@@ -510,14 +510,6 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 	return out, nil
 }
 
-func (r *VariantAutoscalingReconciler) getConfigMap(ctx context.Context, cmName, cmNamespace string) (*corev1.ConfigMap, error) {
-	var cm corev1.ConfigMap
-	if err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm); err != nil {
-		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
-	}
-	return &cm, nil
-}
-
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (*interfaces.PrometheusConfig, error) {
 	// First, try environment variable configuration
 	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
@@ -542,14 +534,12 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 
 		// Parse TLS configuration from ConfigMap
 		if tlsEnabled, exists := cm.Data["PROMETHEUS_TLS_ENABLED"]; exists && tlsEnabled == "true" {
-			config.TLS = &interfaces.PrometheusTLSConfig{
-				EnableTLS:          true,
-				InsecureSkipVerify: getConfigMapValue(&cm, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true",
-				CACertPath:         getConfigMapValue(&cm, "PROMETHEUS_CA_CERT_PATH"),
-				ClientCertPath:     getConfigMapValue(&cm, "PROMETHEUS_CLIENT_CERT_PATH"),
-				ClientKeyPath:      getConfigMapValue(&cm, "PROMETHEUS_CLIENT_KEY_PATH"),
-				ServerName:         getConfigMapValue(&cm, "PROMETHEUS_SERVER_NAME"),
-			}
+			config.EnableTLS = true
+			config.InsecureSkipVerify = getConfigMapValue(&cm, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true"
+			config.CACertPath = getConfigMapValue(&cm, "PROMETHEUS_CA_CERT_PATH")
+			config.ClientCertPath = getConfigMapValue(&cm, "PROMETHEUS_CLIENT_CERT_PATH")
+			config.ClientKeyPath = getConfigMapValue(&cm, "PROMETHEUS_CLIENT_KEY_PATH")
+			config.ServerName = getConfigMapValue(&cm, "PROMETHEUS_SERVER_NAME")
 		}
 
 		// Add bearer token if provided

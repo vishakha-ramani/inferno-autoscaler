@@ -21,6 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,6 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
+	logger "github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
+	ctrlutils "github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
 )
 
 var _ = Describe("VariantAutoscalings Controller", func() {
@@ -43,6 +47,23 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 		VariantAutoscalings := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
 
 		BeforeEach(func() {
+			logger.Log = zap.NewNop().Sugar()
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "inferno-autoscaler-system",
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			By("creating the required configmap for optimization")
+			configMap := ctrlutils.CreateServiceClassConfigMap(ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			configMap = ctrlutils.CreateAcceleratorUnitCostConfigMap(ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			configMap = ctrlutils.CreateVariantAutoscalingConfigMap(ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
 			By("creating the custom resource for the Kind VariantAutoscalings")
 			err := k8sClient.Get(ctx, typeNamespacedName, VariantAutoscalings)
 			if err != nil && errors.IsNotFound(err) {
@@ -52,6 +73,26 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 						Namespace: "default",
 					},
 					// TODO(user): Specify other spec details if needed.
+					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+						// Example spec fields, adjust as necessary
+						ModelID: "default/default",
+						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
+							Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
+								{
+									Acc:          "A100",
+									AccCount:     1,
+									Alpha:        "0.28",
+									Beta:         "0.72",
+									MaxBatchSize: 4,
+									AtTokens:     100,
+								},
+							},
+						},
+						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
+							Name: "premium",
+							Key:  "default/default",
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

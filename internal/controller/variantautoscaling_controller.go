@@ -244,7 +244,7 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			continue
 		}
 
-		entry, className, err := findModelSLO(serviceClassCm, modelName)
+		entry, className, err := utils.FindModelSLO(serviceClassCm, modelName)
 		if err != nil {
 			logger.Log.Error(err, "failed to locate SLO for model - ", "variantAutoscaling-name: ", va.Name, "modelName: ", modelName)
 			continue
@@ -346,8 +346,8 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 				Kind:               deploy.Kind,
 				Name:               deploy.Name,
 				UID:                deploy.UID,
-				Controller:         ptr(true),
-				BlockOwnerDeletion: ptr(true),
+				Controller:         utils.Ptr(true),
+				BlockOwnerDeletion: utils.Ptr(true),
 			})
 
 			// Patch metadata change (ownerReferences)

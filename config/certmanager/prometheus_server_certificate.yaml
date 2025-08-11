@@ -1,0 +1,27 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prometheus-server-cert
+  namespace: inferno-autoscaler-monitoring
+spec:
+  # Secret names are often required, which is the secretName that will be used
+  # to store this certificate.
+  secretName: prometheus-server-cert
+  # Duration of the certificate
+  duration: 2160h # 90 days
+  # Renew 7 days before the certificate expires
+  renewBefore: 168h # 7 days
+  # The reference to the issuer
+  issuerRef:
+    # You can specify the name of the issuer
+    name: selfsigned-issuer
+    # We can reference ClusterIssuers by changing the kind here.
+    # The default value is Issuer (i.e. a locally namespaced Issuer)
+    kind: ClusterIssuer
+  # CommonName is the common name as specified on the DER encoded certificate
+  commonName: kube-prometheus-stack-prometheus
+  # DNSNames is a list of DNS subjectAltNames to be set on the certificate
+  dnsNames:
+    - kube-prometheus-stack-prometheus
+    - kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc
+    - kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local 

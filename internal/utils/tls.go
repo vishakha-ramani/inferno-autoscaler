@@ -89,7 +89,7 @@ func ValidateTLSConfig(tlsConfig *interfaces.PrometheusTLSConfig) error {
 // ParsePrometheusConfigFromEnv parses Prometheus configuration from environment variables
 func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config := &interfaces.PrometheusConfig{
-		BaseURL: getEnvOrDefault("PROMETHEUS_BASE_URL", "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"),
+		BaseURL: getEnvOrDefault("PROMETHEUS_BASE_URL", "http://prometheus:9090"),
 		Timeout: 30 * time.Second,
 	}
 
@@ -108,7 +108,9 @@ func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 		}
 	}
 
+	// Support both direct bearer token and token path
 	config.BearerToken = getEnvOrDefault("PROMETHEUS_BEARER_TOKEN", "")
+	config.TokenPath = getEnvOrDefault("PROMETHEUS_TOKEN_PATH", "")
 
 	return config
 }

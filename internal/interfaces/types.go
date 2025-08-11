@@ -62,8 +62,11 @@ type PrometheusConfig struct {
 	// TLS configuration for secure connections
 	TLS *PrometheusTLSConfig `json:"tls,omitempty"`
 
-	// BearerToken for authentication
+	// BearerToken for authentication (direct token string)
 	BearerToken string `json:"bearerToken,omitempty"`
+
+	// TokenPath for reading bearer token from file (for OpenShift service accounts)
+	TokenPath string `json:"tokenPath,omitempty"`
 
 	// Timeout for API requests
 	Timeout time.Duration `json:"timeout,omitempty"`

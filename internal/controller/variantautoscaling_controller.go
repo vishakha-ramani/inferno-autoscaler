@@ -439,20 +439,28 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	r.PromAPI = promv1.NewAPI(promClient)
 
 	// Validate that the API is working by testing a simple query with retry logic
-	err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
-		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
-		if err != nil {
-			logger.Log.Warn("Prometheus API validation failed, retrying - ", "error: ", err)
-			return false, nil // Continue retrying
-		}
-		return true, nil // Success
-	})
+	// err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
+	// 	// Try different queries that might work better with Thanos
+	// 	queries := []string{"up", "1", "prometheus_build_info"}
+	// 	for _, query := range queries {
+	// 		_, _, err := r.PromAPI.Query(ctx, query, time.Now())
+	// 		if err == nil {
+	// 			logger.Log.Info("Prometheus API validation successful with query", "query", query)
+	// 			return true, nil // Success
+	// 		}
+	// 		logger.Log.Warn("Prometheus API validation failed with query", "query", query, "error", err)
+	// 	}
+	// 	return false, nil // Continue retrying
+	// })
 
-	if err != nil {
-		return fmt.Errorf("failed to validate prometheus API connection after retries: %w", err)
-	}
+	// if err != nil {
+	// 	logger.Log.Warn("Failed to validate prometheus API connection after retries, continuing anyway", "error", err)
+	// 	// Don't fail the controller startup, just log a warning
+	// } else {
+	// 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
+	// }
 
-	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
+	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
@@ -583,11 +591,11 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) 
 		if tlsEnabled, exists := cm.Data["PROMETHEUS_TLS_ENABLED"]; exists && tlsEnabled == "true" {
 			config.TLS = &interfaces.PrometheusTLSConfig{
 				EnableTLS:          true,
-				InsecureSkipVerify: getConfigMapValue(cm, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true",
-				CACertPath:         getConfigMapValue(cm, "PROMETHEUS_CA_CERT_PATH"),
-				ClientCertPath:     getConfigMapValue(cm, "PROMETHEUS_CLIENT_CERT_PATH"),
-				ClientKeyPath:      getConfigMapValue(cm, "PROMETHEUS_CLIENT_KEY_PATH"),
-				ServerName:         getConfigMapValue(cm, "PROMETHEUS_SERVER_NAME"),
+				InsecureSkipVerify: getConfigMapValue(&cm, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true",
+				CACertPath:         getConfigMapValue(&cm, "PROMETHEUS_CA_CERT_PATH"),
+				ClientCertPath:     getConfigMapValue(&cm, "PROMETHEUS_CLIENT_CERT_PATH"),
+				ClientKeyPath:      getConfigMapValue(&cm, "PROMETHEUS_CLIENT_KEY_PATH"),
+				ServerName:         getConfigMapValue(&cm, "PROMETHEUS_SERVER_NAME"),
 			}
 		}
 

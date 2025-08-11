@@ -1,0 +1,26 @@
+# This patch adds the volumes and volumeMounts to allow the manager to use Prometheus client certificates
+# for secure TLS connections to Prometheus
+
+# Add the volumeMount for the Prometheus client certificates
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    mountPath: /etc/prometheus-certs
+    name: prometheus-client-certs
+    readOnly: true
+
+# Add the Prometheus client certificates volume configuration
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: prometheus-client-certs
+    secret:
+      secretName: prometheus-client-cert
+      optional: true
+      items:
+        - key: ca.crt
+          path: ca.crt
+        - key: tls.crt
+          path: tls.crt
+        - key: tls.key
+          path: tls.key 

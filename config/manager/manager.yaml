@@ -64,23 +64,24 @@ spec:
           - --leader-elect=true
           - --health-probe-bind-address=:8081
         image: controller:latest
+        imagePullPolicy: Always
         env:
           - name: LOG_LEVEL
             value: "debug"  # or "info", "warn", "error"
           - name: PROMETHEUS_BASE_URL
-            value: "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+            value: "http://prometheus:9090"  # Generic default, will be overridden by deployment scripts
           - name: PROMETHEUS_TLS_ENABLED
-            value: "false"  # Set to true for production with proper certificates
+            value: "false"  # Default to HTTP, will be overridden for HTTPS
           - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
-            value: "false"
+            value: "false"  # Verify certificates for production
           - name: PROMETHEUS_CA_CERT_PATH
             value: "/etc/prometheus-certs/ca.crt"
           - name: PROMETHEUS_CLIENT_CERT_PATH
             value: "/etc/prometheus-certs/tls.crt"
           - name: PROMETHEUS_CLIENT_KEY_PATH
             value: "/etc/prometheus-certs/tls.key"
-          - name: PROMETHEUS_SERVER_NAME
-            value: "kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local"
+          - name: PROMETHEUS_TOKEN_PATH
+            value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         name: manager
         ports: []
         securityContext:

@@ -15,12 +15,20 @@ spec:
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
-        # TODO(user): The option insecureSkipVerify: true is not recommended for production since it disables
-        # certificate verification, exposing the system to potential man-in-the-middle attacks.
-        # For production environments, it is recommended to use cert-manager for automatic TLS certificate management.
-        # To apply this configuration, enable cert-manager and use the patch located at config/prometheus/servicemonitor_tls_patch.yaml,
-        # which securely references the certificate from the 'metrics-server-cert' secret.
-        insecureSkipVerify: true
+        # Secure TLS configuration using certificates managed by cert-manager
+        serverName: inferno-autoscaler-controller-manager-metrics-service.inferno-autoscaler-system.svc
+        insecureSkipVerify: false
+        ca:
+          secret:
+            name: prometheus-client-cert
+            key: ca.crt
+        cert:
+          secret:
+            name: prometheus-client-cert
+            key: tls.crt
+        keySecret:
+          name: prometheus-client-cert
+          key: tls.key
   selector:
     matchLabels:
       control-plane: controller-manager

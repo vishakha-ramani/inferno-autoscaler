@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
@@ -54,11 +57,23 @@ func CreatePrometheusClientConfig(config *interfaces.PrometheusConfig) (*api.Con
 	}
 
 	// Add bearer token authentication if provided
-	if config.BearerToken != "" {
+	bearerToken := config.BearerToken
+
+	// If no direct bearer token but token path is provided, read from file
+	if bearerToken == "" && config.TokenPath != "" {
+		tokenBytes, err := os.ReadFile(config.TokenPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read bearer token from %s: %w", config.TokenPath, err)
+		}
+		bearerToken = strings.TrimSpace(string(tokenBytes))
+		logger.Log.Info("Bearer token loaded from file", "path", config.TokenPath)
+	}
+
+	if bearerToken != "" {
 		// Create a custom round tripper that adds the bearer token
 		transport = &bearerTokenRoundTripper{
 			base:  transport,
-			token: config.BearerToken,
+			token: bearerToken,
 		}
 	}
 

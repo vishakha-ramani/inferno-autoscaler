@@ -1,27 +1,26 @@
-# OpenShift TLS Configuration for Inferno Autoscaler
+# TLS Configuration for Inferno Autoscaler on OpenShift
 
-This document describes how to configure TLS encryption for the Inferno Autoscaler on OpenShift clusters, specifically for connections to OpenShift's Prometheus service.
+This document describes how to configure TLS encryption for the Inferno Autoscaler on OpenShift clusters for secure communication with OpenShift's Prometheus service.
 
 ## Overview
 
-OpenShift provides its own monitoring stack with Prometheus and Thanos, which requires specific TLS configuration. This guide covers the OpenShift-specific setup for secure communication with OpenShift's Prometheus service.
+OpenShift provides a built-in monitoring stack with Prometheus and Thanos that requires specific TLS configuration. The Inferno Autoscaler uses OpenShift's service CA certificates and service account tokens for secure authentication.
 
-## OpenShift Prometheus Architecture
+## OpenShift Monitoring Architecture
 
-OpenShift uses a multi-tier monitoring architecture:
 - **Thanos Querier**: Provides the Prometheus API endpoint (`thanos-querier.openshift-monitoring.svc:9091`)
 - **User Workload Monitoring**: Separate Prometheus instance for user workloads
 - **Service CA**: OpenShift's built-in certificate authority for internal services
 
 ## Prerequisites
 
-1. **OpenShift Cluster**: Must be running OpenShift 4.x
-2. **User Workload Monitoring**: Must be enabled
-3. **Cluster Monitoring View Role**: Required for accessing Prometheus metrics
+- OpenShift 4.x cluster
+- User Workload Monitoring enabled
+- Cluster monitoring view role access
 
-## Environment Variables for OpenShift
+## Configuration
 
-The following environment variables are configured for OpenShift:
+### Environment Variables
 
 | Variable | Value | Description |
 |----------|-------|-------------|
@@ -29,63 +28,12 @@ The following environment variables are configured for OpenShift:
 | `PROMETHEUS_TLS_ENABLED` | `true` | Enable TLS encryption |
 | `PROMETHEUS_TLS_INSECURE_SKIP_VERIFY` | `false` | Verify certificates (production secure) |
 | `PROMETHEUS_CA_CERT_PATH` | `/etc/openshift-ca/ca.crt` | OpenShift service CA certificate |
-| `PROMETHEUS_CLIENT_CERT_PATH` | `""` | Not needed for server-side validation |
-| `PROMETHEUS_CLIENT_KEY_PATH` | `""` | Not needed for server-side validation |
 | `PROMETHEUS_SERVER_NAME` | `thanos-querier.openshift-monitoring.svc` | Server name for certificate validation |
 | `PROMETHEUS_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | Service account token for authentication |
 
-## OpenShift-Specific Configuration
+### Deployment Configuration
 
-### 1. OpenShift Service CA Certificate
-
-OpenShift automatically provides a service CA certificate that signs internal service certificates. This certificate is used for server-side validation:
-
-```bash
-# The certificate is available in the openshift-config-managed namespace
-kubectl get configmap openshift-service-ca.crt -n openshift-config-managed
-```
-
-**Note**: OpenShift deployment uses OpenShift's built-in service CA certificates and does not require any additional certificate management tools.
-
-### 2. Service Account and RBAC
-
-The controller needs the `cluster-monitoring-view` role to access Prometheus metrics:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: inferno-autoscaler-monitoring-view
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-monitoring-view
-subjects:
-- kind: ServiceAccount
-  name: inferno-autoscaler-controller-manager
-  namespace: inferno-autoscaler-system
-```
-
-### 3. Secret for OpenShift Service CA
-
-The OpenShift service CA certificate is mounted as a secret:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: openshift-service-ca
-  namespace: inferno-autoscaler-system
-type: Opaque
-data:
-  ca.crt: <base64-encoded-openshift-service-ca-cert>
-```
-
-## Deployment Configuration
-
-### Kustomize Patch for OpenShift
-
-The OpenShift-specific configuration is applied via a Kustomize patch:
+The OpenShift-specific configuration is applied via Kustomize:
 
 ```yaml
 # config/openshift/prometheus-patch.yaml
@@ -110,10 +58,6 @@ spec:
           value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - name: PROMETHEUS_CA_CERT_PATH
           value: "/etc/openshift-ca/ca.crt"
-        - name: PROMETHEUS_CLIENT_CERT_PATH
-          value: ""
-        - name: PROMETHEUS_CLIENT_KEY_PATH
-          value: ""
         - name: PROMETHEUS_SERVER_NAME
           value: "thanos-querier.openshift-monitoring.svc"
         volumeMounts:
@@ -129,7 +73,7 @@ spec:
             path: ca.crt
 ```
 
-## Deployment Process
+## Deployment
 
 ### Automated Deployment
 
@@ -205,8 +149,37 @@ Expected output:
 {"level":"INFO","msg":"CA certificate loaded successfullypath/etc/openshift-ca/ca.crt"}
 ```
 
+### Debugging
+
+Enable debug logging:
+
+```yaml
+env:
+- name: LOG_LEVEL
+  value: "debug"
+```
+
+Check controller logs:
+
+```bash
+kubectl logs -n inferno-autoscaler-system deployment/inferno-autoscaler-controller-manager
+```
+
+Test Thanos querier connectivity:
+
+```bash
+kubectl run test-thanos --image=curlimages/curl --rm -it --restart=Never -- \
+  curl -k "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091/api/v1/query?query=up"
+```
+
+## Security Considerations
+
+- OpenShift automatically manages service CA certificates
+- Service account tokens are automatically rotated
+- TLS 1.2+ is enforced by default
+- Certificate validation is mandatory (no insecure skip verify)
+
 ## References
 
 - [OpenShift Monitoring Documentation](https://docs.openshift.com/container-platform/latest/monitoring/monitoring-overview.html)
-- [OpenShift User Workload Monitoring](https://docs.openshift.com/container-platform/latest/monitoring/enabling-monitoring-for-user-defined-projects.html)
 - [OpenShift Service CA](https://docs.openshift.com/container-platform/latest/security/certificates/service-serving-certificate.html) 

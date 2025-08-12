@@ -39,6 +39,9 @@ The actuator is responsible for emitting metrics to the desired sources, like Pr
 Model Analyzer:
 Model Analyzer is a component that runs per model to perform scaling, estimation, prediction, and tuning.
 
+Optimizer:
+Optimizer consumes output of Model Analyzer to make global scaling decisions.
+
 Proposed sources:
 These include the new [API proposal](https://docs.google.com/document/d/1j2KRAT68_FYxq1iVzG0xVL-DHQhGVUZBqiM22Hd_0hc/edit?usp=drivesdk&resourcekey=0-5cSovS8QcRQNYXj0_kRMiw), which is expected to work in conjunction with the inference scheduler (EPP) to provide insights into the request scheduler's dispatching logic.
 

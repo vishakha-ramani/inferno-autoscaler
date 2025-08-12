@@ -553,7 +553,7 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx cont
 	// Create config from ConfigMap data
 	config := &interfaces.PrometheusConfig{
 		BaseURL: promAddr,
-		Timeout: 30 * time.Second,
+		Timeout: utils.DefaultTimeout,
 	}
 
 	// Parse TLS configuration from ConfigMap

@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
-	"time"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
@@ -90,7 +89,7 @@ func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config := &interfaces.PrometheusConfig{
 		BaseURL: getEnvOrDefault("PROMETHEUS_BASE_URL", "http://prometheus:9090"),
-		Timeout: 30 * time.Second,
+		Timeout: DefaultTimeout,
 	}
 
 	// Check if TLS is enabled (HTTPS URL or explicit flag)

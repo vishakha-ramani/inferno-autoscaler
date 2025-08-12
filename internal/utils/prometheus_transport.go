@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
@@ -19,14 +18,14 @@ func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundT
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   DefaultTimeout,
+			KeepAlive: DefaultKeepAlive,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          DefaultMaxIdleConns,
+		IdleConnTimeout:       DefaultIdleConnTimeout,
+		TLSHandshakeTimeout:   DefaultTLSHandshakeTimeout,
+		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 	}
 
 	// Configure TLS if enabled

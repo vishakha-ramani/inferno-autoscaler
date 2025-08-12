@@ -424,6 +424,12 @@ curl -G http://localhost:9090/api/v1/query \
 
 ```
 
+**Generate API docs**
+
+```sh
+make crd-docs
+```
+
 ### Inferno custom metrics
 
 **Apply ServiceMonitor for custom metrics**

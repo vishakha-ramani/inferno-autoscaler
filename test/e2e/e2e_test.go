@@ -109,7 +109,7 @@ func startPortForwarding(service *corev1.Service, namespace string) *exec.Cmd {
 	return portForwardCmd
 }
 
-func startLoadGenerator() *exec.Cmd {
+func startLoadGenerator(rate, contentLength int) *exec.Cmd {
 	// Install the load generator requirements
 	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
 	_, err := utils.Run(requirementsCmd)
@@ -117,8 +117,8 @@ func startLoadGenerator() *exec.Cmd {
 	loadGenCmd := exec.Command("python",
 		"hack/vllme/vllm_emulator/loadgen.py",
 		"--url", "http://localhost:8000/v1",
-		"--rate", "50", // 50 requests per minute to trigger scaling up
-		"--content", "100", // 100 content-length per request
+		"--rate", fmt.Sprintf("%d", rate),
+		"--content", fmt.Sprintf("%d", contentLength),
 		"--model", "vllm")
 	err = loadGenCmd.Start()
 	Expect(err).NotTo(HaveOccurred(), "Failed to start load generator")
@@ -390,7 +390,7 @@ var _ = Describe("Manager", Ordered, func() {
 	})
 })
 
-var _ = Describe("Test vllme deployment with VariantAutoscaling - scale up and immediate scale down with stopped load", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment with VA - scale up and immediate scale down with stopped load", Ordered, func() {
 	var (
 		namespace  string
 		deployName string
@@ -621,7 +621,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling - scale up and i
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
-		loadGenCmd := startLoadGenerator()
+		loadGenCmd := startLoadGenerator(50, 100)
 		defer func() {
 			err = stopCmd(loadGenCmd)
 			Expect(err).NotTo(HaveOccurred())
@@ -786,7 +786,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling - scale up and i
 	})
 })
 
-var _ = Describe("Test vllme deployment with VariantAutoscaling - continuous load", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment with VA - continuous load", Ordered, func() {
 	var (
 		namespace      string
 		deployName     string
@@ -888,7 +888,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling - continuous loa
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
-		loadGenCmd = startLoadGenerator()
+		loadGenCmd = startLoadGenerator(50, 100)
 
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {

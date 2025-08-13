@@ -112,10 +112,10 @@ func startPortForwarding(service *corev1.Service, namespace string) *exec.Cmd {
 
 func startLoadGenerator() *exec.Cmd {
 	// Install the load generator requirements
-	requirementsCmd := exec.Command("pip3", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
+	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
 	_, err := utils.Run(requirementsCmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to install loadgen requirements")
-	loadGenCmd = exec.Command("python3",
+	loadGenCmd = exec.Command("python",
 		"hack/vllme/vllm_emulator/loadgen.py",
 		"--url", "http://localhost:8000/v1",
 		"--rate", "50", // 50 requests per minute to trigger scaling up

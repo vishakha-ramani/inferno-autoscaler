@@ -77,7 +77,7 @@ spec:
 Use the provided deployment script which handles all OpenShift-specific setup:
 
 ```bash
-NAMESPACE=inferno-autoscaler-system IMG=quay.io/mmunirab/inferno-autoscaler:multi-arch0.5tls make deploy-inferno-on-openshift
+NAMESPACE=inferno-autoscaler-system IMG=quay.io/infernoautoscaler/inferno-controller:latest make deploy-inferno-on-openshift
 ```
 
 The script automatically:

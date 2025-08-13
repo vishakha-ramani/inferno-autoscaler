@@ -395,6 +395,11 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("failed to get Prometheus configuration: %w", err)
 	}
 
+	// ensure we have a valid configuration
+	if promConfig == nil {
+		return fmt.Errorf("no Prometheus configuration found - this should not happen")
+	}
+
 	// Always validate TLS configuration since HTTPS is required
 	if err := utils.ValidateTLSConfig(promConfig); err != nil {
 		logger.Log.Error(err, "TLS configuration validation failed - HTTPS is required")

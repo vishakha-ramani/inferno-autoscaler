@@ -59,11 +59,8 @@ func CreateTLSConfig(promConfig *interfaces.PrometheusConfig) (*tls.Config, erro
 
 // ValidateTLSConfig validates TLS configuration.
 // Ensures HTTPS is used and certificate files exist when verification is enabled.
+// Note: This function assumes promConfig is not nil - nil checks should be performed at a higher level.
 func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
-	if promConfig == nil {
-		return fmt.Errorf("Prometheus configuration is required")
-	}
-
 	// Validate that the URL uses HTTPS (TLS is always required)
 	if !IsHTTPS(promConfig.BaseURL) {
 		return fmt.Errorf("HTTPS is required - URL must use https:// scheme: %s", promConfig.BaseURL)

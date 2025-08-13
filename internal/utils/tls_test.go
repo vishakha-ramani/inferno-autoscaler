@@ -109,11 +109,13 @@ func TestValidateTLSConfig(t *testing.T) {
 		name        string
 		promConfig  *interfaces.PrometheusConfig
 		expectError bool
+		expectPanic bool
 	}{
 		{
-			name:        "nil config",
+			name:        "nil config - should panic",
 			promConfig:  nil,
-			expectError: true,
+			expectError: false,
+			expectPanic: true,
 		},
 		{
 			name: "HTTP URL - should fail",
@@ -121,6 +123,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				BaseURL: "http://prometheus:9090",
 			},
 			expectError: true,
+			expectPanic: false,
 		},
 		{
 			name: "TLS with insecure skip verify",
@@ -129,6 +132,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				BaseURL:            "https://prometheus:9090",
 			},
 			expectError: false,
+			expectPanic: false,
 		},
 		{
 			name: "TLS with server name",
@@ -137,16 +141,23 @@ func TestValidateTLSConfig(t *testing.T) {
 				BaseURL:    "https://prometheus:9090",
 			},
 			expectError: false,
+			expectPanic: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTLSConfig(tt.promConfig)
-			if tt.expectError {
-				assert.Error(t, err)
+			if tt.expectPanic {
+				assert.Panics(t, func() {
+					_ = ValidateTLSConfig(tt.promConfig)
+				})
 			} else {
-				assert.NoError(t, err)
+				err := ValidateTLSConfig(tt.promConfig)
+				if tt.expectError {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
 			}
 		})
 	}

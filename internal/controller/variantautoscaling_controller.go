@@ -402,12 +402,8 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	// Validate TLS configuration if enabled
 	if promConfig.EnableTLS {
 		if err := utils.ValidateTLSConfig(promConfig); err != nil {
-			logger.Log.Error(err, "TLS configuration validation failed, falling back to HTTP")
-			promConfig.EnableTLS = false
-			// Ensure BaseURL is HTTP if TLS fails
-			if len(promConfig.BaseURL) > 8 && promConfig.BaseURL[:8] == "https://" {
-				promConfig.BaseURL = "http://" + promConfig.BaseURL[8:]
-			}
+			logger.Log.Error(err, "TLS configuration validation failed - HTTPS is required")
+			return fmt.Errorf("TLS configuration validation failed: %w", err)
 		}
 	}
 

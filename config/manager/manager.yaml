@@ -71,18 +71,18 @@ spec:
           - name: PROMETHEUS_BASE_URL
             valueFrom:
               configMapKeyRef:
-                name: inferno-autoscaler-variantautoscaling-config
+                name: variantautoscaling-config
                 key: PROMETHEUS_BASE_URL
           - name: PROMETHEUS_TLS_ENABLED
-            value: "false"  # Default to HTTP, will be overridden for HTTPS
+            valueFrom:
+              configMapKeyRef:
+                name: variantautoscaling-config
+                key: PROMETHEUS_TLS_ENABLED
           - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
-            value: "false"  # Verify certificates for production
-          - name: PROMETHEUS_CA_CERT_PATH
-            value: "/etc/prometheus-certs/ca.crt"
-          - name: PROMETHEUS_CLIENT_CERT_PATH
-            value: "/etc/prometheus-certs/tls.crt"
-          - name: PROMETHEUS_CLIENT_KEY_PATH
-            value: "/etc/prometheus-certs/tls.key"
+            valueFrom:
+              configMapKeyRef:
+                name: variantautoscaling-config
+                key: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
           - name: PROMETHEUS_TOKEN_PATH
             value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         name: manager

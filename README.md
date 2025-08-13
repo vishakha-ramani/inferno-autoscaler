@@ -11,7 +11,6 @@ The inferno-autoscaler assigns GPU types to inference model servers and decides 
   - [Showing Inferno-autoscaler scaling replicas up and down](#showing-inferno-autoscaler-scaling-replicas-up-and-down)
   - [Uninstalling llm-d and Inferno-autoscaler](#uninstalling-llm-d-and-inferno-autoscaler)
 - [Running E2E tests](#running-e2e-tests)
-- [OpenShift Deployment](#openshift-deployment)
 - [Details on emulated mode deployment on Kind](#details-on-emulated-mode-deployment-on-kind)
   - [Deployment](#deployment)
   - [Uninstall](#uninstall)
@@ -306,9 +305,6 @@ You can change Kubernetes configuration file (default: **$HOME/.kube/config**) a
 ```sh
 make test-e2e KUBECONFIG="path/to/your/config" K8S_VERSION="vX.y.z"
 ```
-## OpenShift Deployment
-
-For deploying on OpenShift clusters with OpenShift's built-in monitoring stack, see the [OpenShift TLS Configuration Guide](docs/tls-configuration-openshift.md) for specific configuration details.
 
 ## Details on emulated mode deployment on Kind
 
@@ -393,7 +389,7 @@ sleep 30 && kubectl get pods -A | grep -E "(inferno|vllme|prometheus)"
 
 # Port forward Prometheus
 kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-monitoring
-# server can be accessed at location: http://localhost:9090
+# server can be accessed at location: https://localhost:9090
 ```
 
 **Note**: Always ensure pods are ready before attempting port forwarding to avoid connection errors.
@@ -419,10 +415,10 @@ Go to http://localhost:8000/metrics and check if you see metrics starting with v
 **Run sample query**
 
 ```sh
-curl -G http://localhost:9090/api/v1/query \
+curl -G https://localhost:9090/api/v1/query \
      --data-urlencode 'query=sum(rate(vllm:requests_count_total[1m])) * 60'
 
-curl -G http://localhost:9090/api/v1/query \
+curl -G https://localhost:9090/api/v1/query \
      --data-urlencode 'query=sum(rate(vllm:requests_count_total[1m])) * 60'
 {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1752075000.160,"9.333333333333332"]}]}}% 
 

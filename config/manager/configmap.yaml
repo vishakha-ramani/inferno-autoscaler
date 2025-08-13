@@ -8,11 +8,14 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
 data:
   # Prometheus configuration - REQUIRED: Set your Prometheus server URL
-  # Example: 
-  # General - "http://prometheus:9090" or 
-  # Openshift cluster - "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-  # KIND cluster promethues-stack deployment- "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
-  PROMETHEUS_BASE_URL: ""
+  # General - "https://prometheus:9090" or
+  # OpenShift - "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091" or
+  # KIND cluster promethues-stack deployment- "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+  PROMETHEUS_BASE_URL: "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+  
+  # TLS configuration for Kind cluster
+  PROMETHEUS_TLS_ENABLED: "true"
+  PROMETHEUS_TLS_INSECURE_SKIP_VERIFY: "true"
   
   # Optimization configuration
   GLOBAL_OPT_INTERVAL: "60s"

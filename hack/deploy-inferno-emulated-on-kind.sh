@@ -10,7 +10,6 @@ NAMESPACE=${NAMESPACE:-"inferno-autoscaler-system"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"inferno-autoscaler-monitoring"}
 KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-inferno-gpu-cluster-control-plane"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
-PROMETHEUS_BASE_URL=${PROMETHEUS_BASE_URL:-"http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"}
 
 _kubectl() {
         ${KUBECTL} --context ${KIND_CONTEXT} $@
@@ -48,18 +47,14 @@ _kubectl apply -f deploy/configmap-serviceclass.yaml
 # Install the configmap for the accelerator unit cost
 _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 
-# deploy emulated vllme server (includes Prometheus)
+# deploy emulated vllme server (includes Prometheus with TLS)
 hack/deploy-emulated-vllme-server.sh
 
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
 echo "Inferno controller-manager Installed"
 
-# Configure Prometheus URL for the Kind cluster deployment
-echo "Configuring Prometheus URL for Kind cluster deployment..."
-echo "Using Prometheus URL: ${PROMETHEUS_BASE_URL}"
-_kubectl patch configmap inferno-autoscaler-variantautoscaling-config -n ${NAMESPACE} --patch "{\"data\":{\"PROMETHEUS_BASE_URL\":\"${PROMETHEUS_BASE_URL}\"}}" --type=merge
+# Deploy using the existing manager configuration which now has Kind-specific settings
+kustomize build config/manager | _kubectl apply -f -
 
-echo "Restarting controller to pick up new configuration..."
-_kubectl rollout restart deployment inferno-autoscaler-controller-manager -n ${NAMESPACE}
 echo "Inferno Deployment complete"

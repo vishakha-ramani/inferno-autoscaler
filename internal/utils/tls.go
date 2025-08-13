@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/url"
 	"os"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
@@ -58,7 +59,14 @@ func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 		return nil
 	}
 
-	// Check if certificate files exist
+	// If InsecureSkipVerify is true, we don't need to validate certificate files
+	// since we're intentionally skipping certificate verification
+	if promConfig.InsecureSkipVerify {
+		logger.Log.Warn("TLS certificate verification is disabled - this is not recommended for production")
+		return nil
+	}
+
+	// Check if certificate files exist (only when not skipping verification)
 	if promConfig.CACertPath != "" {
 		if _, err := os.Stat(promConfig.CACertPath); os.IsNotExist(err) {
 			return fmt.Errorf("CA certificate file not found: %s", promConfig.CACertPath)
@@ -77,33 +85,23 @@ func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 		}
 	}
 
-	// Warn about insecure configuration
-	if promConfig.InsecureSkipVerify {
-		logger.Log.Warn("TLS certificate verification is disabled - this is not recommended for production")
-	}
-
 	return nil
 }
 
 // ParsePrometheusConfigFromEnv parses Prometheus configuration from environment variables
 func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config := &interfaces.PrometheusConfig{
-		BaseURL: getEnvOrDefault("PROMETHEUS_BASE_URL", "http://prometheus:9090"),
+		BaseURL: getEnvOrDefault("PROMETHEUS_BASE_URL", "https://prometheus:9090"),
 		Timeout: DefaultTimeout,
 	}
 
-	// Check if TLS is enabled (HTTPS URL or explicit flag)
-	enableTLS := getEnvOrDefault("PROMETHEUS_TLS_ENABLED", "") == "true" ||
-		(len(config.BaseURL) > 8 && config.BaseURL[:8] == "https://")
-
-	if enableTLS {
-		config.EnableTLS = true
-		config.InsecureSkipVerify = getEnvOrDefault("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false") == "true"
-		config.CACertPath = getEnvOrDefault("PROMETHEUS_CA_CERT_PATH", "")
-		config.ClientCertPath = getEnvOrDefault("PROMETHEUS_CLIENT_CERT_PATH", "")
-		config.ClientKeyPath = getEnvOrDefault("PROMETHEUS_CLIENT_KEY_PATH", "")
-		config.ServerName = getEnvOrDefault("PROMETHEUS_SERVER_NAME", "")
-	}
+	// Enable TLS based on environment variable, default to true for HTTPS-only support
+	config.EnableTLS = getEnvOrDefault("PROMETHEUS_TLS_ENABLED", "true") == "true"
+	config.InsecureSkipVerify = getEnvOrDefault("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false") == "true"
+	config.CACertPath = getEnvOrDefault("PROMETHEUS_CA_CERT_PATH", "")
+	config.ClientCertPath = getEnvOrDefault("PROMETHEUS_CLIENT_CERT_PATH", "")
+	config.ClientKeyPath = getEnvOrDefault("PROMETHEUS_CLIENT_KEY_PATH", "")
+	config.ServerName = getEnvOrDefault("PROMETHEUS_SERVER_NAME", "")
 
 	// Support both direct bearer token and token path
 	config.BearerToken = getEnvOrDefault("PROMETHEUS_BEARER_TOKEN", "")
@@ -118,4 +116,22 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// IsHTTPS checks if the given URL string uses HTTPS scheme
+func IsHTTPS(urlStr string) bool {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "https"
+}
+
+// GetScheme extracts the scheme from a URL string
+func GetScheme(urlStr string) (string, error) {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL %s: %w", urlStr, err)
+	}
+	return u.Scheme, nil
 }

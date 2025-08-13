@@ -9,12 +9,6 @@ spec:
       containers:
       - name: manager
         env:
-        - name: PROMETHEUS_BASE_URL
-          value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-        - name: PROMETHEUS_TLS_ENABLED
-          value: "true"
-        - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
-          value: "false"
         - name: PROMETHEUS_TOKEN_PATH
           value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - name: PROMETHEUS_CA_CERT_PATH

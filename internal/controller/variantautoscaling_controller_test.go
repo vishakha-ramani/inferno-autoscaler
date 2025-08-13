@@ -84,7 +84,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 									Alpha:        "0.28",
 									Beta:         "0.72",
 									MaxBatchSize: 4,
-									AtTokens:     100,
 								},
 							},
 						},

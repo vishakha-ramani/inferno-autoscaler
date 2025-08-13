@@ -392,7 +392,7 @@ var _ = Describe("Manager", Ordered, func() {
 	})
 })
 
-var _ = Describe("Test Inferno-autoscaler with vllme deployment - scale up and immediate scale down with stopped load", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - scale up and down with stopped load", Ordered, func() {
 	var (
 		namespace  string
 		deployName string
@@ -788,7 +788,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - scale up and i
 	})
 })
 
-var _ = Describe("Test Inferno-autoscaler with vllme deployment - continuous load", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - continuous load", Ordered, func() {
 	var (
 		namespace      string
 		deployName     string
@@ -892,7 +892,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - continuous loa
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
-		loadGenCmd = startLoadGenerator(50, 100, 8000)
+		loadGenCmd = startLoadGenerator(60, 100, 8000)
 
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
@@ -1049,7 +1049,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - continuous loa
 	})
 })
 
-var _ = Describe("Test Inferno-autoscaler with multiple VAs", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs", Ordered, func() {
 	var (
 		namespace                string
 		firstDeployName          string

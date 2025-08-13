@@ -399,12 +399,10 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("no Prometheus configuration found. Please set PROMETHEUS_BASE_URL environment variable or configure via ConfigMap")
 	}
 
-	// Validate TLS configuration if enabled
-	if promConfig.EnableTLS {
-		if err := utils.ValidateTLSConfig(promConfig); err != nil {
-			logger.Log.Error(err, "TLS configuration validation failed - HTTPS is required")
-			return fmt.Errorf("TLS configuration validation failed: %w", err)
-		}
+	// Always validate TLS configuration since HTTPS is required
+	if err := utils.ValidateTLSConfig(promConfig); err != nil {
+		logger.Log.Error(err, "TLS configuration validation failed - HTTPS is required")
+		return fmt.Errorf("TLS configuration validation failed: %w", err)
 	}
 
 	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: ", promConfig.EnableTLS)

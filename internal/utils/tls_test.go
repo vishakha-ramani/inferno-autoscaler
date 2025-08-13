@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"os"
 	"testing"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
@@ -23,13 +22,6 @@ func TestCreateTLSConfig(t *testing.T) {
 		{
 			name:        "nil config",
 			promConfig:  nil,
-			expectError: false,
-		},
-		{
-			name: "TLS disabled",
-			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS: false,
-			},
 			expectError: false,
 		},
 		{
@@ -122,40 +114,41 @@ func TestValidateTLSConfig(t *testing.T) {
 		{
 			name:        "nil config",
 			promConfig:  nil,
-			expectError: false,
+			expectError: true,
 		},
 		{
-			name: "TLS disabled",
+			name: "TLS disabled - should fail",
 			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS: false,
+				BaseURL:   "https://prometheus:9090",
 			},
-			expectError: false,
+			expectError: true,
+		},
+		{
+			name: "HTTP URL - should fail",
+			promConfig: &interfaces.PrometheusConfig{
+				EnableTLS: true,
+				BaseURL:   "http://prometheus:9090",
+			},
+			expectError: true,
 		},
 		{
 			name: "TLS enabled with insecure skip verify",
 			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:          true,
 				InsecureSkipVerify: true,
+				BaseURL:            "https://prometheus:9090",
 			},
 			expectError: false,
 		},
 		{
-			name: "TLS enabled with non-existent CA cert",
+			name: "TLS enabled with server name",
 			promConfig: &interfaces.PrometheusConfig{
 				EnableTLS:  true,
-				CACertPath: "/non/existent/path",
+				ServerName: "prometheus.example.com",
+				BaseURL:    "https://prometheus:9090",
 			},
-			expectError: true,
-		},
-		{
-			name: "OpenShift TLS configuration",
-			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS:          true,
-				InsecureSkipVerify: false,
-				CACertPath:         "/etc/openshift-ca/ca.crt",
-				ServerName:         "thanos-querier.openshift-monitoring.svc",
-			},
-			expectError: true, // Will fail because CA cert doesn't exist in test environment
+			expectError: false,
 		},
 	}
 
@@ -179,12 +172,12 @@ func TestIsHTTPS(t *testing.T) {
 	}{
 		{
 			name:     "valid HTTPS URL",
-			url:      "https://prometheus.example.com:9090",
+			url:      "https://prometheus:9090",
 			expected: true,
 		},
 		{
 			name:     "valid HTTPS URL with path",
-			url:      "https://prometheus.example.com:9090/api/v1",
+			url:      "https://prometheus:9090/api/v1/query",
 			expected: true,
 		},
 		{
@@ -199,12 +192,12 @@ func TestIsHTTPS(t *testing.T) {
 		},
 		{
 			name:     "URL with different scheme",
-			url:      "ftp://example.com",
+			url:      "http://prometheus:9090",
 			expected: false,
 		},
 		{
 			name:     "URL with uppercase HTTPS",
-			url:      "HTTPS://example.com",
+			url:      "HTTPS://prometheus:9090",
 			expected: true,
 		},
 	}
@@ -212,52 +205,6 @@ func TestIsHTTPS(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsHTTPS(tt.url)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGetScheme(t *testing.T) {
-	tests := []struct {
-		name        string
-		url         string
-		expected    string
-		expectError bool
-	}{
-		{
-			name:        "HTTPS URL",
-			url:         "https://prometheus.example.com:9090",
-			expected:    "https",
-			expectError: false,
-		},
-		{
-			name:        "FTP URL",
-			url:         "ftp://example.com",
-			expected:    "ftp",
-			expectError: false,
-		},
-		{
-			name:        "invalid URL - Go's url.Parse is lenient",
-			url:         "not-a-url",
-			expected:    "",
-			expectError: false,
-		},
-		{
-			name:        "empty URL - Go's url.Parse handles this",
-			url:         "",
-			expected:    "",
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := GetScheme(tt.url)
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

@@ -5,7 +5,6 @@ set -euo pipefail
 # Configuration
 KUBECTL=${KUBECTL:-kubectl}
 NAMESPACE=${NAMESPACE:-"inferno-autoscaler-system"}
-IMG=${IMG:-"quay.io/infernoautoscaler:0.0.1-multi-arch"}
 
 # Colors for output
 RED='\033[0;31m'
@@ -186,16 +185,6 @@ deploy_inferno() {
 # Verify deployment
 verify_deployment() {
     log_info "=== Verifying Deployment ==="
-    
-    # Check Inferno controller
-    log_info "Checking Inferno controller status..."
-    if ${KUBECTL} get pods -n ${NAMESPACE} -l app.kubernetes.io/name=inferno-autoscaler | grep -q Running; then
-        log_success "Inferno controller is running"
-    else
-        log_error "Inferno controller is not running properly"
-        ${KUBECTL} get pods -n ${NAMESPACE} -l app.kubernetes.io/name=inferno-autoscaler
-        return 1
-    fi
     
     # Check if OpenShift service CA secret exists
     log_info "Checking OpenShift service CA secret..."

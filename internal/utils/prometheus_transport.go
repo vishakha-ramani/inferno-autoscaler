@@ -12,9 +12,9 @@ import (
 	"github.com/prometheus/client_golang/api"
 )
 
-// CreatePrometheusTransport creates a custom HTTP transport for Prometheus client with TLS support
+// CreatePrometheusTransport creates a custom HTTPS transport for Prometheus client with TLS support
 func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundTripper, error) {
-	// Create base transport
+	// Create base HTTPS transport
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -28,28 +28,26 @@ func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundT
 		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 	}
 
-	// Configure TLS if enabled
-	if config.EnableTLS {
-		tlsConfig, err := CreateTLSConfig(config)
-		if err != nil {
-			return nil, err
-		}
-		if tlsConfig != nil {
-			transport.TLSClientConfig = tlsConfig
-			logger.Log.Info("TLS configuration applied to Prometheus transport")
-		}
+	// Always configure TLS since HTTPS is required
+	tlsConfig, err := CreateTLSConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	if tlsConfig != nil {
+		transport.TLSClientConfig = tlsConfig
+		logger.Log.Info("TLS configuration applied to Prometheus HTTPS transport")
 	}
 
 	return transport, nil
 }
 
-// CreatePrometheusClientConfig creates a complete Prometheus client configuration
+// CreatePrometheusClientConfig creates a complete Prometheus client configuration with HTTPS support
 func CreatePrometheusClientConfig(config *interfaces.PrometheusConfig) (*api.Config, error) {
 	clientConfig := &api.Config{
 		Address: config.BaseURL,
 	}
 
-	// Create custom transport with TLS support
+	// Create custom HTTPS transport with TLS support
 	transport, err := CreatePrometheusTransport(config)
 	if err != nil {
 		return nil, err
@@ -81,12 +79,13 @@ func CreatePrometheusClientConfig(config *interfaces.PrometheusConfig) (*api.Con
 	return clientConfig, nil
 }
 
-// bearerTokenRoundTripper adds bearer token authentication to requests
+// bearerTokenRoundTripper adds bearer token authentication to HTTPS requests
 type bearerTokenRoundTripper struct {
 	base  http.RoundTripper
 	token string
 }
 
+// RoundTrip adds the Authorization header with bearer token
 func (b *bearerTokenRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+b.token)
 	return b.base.RoundTrip(req)

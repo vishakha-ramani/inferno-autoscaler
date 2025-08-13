@@ -1316,7 +1316,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs",
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
-			Name:      firstDeployName,
+			Name:      secondDeployName,
 		}, finalVA2)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1494,7 +1494,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs",
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
-			Name:      firstDeployName,
+			Name:      secondDeployName,
 		}, finalVA2)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1567,7 +1567,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs",
 		finalVA2 = &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
-			Name:      firstDeployName,
+			Name:      secondDeployName,
 		}, finalVA2)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1652,7 +1652,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs",
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
-			Name:      firstDeployName,
+			Name:      secondDeployName,
 		}, finalVA2)
 		Expect(err).NotTo(HaveOccurred())
 

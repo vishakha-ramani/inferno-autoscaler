@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"time"
-
 	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
 )
 
@@ -48,7 +46,4 @@ type PrometheusConfig struct {
 	// Authentication fields (BearerToken takes precedence over TokenPath)
 	BearerToken string `json:"bearerToken,omitempty"` // Direct bearer token string (development/testing)
 	TokenPath   string `json:"tokenPath,omitempty"`   // Path to file containing bearer token (production with mounted secrets)
-
-	// Timeout for API requests
-	Timeout time.Duration `json:"timeout,omitempty"`
 }

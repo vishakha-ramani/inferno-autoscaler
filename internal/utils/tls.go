@@ -103,7 +103,6 @@ func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config := &interfaces.PrometheusConfig{
 		BaseURL: os.Getenv("PROMETHEUS_BASE_URL"),
-		Timeout: DefaultTimeout,
 	}
 
 	// TLS is always enabled for HTTPS-only support

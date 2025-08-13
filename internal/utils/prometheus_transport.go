@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -15,19 +14,8 @@ import (
 // CreatePrometheusTransport creates a custom HTTPS transport for Prometheus client with TLS support.
 // TLS is always enabled for HTTPS-only support with configurable certificate validation.
 func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundTripper, error) {
-	// Create base HTTPS transport
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   DefaultTimeout,
-			KeepAlive: DefaultKeepAlive,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          DefaultMaxIdleConns,
-		IdleConnTimeout:       DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   DefaultTLSHandshakeTimeout,
-		ExpectContinueTimeout: DefaultExpectContinueTimeout,
-	}
+	// Clone the default transport to get all the good defaults
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 
 	// Configure TLS (always required for HTTPS-only support)
 	tlsConfig, err := CreateTLSConfig(config)

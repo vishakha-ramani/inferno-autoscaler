@@ -289,7 +289,6 @@ func createVariantAutoscalingResource(namespace, resourceName string) *v1alpha1.
 						Alpha:        "20.58",
 						Beta:         "0.41",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 					{
 						Acc:          "MI300X",
@@ -297,7 +296,6 @@ func createVariantAutoscalingResource(namespace, resourceName string) *v1alpha1.
 						Alpha:        "7.77",
 						Beta:         "0.15",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 					{
 						Acc:          "G2",
@@ -305,7 +303,6 @@ func createVariantAutoscalingResource(namespace, resourceName string) *v1alpha1.
 						Alpha:        "17.15",
 						Beta:         "0.34",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 				},
 			},
@@ -603,7 +600,11 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 		// Port-forward the vllme service to send requests to it
 		By("setting up port-forward to the vllme service")
 		portForwardCmd := startPortForwarding(service, namespace)
-		defer stopCmd(portForwardCmd)
+		defer func() {
+			if err := stopCmd(portForwardCmd); err != nil {
+				Expect(err).NotTo(HaveOccurred(), "port-forward should stop gracefully")
+			}
+		}()
 
 		By("waiting for port-forward to be ready")
 		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
@@ -620,7 +621,11 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 		By("starting load generation to create traffic")
 		loadGenCmd = startLoadGenerator()
-		defer stopCmd(loadGenCmd)
+		defer func() {
+			if err := stopCmd(loadGenCmd); err != nil {
+				Expect(err).NotTo(HaveOccurred(), "load generator should stop gracefully")
+			}
+		}()
 
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
@@ -759,7 +764,8 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 		serviceMonitor.SetName("vllme-servicemonitor")
 		serviceMonitor.SetNamespace("inferno-autoscaler-monitoring")
 		err = crClient.Delete(ctx, serviceMonitor)
-		client.IgnoreNotFound(err)
+		err = client.IgnoreNotFound(err)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("deleting vllme service")
 		err = k8sClient.CoreV1().Services(namespace).Delete(ctx, "vllme-service", metav1.DeleteOptions{})

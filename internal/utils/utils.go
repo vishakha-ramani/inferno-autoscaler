@@ -220,7 +220,6 @@ func AddModelAcceleratorProfileToSystemData(
 			Alpha:        float32(alpha),
 			Beta:         float32(beta),
 			MaxBatchSize: modelAcceleratorProfile.MaxBatchSize,
-			AtTokens:     modelAcceleratorProfile.AtTokens,
 		})
 	return nil
 }

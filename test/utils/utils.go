@@ -62,10 +62,27 @@ func Run(cmd *exec.Cmd) (string, error) {
 }
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
+// Includes TLS certificate generation and configuration for HTTPS support.
 func InstallPrometheusOperator() error {
 	cmd := exec.Command("kubectl", "create", "ns", monitoringNamespace)
 	if _, err := Run(cmd); err != nil {
 		return err
+	}
+
+	// Add a small delay to ensure namespace is ready
+	cmd = exec.Command("sleep", "5")
+	if _, err := Run(cmd); err != nil {
+		return fmt.Errorf("failed to wait for namespace to be ready: %w", err)
+	}
+
+	// Generate TLS certificates for Prometheus
+	if err := generateTLSCertificates(); err != nil {
+		return fmt.Errorf("failed to generate TLS certificates: %w", err)
+	}
+
+	// Create Kubernetes secret for TLS certificates
+	if err := createTLSCertificateSecret(); err != nil {
+		return fmt.Errorf("failed to create TLS certificate secret: %w", err)
 	}
 
 	cmd = exec.Command("helm", "repo", "add", "prometheus-community", prometheusHelmChart)
@@ -78,7 +95,10 @@ func InstallPrometheusOperator() error {
 		return err
 	}
 
-	cmd = exec.Command("helm", "upgrade", "-i", "kube-prometheus-stack", "prometheus-community/kube-prometheus-stack", "-n", monitoringNamespace)
+	// Install Prometheus with TLS configuration
+	cmd = exec.Command("helm", "upgrade", "-i", "kube-prometheus-stack", "prometheus-community/kube-prometheus-stack",
+		"-n", monitoringNamespace,
+		"-f", "hack/vllme/deploy/prometheus-operator/prometheus-tls-values.yaml")
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
@@ -123,6 +143,61 @@ func IsPrometheusCRDsInstalled() bool {
 	}
 
 	return false
+}
+
+// generateTLSCertificates generates self-signed TLS certificates for Prometheus
+func generateTLSCertificates() error {
+	// Create TLS certificates directory
+	cmd := exec.Command("mkdir", "-p", "hack/tls-certs")
+	if _, err := Run(cmd); err != nil {
+		return fmt.Errorf("failed to create TLS certs directory: %w", err)
+	}
+
+	// Check if certificate already exists and is valid
+	certFile := "hack/tls-certs/prometheus-cert.pem"
+	keyFile := "hack/tls-certs/prometheus-key.pem"
+
+	// Check if certificate is still valid (not expired)
+	cmd = exec.Command("openssl", "x509", "-checkend", "86400", "-noout", "-in", certFile)
+	if err := cmd.Run(); err == nil {
+		// Certificate exists and is valid
+		return nil
+	}
+
+	// Generate self-signed certificate
+	fmt.Println("Generating self-signed certificate for Prometheus...")
+	cmd = exec.Command("openssl", "req", "-x509", "-newkey", "rsa:4096",
+		"-keyout", keyFile,
+		"-out", certFile,
+		"-days", "3650",
+		"-nodes",
+		"-subj", "/CN=prometheus",
+		"-addext", "subjectAltName=DNS:kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local,DNS:kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc,DNS:prometheus,DNS:localhost,IP:127.0.0.1")
+
+	if _, err := Run(cmd); err != nil {
+		return fmt.Errorf("failed to generate TLS certificate: %w", err)
+	}
+
+	fmt.Println("TLS certificate generated successfully")
+	return nil
+}
+
+// createTLSCertificateSecret creates a Kubernetes secret for TLS certificates
+func createTLSCertificateSecret() error {
+	certFile := "hack/tls-certs/prometheus-cert.pem"
+	keyFile := "hack/tls-certs/prometheus-key.pem"
+
+	cmd := exec.Command("kubectl", "create", "secret", "tls", "prometheus-tls",
+		"--cert="+certFile,
+		"--key="+keyFile,
+		"-n", monitoringNamespace)
+
+	if _, err := Run(cmd); err != nil {
+		// Secret might already exist, which is fine
+		fmt.Println("TLS secret already exists or creation failed (this is usually OK)")
+	}
+
+	return nil
 }
 
 // UninstallCertManager uninstalls the cert manager

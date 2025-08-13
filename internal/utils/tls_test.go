@@ -11,7 +11,10 @@ import (
 
 func init() {
 	// Initialize logger for tests
-	logger.InitLogger()
+	_, err := logger.InitLogger()
+	if err != nil {
+		panic("failed to initialize logger: " + err.Error())
+	}
 }
 
 func TestCreateTLSConfig(t *testing.T) {

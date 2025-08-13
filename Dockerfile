@@ -1,8 +1,7 @@
 # Build the manager binary
-FROM --platform=${BUILDPLATFORM} docker.io/golang:1.23 AS builder
+FROM docker.io/golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
-ARG BUILDPLATFORM
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -27,7 +26,6 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
-ARG TARGETPLATFORM
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532

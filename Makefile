@@ -129,7 +129,7 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -v -ginkgo.v
+	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -v -ginkgo.v -timeout=20m
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -170,54 +170,18 @@ docker-push: ## Push docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64
+PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 BUILDER_NAME ?= inferno-autoscaler-builder
 
-.PHONY: docker-buildx-setup
-docker-buildx-setup: ## Setup docker buildx builder for multi-arch builds
-	@echo "Setting up docker buildx builder..."
-	@$(CONTAINER_TOOL) buildx inspect $(BUILDER_NAME) >/dev/null 2>&1 || \
-		$(CONTAINER_TOOL) buildx create --name $(BUILDER_NAME) --driver docker-container --use
-	@$(CONTAINER_TOOL) buildx inspect --bootstrap
-
 .PHONY: docker-buildx
-docker-buildx: docker-buildx-setup ## Build and push docker image for the manager for cross-platform support
-	@echo "Building multi-arch image for platforms: $(PLATFORMS)"
-	@echo "Image: $(IMG)"
-	$(CONTAINER_TOOL) buildx build \
-		--platform=$(PLATFORMS) \
-		--tag $(IMG) \
-		--push \
-		--progress=plain \
-		.
-
-.PHONY: docker-buildx-load
-docker-buildx-load: docker-buildx-setup ## Build and load docker image for local use (single platform)
-	@echo "Building and loading image for local platform"
-	$(CONTAINER_TOOL) buildx build \
-		--platform=linux/$(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
-		--tag $(IMG) \
-		--load \
-		--progress=plain \
-		.
-
-.PHONY: docker-buildx-cleanup
-docker-buildx-cleanup: ## Clean up docker buildx builder
-	@echo "Cleaning up docker buildx builder..."
-	-$(CONTAINER_TOOL) buildx rm $(BUILDER_NAME) 2>/dev/null || true
-
-.PHONY: docker-buildx-verify
-docker-buildx-verify: ## Verify multiarch image was built correctly
-	@echo "Verifying multiarch image: $(IMG)"
-	@$(CONTAINER_TOOL) buildx imagetools inspect $(IMG) || { \
-		echo "Error: Image $(IMG) not found or not accessible"; \
-		exit 1; \
-	}
-	@echo "Available platforms:"
-	@$(CONTAINER_TOOL) buildx imagetools inspect $(IMG) --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{end}}'
-
-.PHONY: docker-buildx-full
-docker-buildx-full: docker-buildx docker-buildx-verify ## Build, push and verify multiarch image
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	- $(CONTAINER_TOOL) buildx create --name inferno-autoscaler-builder
+	$(CONTAINER_TOOL) buildx use inferno-autoscaler-builder
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx rm inferno-autoscaler-builder
+	rm Dockerfile.cross
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.

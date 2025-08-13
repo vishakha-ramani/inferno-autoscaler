@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"os"
 	"testing"
 
 	interfaces "github.com/llm-d-incubation/inferno-autoscaler/internal/interfaces"
@@ -25,17 +26,15 @@ func TestCreateTLSConfig(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "TLS enabled with insecure skip verify",
+			name: "TLS with insecure skip verify",
 			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS:          true,
 				InsecureSkipVerify: true,
 			},
 			expectError: false,
 		},
 		{
-			name: "TLS enabled with server name",
+			name: "TLS with server name",
 			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS:  true,
 				ServerName: "prometheus.example.com",
 			},
 			expectError: false,
@@ -50,7 +49,7 @@ func TestCreateTLSConfig(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			if tt.promConfig != nil && tt.promConfig.EnableTLS {
+			if tt.promConfig != nil {
 				assert.NotNil(t, config)
 			} else {
 				assert.Nil(t, config)
@@ -65,7 +64,6 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config := ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://prometheus:9090", config.BaseURL)
-	assert.True(t, config.EnableTLS)
 
 	// Test with explicit TLS configuration
 	os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090")
@@ -73,7 +71,6 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://prometheus:9090", config.BaseURL)
-	assert.True(t, config.EnableTLS)
 	assert.True(t, config.InsecureSkipVerify)
 
 	// Test OpenShift configuration
@@ -87,7 +84,6 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091", config.BaseURL)
-	assert.True(t, config.EnableTLS)
 	assert.False(t, config.InsecureSkipVerify)
 	assert.Equal(t, "/etc/openshift-ca/ca.crt", config.CACertPath)
 	assert.Equal(t, "", config.ClientCertPath)
@@ -117,34 +113,23 @@ func TestValidateTLSConfig(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "TLS disabled - should fail",
-			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS: false,
-				BaseURL:   "https://prometheus:9090",
-			},
-			expectError: true,
-		},
-		{
 			name: "HTTP URL - should fail",
 			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS: true,
-				BaseURL:   "http://prometheus:9090",
+				BaseURL: "http://prometheus:9090",
 			},
 			expectError: true,
 		},
 		{
-			name: "TLS enabled with insecure skip verify",
+			name: "TLS with insecure skip verify",
 			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS:          true,
 				InsecureSkipVerify: true,
 				BaseURL:            "https://prometheus:9090",
 			},
 			expectError: false,
 		},
 		{
-			name: "TLS enabled with server name",
+			name: "TLS with server name",
 			promConfig: &interfaces.PrometheusConfig{
-				EnableTLS:  true,
 				ServerName: "prometheus.example.com",
 				BaseURL:    "https://prometheus:9090",
 			},

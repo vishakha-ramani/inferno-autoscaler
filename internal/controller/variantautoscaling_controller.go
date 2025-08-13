@@ -405,7 +405,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("TLS configuration validation failed: %w", err)
 	}
 
-	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: ", promConfig.EnableTLS)
+	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: true")
 
 	// Create Prometheus client with TLS support
 	promClientConfig, err := utils.CreatePrometheusClientConfig(promConfig)
@@ -550,40 +550,37 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx cont
 		Timeout: utils.DefaultTimeout,
 	}
 
-	// Parse TLS configuration from ConfigMap
-	if tlsEnabled, exists := cm.Data["PROMETHEUS_TLS_ENABLED"]; exists && tlsEnabled == "true" {
-		config.EnableTLS = true
-		config.InsecureSkipVerify = func() bool {
-			if v, exists := cm.Data["PROMETHEUS_TLS_INSECURE_SKIP_VERIFY"]; exists {
-				return v == "true"
-			}
-			return false
-		}()
-		config.CACertPath = func() string {
-			if v, exists := cm.Data["PROMETHEUS_CA_CERT_PATH"]; exists {
-				return v
-			}
-			return ""
-		}()
-		config.ClientCertPath = func() string {
-			if v, exists := cm.Data["PROMETHEUS_CLIENT_CERT_PATH"]; exists {
-				return v
-			}
-			return ""
-		}()
-		config.ClientKeyPath = func() string {
-			if v, exists := cm.Data["PROMETHEUS_CLIENT_KEY_PATH"]; exists {
-				return v
-			}
-			return ""
-		}()
-		config.ServerName = func() string {
-			if v, exists := cm.Data["PROMETHEUS_SERVER_NAME"]; exists {
-				return v
-			}
-			return ""
-		}()
-	}
+	// Parse TLS configuration from ConfigMap (TLS is always enabled for HTTPS-only support)
+	config.InsecureSkipVerify = func() bool {
+		if v, exists := cm.Data["PROMETHEUS_TLS_INSECURE_SKIP_VERIFY"]; exists {
+			return v == "true"
+		}
+		return false
+	}()
+	config.CACertPath = func() string {
+		if v, exists := cm.Data["PROMETHEUS_CA_CERT_PATH"]; exists {
+			return v
+		}
+		return ""
+	}()
+	config.ClientCertPath = func() string {
+		if v, exists := cm.Data["PROMETHEUS_CLIENT_CERT_PATH"]; exists {
+			return v
+		}
+		return ""
+	}()
+	config.ClientKeyPath = func() string {
+		if v, exists := cm.Data["PROMETHEUS_CLIENT_KEY_PATH"]; exists {
+			return v
+		}
+		return ""
+	}()
+	config.ServerName = func() string {
+		if v, exists := cm.Data["PROMETHEUS_SERVER_NAME"]; exists {
+			return v
+		}
+		return ""
+	}()
 
 	// Add bearer token if provided
 	if bearerToken, exists := cm.Data["PROMETHEUS_BEARER_TOKEN"]; exists && bearerToken != "" {

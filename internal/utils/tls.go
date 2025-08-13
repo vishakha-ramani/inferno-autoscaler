@@ -11,9 +11,13 @@ import (
 	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
 )
 
-// CreateTLSConfig creates a TLS configuration from PrometheusConfig
+// CreateTLSConfig creates a TLS configuration from PrometheusConfig.
+// TLS is always enabled for HTTPS-only support. The configuration supports:
+// - Server certificate validation via CA certificate
+// - Mutual TLS authentication via client certificates
+// - Insecure certificate verification (development/testing only)
 func CreateTLSConfig(promConfig *interfaces.PrometheusConfig) (*tls.Config, error) {
-	if promConfig == nil || !promConfig.EnableTLS {
+	if promConfig == nil {
 		return nil, nil
 	}
 
@@ -53,18 +57,14 @@ func CreateTLSConfig(promConfig *interfaces.PrometheusConfig) (*tls.Config, erro
 	return config, nil
 }
 
-// ValidateTLSConfig validates TLS configuration
+// ValidateTLSConfig validates TLS configuration.
+// Ensures HTTPS is used and certificate files exist when verification is enabled.
 func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 	if promConfig == nil {
 		return fmt.Errorf("Prometheus configuration is required")
 	}
 
-	// Always require TLS since we only support HTTPS
-	if !promConfig.EnableTLS {
-		return fmt.Errorf("TLS is required - HTTPS is the only supported protocol")
-	}
-
-	// Validate that the URL uses HTTPS
+	// Validate that the URL uses HTTPS (TLS is always required)
 	if !IsHTTPS(promConfig.BaseURL) {
 		return fmt.Errorf("HTTPS is required - URL must use https:// scheme: %s", promConfig.BaseURL)
 	}
@@ -98,15 +98,15 @@ func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 	return nil
 }
 
-// ParsePrometheusConfigFromEnv parses Prometheus configuration from environment variables
+// ParsePrometheusConfigFromEnv parses Prometheus configuration from environment variables.
+// Supports both direct values and file paths for flexible deployment scenarios.
 func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config := &interfaces.PrometheusConfig{
 		BaseURL: os.Getenv("PROMETHEUS_BASE_URL"),
 		Timeout: DefaultTimeout,
 	}
 
-	// Enable TLS based on environment variable, default to true for HTTPS-only support
-	config.EnableTLS = os.Getenv("PROMETHEUS_TLS_ENABLED") == "true"
+	// TLS is always enabled for HTTPS-only support
 	config.InsecureSkipVerify = os.Getenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY") == "true"
 	config.CACertPath = os.Getenv("PROMETHEUS_CA_CERT_PATH")
 	config.ClientCertPath = os.Getenv("PROMETHEUS_CLIENT_CERT_PATH")

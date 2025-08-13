@@ -25,7 +25,6 @@ OpenShift provides a built-in monitoring stack with Prometheus and Thanos that r
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `PROMETHEUS_BASE_URL` | `https://thanos-querier.openshift-monitoring.svc.cluster.local:9091` | OpenShift's Thanos querier endpoint |
-| `PROMETHEUS_TLS_ENABLED` | `true` | Enable TLS encryption |
 | `PROMETHEUS_TLS_INSECURE_SKIP_VERIFY` | `false` | Verify certificates (production secure) |
 | `PROMETHEUS_CA_CERT_PATH` | `/etc/openshift-ca/ca.crt` | OpenShift service CA certificate |
 | `PROMETHEUS_SERVER_NAME` | `thanos-querier.openshift-monitoring.svc` | Server name for certificate validation |
@@ -50,8 +49,6 @@ spec:
         env:
         - name: PROMETHEUS_BASE_URL
           value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-        - name: PROMETHEUS_TLS_ENABLED
-          value: "true"
         - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
           value: "false"
         - name: PROMETHEUS_TOKEN_PATH
@@ -114,14 +111,6 @@ make deploy-inferno-on-openshift NAMESPACE=inferno-autoscaler-system IMG=your-im
 ```
 
 ## Verification
-
-### Check TLS Configuration
-
-Verify the TLS configuration is applied correctly:
-
-```bash
-kubectl get deployment inferno-autoscaler-controller-manager -n inferno-autoscaler-system -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PROMETHEUS_TLS_ENABLED")].value}'
-```
 
 ### Verify Prometheus Connection
 

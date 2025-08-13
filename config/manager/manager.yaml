@@ -73,11 +73,6 @@ spec:
               configMapKeyRef:
                 name: variantautoscaling-config
                 key: PROMETHEUS_BASE_URL
-          - name: PROMETHEUS_TLS_ENABLED
-            valueFrom:
-              configMapKeyRef:
-                name: variantautoscaling-config
-                key: PROMETHEUS_TLS_ENABLED
           - name: PROMETHEUS_TLS_INSECURE_SKIP_VERIFY
             valueFrom:
               configMapKeyRef:

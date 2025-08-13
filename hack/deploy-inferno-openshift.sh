@@ -198,14 +198,12 @@ verify_deployment() {
     # Check Prometheus configuration
     log_info "Verifying Prometheus configuration..."
     PROMETHEUS_URL=$(${KUBECTL} get deployment inferno-autoscaler-controller-manager -n ${NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PROMETHEUS_BASE_URL")].value}')
-    TLS_ENABLED=$(${KUBECTL} get deployment inferno-autoscaler-controller-manager -n ${NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PROMETHEUS_TLS_ENABLED")].value}')
     INSECURE_SKIP=$(${KUBECTL} get deployment inferno-autoscaler-controller-manager -n ${NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PROMETHEUS_TLS_INSECURE_SKIP_VERIFY")].value}')
     
     log_info "Prometheus URL: ${PROMETHEUS_URL}"
-    log_info "TLS Enabled: ${TLS_ENABLED}"
     log_info "Insecure Skip Verify: ${INSECURE_SKIP}"
     
-    if [[ "${TLS_ENABLED}" == "true" && "${INSECURE_SKIP}" == "false" ]]; then
+    if [[ "${INSECURE_SKIP}" == "false" ]]; then
         log_success "TLS configuration is secure (certificate validation enabled)"
     else
         log_warning "TLS configuration may not be optimal for production"

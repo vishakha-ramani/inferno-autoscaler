@@ -4,14 +4,15 @@ import "time"
 
 // Default timeout and connection constants used across the codebase
 const (
-	// DefaultTimeout is the default timeout for HTTP requests and operations
+	// DefaultTimeout is the default timeout for HTTPS requests and operations
 	DefaultTimeout = 30 * time.Second
 
-	// DefaultKeepAlive is the default keep-alive duration for HTTP connections
+	// DefaultKeepAlive is the default keep-alive duration for HTTPS connections
 	DefaultKeepAlive = 30 * time.Second
 
 	// DefaultMaxIdleConns is the default maximum number of idle connections per host
 	// This is the same as Go's http.Transport default, suitable for HTTP/2 multiplexing
+	// https://go.dev/src/net/http/transport.go
 	DefaultMaxIdleConns = 100
 
 	// DefaultIdleConnTimeout is the default timeout for idle connections

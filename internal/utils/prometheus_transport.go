@@ -12,7 +12,8 @@ import (
 	"github.com/prometheus/client_golang/api"
 )
 
-// CreatePrometheusTransport creates a custom HTTPS transport for Prometheus client with TLS support
+// CreatePrometheusTransport creates a custom HTTPS transport for Prometheus client with TLS support.
+// TLS is always enabled for HTTPS-only support with configurable certificate validation.
 func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundTripper, error) {
 	// Create base HTTPS transport
 	transport := &http.Transport{
@@ -28,20 +29,19 @@ func CreatePrometheusTransport(config *interfaces.PrometheusConfig) (http.RoundT
 		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 	}
 
-	// Always configure TLS since HTTPS is required
+	// Configure TLS (always required for HTTPS-only support)
 	tlsConfig, err := CreateTLSConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	if tlsConfig != nil {
-		transport.TLSClientConfig = tlsConfig
-		logger.Log.Info("TLS configuration applied to Prometheus HTTPS transport")
-	}
+	transport.TLSClientConfig = tlsConfig
+	logger.Log.Info("TLS configuration applied to Prometheus HTTPS transport")
 
 	return transport, nil
 }
 
-// CreatePrometheusClientConfig creates a complete Prometheus client configuration with HTTPS support
+// CreatePrometheusClientConfig creates a complete Prometheus client configuration with HTTPS support.
+// Supports both direct bearer tokens and token files for flexible authentication.
 func CreatePrometheusClientConfig(config *interfaces.PrometheusConfig) (*api.Config, error) {
 	clientConfig := &api.Config{
 		Address: config.BaseURL,

@@ -69,8 +69,8 @@ func InstallPrometheusOperator() error {
 		return err
 	}
 
-	// Wait for namespace to be ready
-	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "namespace/"+monitoringNamespace, "--timeout=30s")
+	// Wait for namespace to be created and active
+	cmd = exec.Command("kubectl", "wait", "--for=jsonpath={.status.phase}=Active", "namespace/"+monitoringNamespace, "--timeout=30s")
 	if _, err := Run(cmd); err != nil {
 		return fmt.Errorf("failed to wait for namespace to be ready: %w", err)
 	}

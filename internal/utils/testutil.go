@@ -41,20 +41,20 @@ func CreateServiceClassConfigMap(controllerNamespace string) *corev1.ConfigMap {
 priority: 1
 data:
   - model: default/default
-    slo-itl: 24
-    slo-ttw: 500
-  - model: llama0-70b
-    slo-itl: 80
-    slo-ttw: 500`,
+    slo-tpot: 24
+    slo-ttft: 500
+  - model: meta/llama0-70b
+    slo-tpot: 80
+    slo-ttft: 500`,
 			"freemium.yaml": `name: Freemium
 priority: 10
 data:
-  - model: granite-13b
-    slo-itl: 200
-    slo-ttw: 2000
-  - model: llama0-7b
-    slo-itl: 150
-    slo-ttw: 1500`,
+  - model: ibm/granite-13b
+    slo-tpot: 200
+    slo-ttft: 2000
+  - model: meta/llama0-7b
+    slo-tpot: 150
+    slo-ttft: 1500`,
 		},
 	}
 }

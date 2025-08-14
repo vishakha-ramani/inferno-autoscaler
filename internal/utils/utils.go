@@ -220,7 +220,6 @@ func AddModelAcceleratorProfileToSystemData(
 			Alpha:        float32(alpha),
 			Beta:         float32(beta),
 			MaxBatchSize: modelAcceleratorProfile.MaxBatchSize,
-			AtTokens:     modelAcceleratorProfile.AtTokens,
 		})
 	return nil
 }
@@ -345,4 +344,25 @@ func MarshalStructToJsonString(t any) string {
 	}
 	re := regexp.MustCompile("\"|\n")
 	return re.ReplaceAllString(string(jsonBytes), "")
+}
+
+// Helper to find SLOs for a model variant
+func FindModelSLO(cmData map[string]string, targetModel string) (*interfaces.ServiceClassEntry, string /* class name */, error) {
+	for key, val := range cmData {
+		var sc interfaces.ServiceClass
+		if err := yaml.Unmarshal([]byte(val), &sc); err != nil {
+			return nil, "", fmt.Errorf("failed to parse %s: %w", key, err)
+		}
+
+		for _, entry := range sc.Data {
+			if entry.Model == targetModel {
+				return &entry, sc.Name, nil
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("model %q not found in any service class", targetModel)
+}
+
+func Ptr[T any](v T) *T {
+	return &v
 }

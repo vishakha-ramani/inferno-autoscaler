@@ -4,6 +4,8 @@ go 1.23.0
 
 godebug default=go1.23
 
+toolchain go1.23.10
+
 require (
 	github.com/llm-inferno/optimizer-light v0.2.1-0.20250730192303-8fc046309dda
 	github.com/onsi/ginkgo/v2 v2.22.0
@@ -95,7 +97,7 @@ require (
 	k8s.io/component-base v0.32.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
+	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect

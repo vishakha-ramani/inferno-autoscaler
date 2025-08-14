@@ -297,7 +297,6 @@ func createVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 						Alpha:        "20.58",
 						Beta:         "0.41",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 					{
 						Acc:          "MI300X",
@@ -305,7 +304,6 @@ func createVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 						Alpha:        "7.77",
 						Beta:         "0.15",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 					{
 						Acc:          "G2",
@@ -313,7 +311,6 @@ func createVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 						Alpha:        "17.15",
 						Beta:         "0.34",
 						MaxBatchSize: 4,
-						AtTokens:     128,
 					},
 				},
 			},
@@ -617,8 +614,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - sc
 		port := 8000
 		portForwardCmd := startPortForwarding(service, namespace, port)
 		defer func() {
-			err = stopCmd(portForwardCmd)
-			Expect(err).NotTo(HaveOccurred())
+			if err := stopCmd(portForwardCmd); err != nil {
+				Expect(err).NotTo(HaveOccurred(), "port-forward should stop gracefully")
+			}
 		}()
 
 		By("waiting for port-forward to be ready")
@@ -638,8 +636,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - sc
 		loadRate := 50
 		loadGenCmd := startLoadGenerator(loadRate, 100, port)
 		defer func() {
-			err = stopCmd(loadGenCmd)
-			Expect(err).NotTo(HaveOccurred())
+			if err := stopCmd(loadGenCmd); err != nil {
+				Expect(err).NotTo(HaveOccurred(), "load generator should stop gracefully")
+			}
 		}()
 
 		By("waiting for load to be processed and scaling decision to be made")

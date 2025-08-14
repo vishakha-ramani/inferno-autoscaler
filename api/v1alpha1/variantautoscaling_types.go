@@ -137,10 +137,17 @@ type ActuationStatus struct {
 	Applied bool `json:"applied"`
 }
 
-// VariantAutoscaling is the Schema for the variantautoscalings API.
-// It represents the autoscaling configuration and status for a model variant.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=va
+// +kubebuilder:printcolumn:name="Model",type=string,JSONPath=".spec.modelID"
+// +kubebuilder:printcolumn:name="Accelerator",type=string,JSONPath=".status.currentAlloc.accelerator"
+// +kubebuilder:printcolumn:name="CurrentReplicas",type=integer,JSONPath=".status.currentAlloc.numReplicas"
+// +kubebuilder:printcolumn:name="Optimized",type=string,JSONPath=".status.desiredOptimizedAlloc.numReplicas"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
+
+// VariantAutoscaling is the Schema for the variantautoscalings API.
+// It represents the autoscaling configuration and status for a model variant.
 type VariantAutoscaling struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

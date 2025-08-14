@@ -391,3 +391,11 @@ func ValidatePrometheusAPIWithBackoff(ctx context.Context, promAPI promv1.API, b
 func ValidatePrometheusAPI(ctx context.Context, promAPI promv1.API) error {
 	return ValidatePrometheusAPIWithBackoff(ctx, promAPI, PrometheusBackoff)
 }
+
+// GetConfigValue retrieves a value from a ConfigMap with a default fallback
+func GetConfigValue(data map[string]string, key, def string) string {
+	if v, ok := data[key]; ok {
+		return v
+	}
+	return def
+}

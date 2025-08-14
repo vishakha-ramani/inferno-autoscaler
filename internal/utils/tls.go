@@ -62,7 +62,8 @@ func CreateTLSConfig(promConfig *interfaces.PrometheusConfig) (*tls.Config, erro
 // Note: This function assumes promConfig is not nil - nil checks should be performed at a higher level.
 func ValidateTLSConfig(promConfig *interfaces.PrometheusConfig) error {
 	// Validate that the URL uses HTTPS (TLS is always required)
-	if !IsHTTPS(promConfig.BaseURL) {
+	u, err := url.Parse(promConfig.BaseURL)
+	if err != nil || u.Scheme != "https" {
 		return fmt.Errorf("HTTPS is required - URL must use https:// scheme: %s", promConfig.BaseURL)
 	}
 
@@ -114,13 +115,4 @@ func ParsePrometheusConfigFromEnv() *interfaces.PrometheusConfig {
 	config.TokenPath = os.Getenv("PROMETHEUS_TOKEN_PATH")
 
 	return config
-}
-
-// IsHTTPS checks if the given URL string uses HTTPS scheme
-func IsHTTPS(urlStr string) bool {
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return false
-	}
-	return u.Scheme == "https"
 }

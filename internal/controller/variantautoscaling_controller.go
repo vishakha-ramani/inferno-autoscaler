@@ -424,11 +424,6 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	// Validate that the API is working by testing a simple query with retry logic
 	if err := utils.ValidatePrometheusAPI(context.Background(), r.PromAPI); err != nil {
 		logger.Log.Error(err, "CRITICAL: Failed to connect to Prometheus - Inferno requires Prometheus connectivity for autoscaling decisions")
-		logger.Log.Error("Please ensure:")
-		logger.Log.Error("1. Prometheus server is running and accessible")
-		logger.Log.Error("2. vLLM deployments are configured to export metrics")
-		logger.Log.Error("3. Network connectivity and authentication are properly configured")
-		logger.Log.Error("4. TLS certificates and bearer tokens are correctly set up")
 		return fmt.Errorf("critical: failed to validate Prometheus API connection - autoscaling functionality requires Prometheus: %w", err)
 	}
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
@@ -510,18 +505,20 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (*interfaces.PrometheusConfig, error) {
 	// Try environment variables first
-	if config, err := r.getPrometheusConfigFromEnv(); err != nil {
+	config, err := r.getPrometheusConfigFromEnv()
+	if err != nil {
 		return nil, fmt.Errorf("failed to get config from environment: %w", err)
-	} else if config != nil {
-		logger.Log.Info("Using Prometheus configuration from environment variables")
+	}
+	if config != nil {
 		return config, nil
 	}
 
 	// Try ConfigMap second
-	if config, err := r.getPrometheusConfigFromConfigMap(ctx); err != nil {
+	config, err = r.getPrometheusConfigFromConfigMap(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get config from ConfigMap: %w", err)
-	} else if config != nil {
-		logger.Log.Info("Using Prometheus configuration from ConfigMap")
+	}
+	if config != nil {
 		return config, nil
 	}
 
@@ -536,7 +533,7 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromEnv() (*interfaces
 		return nil, nil // No config found, but not an error
 	}
 
-	logger.Log.Info("Using Prometheus address from environment variable -> ", "address: ", promAddr)
+	logger.Log.Info("Using Prometheus configuration from environment variables", "address", promAddr)
 	return utils.ParsePrometheusConfigFromEnv(), nil
 }
 
@@ -552,7 +549,7 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx cont
 		return nil, nil // No config found, but not an error
 	}
 
-	logger.Log.Info("Using Prometheus address from ConfigMap -> ", "address: ", promAddr)
+	logger.Log.Info("Using Prometheus configuration from ConfigMap", "address", promAddr)
 
 	// Create config from ConfigMap data
 	config := &interfaces.PrometheusConfig{
@@ -560,36 +557,11 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx cont
 	}
 
 	// Parse TLS configuration from ConfigMap (TLS is always enabled for HTTPS-only support)
-	config.InsecureSkipVerify = func() bool {
-		if v, exists := cm.Data["PROMETHEUS_TLS_INSECURE_SKIP_VERIFY"]; exists {
-			return v == "true"
-		}
-		return false
-	}()
-	config.CACertPath = func() string {
-		if v, exists := cm.Data["PROMETHEUS_CA_CERT_PATH"]; exists {
-			return v
-		}
-		return ""
-	}()
-	config.ClientCertPath = func() string {
-		if v, exists := cm.Data["PROMETHEUS_CLIENT_CERT_PATH"]; exists {
-			return v
-		}
-		return ""
-	}()
-	config.ClientKeyPath = func() string {
-		if v, exists := cm.Data["PROMETHEUS_CLIENT_KEY_PATH"]; exists {
-			return v
-		}
-		return ""
-	}()
-	config.ServerName = func() string {
-		if v, exists := cm.Data["PROMETHEUS_SERVER_NAME"]; exists {
-			return v
-		}
-		return ""
-	}()
+	config.InsecureSkipVerify = utils.GetConfigValue(cm.Data, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "") == "true"
+	config.CACertPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CA_CERT_PATH", "")
+	config.ClientCertPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CLIENT_CERT_PATH", "")
+	config.ClientKeyPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CLIENT_KEY_PATH", "")
+	config.ServerName = utils.GetConfigValue(cm.Data, "PROMETHEUS_SERVER_NAME", "")
 
 	// Add bearer token if provided
 	if bearerToken, exists := cm.Data["PROMETHEUS_BEARER_TOKEN"]; exists && bearerToken != "" {

@@ -648,7 +648,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			Expect(err).NotTo(HaveOccurred())
 			g.Expect(deployment.Status.Replicas).To(BeNumerically(">", 1), "Deployment should have scaled up")
 
-		}, 10*time.Minute, 15*time.Second).Should(Succeed())
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -694,7 +694,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			Expect(err).NotTo(HaveOccurred())
 			g.Expect(deployment.Status.Replicas).To(BeNumerically("==", 1), "Deployment should have scaled down to one replica")
 
-		}, 10*time.Minute, 15*time.Second).Should(Succeed())
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -740,7 +740,6 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 
 		By("verifying controller can connect to Prometheus with TLS")
 		Eventually(func(g Gomega) {
-			// Check controller logs for successful TLS connection
 			pods, err := k8sClient.CoreV1().Pods(controllerNamespace).List(ctx, metav1.ListOptions{
 				LabelSelector: "app.kubernetes.io/name=inferno-autoscaler",
 			})
@@ -750,7 +749,7 @@ var _ = Describe("Test vllme deployment with VariantAutoscaling", Ordered, func(
 			// Check logs for TLS-related messages
 			pod := pods.Items[0]
 			logs, err := k8sClient.CoreV1().Pods(controllerNamespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-				TailLines: &[]int64{50}[0],
+				// Get all logs instead of just tail lines to find the TLS message from startup
 			}).DoRaw(ctx)
 			g.Expect(err).NotTo(HaveOccurred(), "Should be able to get controller logs")
 

@@ -165,7 +165,6 @@ func generateTLSCertificates() error {
 	}
 
 	// Generate self-signed certificate
-	fmt.Println("Generating self-signed certificate for Prometheus...")
 	cmd = exec.Command("openssl", "req", "-x509", "-newkey", "rsa:4096",
 		"-keyout", keyFile,
 		"-out", certFile,
@@ -177,8 +176,6 @@ func generateTLSCertificates() error {
 	if _, err := Run(cmd); err != nil {
 		return fmt.Errorf("failed to generate TLS certificate: %w", err)
 	}
-
-	fmt.Println("TLS certificate generated successfully")
 	return nil
 }
 

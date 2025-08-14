@@ -1,8 +1,6 @@
 package controller
 
-import (
-	inferno "github.com/llm-inferno/optimizer-light/pkg/core"
-)
+import inferno "github.com/llm-inferno/optimizer-light/pkg/core"
 
 // Captures response from ModelAnalyzer(s) per model
 type ModelAnalyzeResponse struct {

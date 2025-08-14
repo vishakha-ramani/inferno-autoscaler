@@ -47,9 +47,14 @@ _kubectl apply -f deploy/configmap-serviceclass.yaml
 # Install the configmap for the accelerator unit cost
 _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 
-# deploy emulated vllme server (includes Prometheus)
+# deploy emulated vllme server (includes Prometheus with TLS)
 hack/deploy-emulated-vllme-server.sh
 
 echo "Deploying Inferno controller-manager"
 make deploy-emulated
 echo "Inferno controller-manager Installed"
+
+# Deploy using the existing manager configuration which now has Kind-specific settings
+kustomize build config/manager | _kubectl apply -f -
+
+echo "Inferno Deployment complete"

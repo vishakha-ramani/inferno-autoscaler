@@ -389,7 +389,7 @@ sleep 30 && kubectl get pods -A | grep -E "(inferno|vllme|prometheus)"
 
 # Port forward Prometheus
 kubectl port-forward svc/prometheus-operated 9090:9090 -n inferno-autoscaler-monitoring
-# server can be accessed at location: http://localhost:9090
+# server can be accessed at location: https://localhost:9090
 ```
 
 **Note**: Always ensure pods are ready before attempting port forwarding to avoid connection errors.
@@ -415,10 +415,10 @@ Go to http://localhost:8000/metrics and check if you see metrics starting with v
 **Run sample query**
 
 ```sh
-curl -G http://localhost:9090/api/v1/query \
+curl -G https://localhost:9090/api/v1/query \
      --data-urlencode 'query=sum(rate(vllm:requests_count_total[1m])) * 60'
 
-curl -G http://localhost:9090/api/v1/query \
+curl -G https://localhost:9090/api/v1/query \
      --data-urlencode 'query=sum(rate(vllm:requests_count_total[1m])) * 60'
 {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1752075000.160,"9.333333333333332"]}]}}% 
 

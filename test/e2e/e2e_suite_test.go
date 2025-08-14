@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
@@ -98,6 +99,11 @@ var _ = BeforeSuite(func() {
 	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
 
+	By("creating the Prometheus configuration ConfigMap with TLS settings")
+	prometheusConfigMap := createPrometheusConfigMapWithTLS(controllerNamespace)
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), prometheusConfigMap, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create Prometheus configuration ConfigMap")
+
 	cmd = exec.Command("kubectl", "apply", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml")
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to deploy Prometheus resources")
@@ -135,3 +141,24 @@ var _ = AfterSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to destroy Kind cluster")
 })
+
+// createPrometheusConfigMapWithTLS creates a ConfigMap with Prometheus configuration including TLS settings
+func createPrometheusConfigMapWithTLS(namespace string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "inferno-autoscaler-variantautoscaling-config",
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			// Prometheus configuration with HTTPS and TLS
+			"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+
+			// TLS configuration for e2e tests (using self-signed certificates)
+			"PROMETHEUS_TLS_INSECURE_SKIP_VERIFY": "true",
+
+			// Optimization configuration
+			"GLOBAL_OPT_INTERVAL": "60s",
+			"GLOBAL_OPT_TRIGGER":  "false",
+		},
+	}
+}

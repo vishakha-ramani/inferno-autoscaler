@@ -107,6 +107,13 @@ deploy-llm-d-inferno-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
 		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS)
 
+## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
+.PHONY: deploy-inferno-on-openshift
+deploy-inferno-on-openshift: manifests kustomize ## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
+	@echo "Deploying Inferno Autoscaler to OpenShift with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),inferno-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),inferno-autoscaler-system) IMG=$(IMG) ./hack/deploy-inferno-openshift.sh
+
 .PHONY: undeploy-llm-d-inferno-emulated-on-kind
 undeploy-llm-d-inferno-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and Inferno-autoscaler"
@@ -122,7 +129,7 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -v -ginkgo.v
+	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -v -ginkgo.v -timeout=20m
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -164,6 +171,8 @@ docker-push: ## Push docker image with the manager.
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+BUILDER_NAME ?= inferno-autoscaler-builder
+
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile

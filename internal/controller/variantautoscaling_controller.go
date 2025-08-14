@@ -26,8 +26,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -95,24 +93,15 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if trigger == "true" {
 		logger.Log.Info("Manual optimization trigger received")
 		// Reset the trigger
-		err := wait.ExponentialBackoff(utils.ReconcileBackoff, func() (bool, error) {
-			cm := &corev1.ConfigMap{}
-			if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: configMapNamespace}, cm); err != nil {
-				logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
-				return false, nil // retry
-			}
+		cm := &corev1.ConfigMap{}
+		if err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, cm); err != nil {
+			logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
+			return ctrl.Result{}, err
+		}
 
-			cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
-			if err := r.Update(ctx, cm); err != nil {
-				logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
-				return false, nil // retry
-			}
-
-			return true, nil // success
-		})
-
-		if err != nil {
-			logger.Log.Error(err, "Failed to reset GLOBAL_OPT_TRIGGER after retries")
+		cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
+		if err := r.Update(ctx, cm); err != nil {
+			logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
 			return ctrl.Result{}, err
 		}
 	}
@@ -321,7 +310,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		}
 		// Fetch the latest version from API server
 		var updateVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		if err := r.Get(ctx, client.ObjectKeyFromObject(va), &updateVa); err != nil {
+		if err := utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, va.Name, va.Namespace, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server: ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
@@ -400,19 +389,32 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	// Initialize metrics
 	initMetricsEmitter()
 
-	// Configure Prometheus client using flexible configuration
-	// TODO: If configuration changes become a concern, implement a configuration watcher rather than per-cycle initialization.
-	prom_addr, err := r.getPrometheusConfig(context.Background())
+	// Configure Prometheus client using flexible configuration with TLS support
+	promConfig, err := r.getPrometheusConfig(context.Background())
 	if err != nil {
-		logger.Log.Warn("Failed to get Prometheus config, using default - ", "error: ", err)
-		// Use default as fallback
-		prom_addr = "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
+		return fmt.Errorf("failed to get Prometheus configuration: %w", err)
 	}
 
-	logger.Log.Info("Initializing Prometheus client -> ", "address: ", prom_addr)
-	promClient, err := api.NewClient(api.Config{
-		Address: prom_addr,
-	})
+	// ensure we have a valid configuration
+	if promConfig == nil {
+		return fmt.Errorf("no Prometheus configuration found - this should not happen")
+	}
+
+	// Always validate TLS configuration since HTTPS is required
+	if err := utils.ValidateTLSConfig(promConfig); err != nil {
+		logger.Log.Error(err, "TLS configuration validation failed - HTTPS is required")
+		return fmt.Errorf("TLS configuration validation failed: %w", err)
+	}
+
+	logger.Log.Info("Initializing Prometheus client -> ", "address: ", promConfig.BaseURL, " tls_enabled: true")
+
+	// Create Prometheus client with TLS support
+	promClientConfig, err := utils.CreatePrometheusClientConfig(promConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create prometheus client config: %w", err)
+	}
+
+	promClient, err := api.NewClient(*promClientConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create prometheus client: %w", err)
 	}
@@ -420,20 +422,13 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	r.PromAPI = promv1.NewAPI(promClient)
 
 	// Validate that the API is working by testing a simple query with retry logic
-	err = wait.ExponentialBackoffWithContext(context.Background(), utils.PrometheusBackoff, func(ctx context.Context) (bool, error) {
-		_, _, err := r.PromAPI.Query(ctx, "up", time.Now())
-		if err != nil {
-			logger.Log.Warn("Prometheus API validation failed, retrying - ", "error: ", err)
-			return false, nil // Continue retrying
-		}
-		return true, nil // Success
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to validate prometheus API connection after retries: %w", err)
+	if err := utils.ValidatePrometheusAPI(context.Background(), r.PromAPI); err != nil {
+		logger.Log.Error(err, "CRITICAL: Failed to connect to Prometheus - Inferno requires Prometheus connectivity for autoscaling decisions")
+		return fmt.Errorf("critical: failed to validate Prometheus API connection - autoscaling functionality requires Prometheus: %w", err)
 	}
-
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
+
+	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
@@ -508,27 +503,72 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 	return out, nil
 }
 
-func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (string, error) {
-	// First, try environment variable
-	if promAddr := os.Getenv("PROMETHEUS_BASE_URL"); promAddr != "" {
-		logger.Log.Info("Using Prometheus address from environment variable -> ", "address: ", promAddr)
-		return promAddr, nil
+func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (*interfaces.PrometheusConfig, error) {
+	// Try environment variables first
+	config, err := r.getPrometheusConfigFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config from environment: %w", err)
+	}
+	if config != nil {
+		return config, nil
 	}
 
-	// Then, try to get from ConfigMap with retry logic
+	// Try ConfigMap second
+	config, err = r.getPrometheusConfigFromConfigMap(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config from ConfigMap: %w", err)
+	}
+	if config != nil {
+		return config, nil
+	}
+
+	// No configuration found
+	logger.Log.Warn("No Prometheus configuration found. Please set PROMETHEUS_BASE_URL environment variable or configure via ConfigMap")
+	return nil, fmt.Errorf("no Prometheus configuration found. Please set PROMETHEUS_BASE_URL environment variable or configure via ConfigMap")
+}
+
+func (r *VariantAutoscalingReconciler) getPrometheusConfigFromEnv() (*interfaces.PrometheusConfig, error) {
+	promAddr := os.Getenv("PROMETHEUS_BASE_URL")
+	if promAddr == "" {
+		return nil, nil // No config found, but not an error
+	}
+
+	logger.Log.Info("Using Prometheus configuration from environment variables", "address", promAddr)
+	return utils.ParsePrometheusConfigFromEnv(), nil
+}
+
+func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx context.Context) (*interfaces.PrometheusConfig, error) {
 	cm := corev1.ConfigMap{}
 	err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
 	if err != nil {
-		logger.Log.Warn("Failed to get ConfigMap for Prometheus config after retries, using default - ", "error: ", err)
-	} else if promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]; exists && promAddr != "" {
-		logger.Log.Info("Using Prometheus address from ConfigMap -> ", "address: ", promAddr)
-		return promAddr, nil
+		return nil, fmt.Errorf("failed to get ConfigMap for Prometheus config: %w", err)
 	}
 
-	// Default in-cluster address
-	defaultAddr := "http://prometheus-operated.inferno-autoscaler-monitoring.svc.cluster.local:9090"
-	logger.Log.Info("Using default Prometheus address -> ", "address: ", defaultAddr)
-	return defaultAddr, nil
+	promAddr, exists := cm.Data["PROMETHEUS_BASE_URL"]
+	if !exists || promAddr == "" {
+		return nil, nil // No config found, but not an error
+	}
+
+	logger.Log.Info("Using Prometheus configuration from ConfigMap", "address", promAddr)
+
+	// Create config from ConfigMap data
+	config := &interfaces.PrometheusConfig{
+		BaseURL: promAddr,
+	}
+
+	// Parse TLS configuration from ConfigMap (TLS is always enabled for HTTPS-only support)
+	config.InsecureSkipVerify = utils.GetConfigValue(cm.Data, "PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "") == "true"
+	config.CACertPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CA_CERT_PATH", "")
+	config.ClientCertPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CLIENT_CERT_PATH", "")
+	config.ClientKeyPath = utils.GetConfigValue(cm.Data, "PROMETHEUS_CLIENT_KEY_PATH", "")
+	config.ServerName = utils.GetConfigValue(cm.Data, "PROMETHEUS_SERVER_NAME", "")
+
+	// Add bearer token if provided
+	if bearerToken, exists := cm.Data["PROMETHEUS_BEARER_TOKEN"]; exists && bearerToken != "" {
+		config.BearerToken = bearerToken
+	}
+
+	return config, nil
 }
 
 func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, trigger string, err error) {

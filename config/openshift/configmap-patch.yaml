@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inferno-autoscaler-variantautoscaling-config
+  namespace: inferno-autoscaler-system
+data:
+  # OpenShift Prometheus configuration
+  PROMETHEUS_BASE_URL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+  
+  # TLS configuration for OpenShift
+  PROMETHEUS_TLS_INSECURE_SKIP_VERIFY: "false"
+  
+  # Optimization configuration
+  GLOBAL_OPT_INTERVAL: "60s"
+  GLOBAL_OPT_TRIGGER: "false" 

@@ -70,7 +70,7 @@ func CreateVariantAutoscalingConfigMap(controllerNamespace string) *corev1.Confi
 			},
 		},
 		Data: map[string]string{
-			"PROMETHEUS_BASE_URL": "http://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+			"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
 			"GLOBAL_OPT_INTERVAL": "60s",
 			"GLOBAL_OPT_TRIGGER":  "false",
 		},

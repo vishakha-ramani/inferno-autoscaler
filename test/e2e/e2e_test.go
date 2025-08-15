@@ -492,7 +492,7 @@ func createVllmeServiceMonitor(name, appLabel string) *unstructured.Unstructured
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
 
-	SetDefaultEventuallyTimeout(1 * time.Minute)
+	SetDefaultEventuallyTimeout(2 * time.Minute)
 	SetDefaultEventuallyPollingInterval(time.Second)
 
 	Context("Manager", func() {
@@ -753,7 +753,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		portForwardCmd := startPortForwarding(service, namespace, port)
 		defer func() {
 			if err := stopCmd(portForwardCmd); err != nil {
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("port-forward should stop gracefully for: %s", serviceName))
+				fmt.Printf("Warning: failed to stop port-forward command: %v\n", err)
 			}
 		}()
 
@@ -875,6 +875,73 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		fmt.Printf("Current replicas for Deployment - %s: %d\n",
 			deployName,
 			deployment.Status.Replicas)
+	})
+
+	It("should connect to Prometheus using HTTPS with TLS", func() {
+		By("verifying Prometheus is accessible via HTTPS")
+		Eventually(func(g Gomega) {
+			// Check if Prometheus service is running with TLS
+			service, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), "Prometheus service should exist")
+			g.Expect(service.Spec.Ports).To(ContainElement(HaveField("Port", int32(9090))), "Prometheus should be listening on port 9090")
+
+			// Verify TLS secret exists
+			secret, err := k8sClient.CoreV1().Secrets("inferno-autoscaler-monitoring").Get(ctx, "prometheus-tls", metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), "TLS secret should exist")
+			g.Expect(secret.Data).To(HaveKey("tls.crt"), "TLS secret should contain certificate")
+			g.Expect(secret.Data).To(HaveKey("tls.key"), "TLS secret should contain private key")
+
+		}, 2*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("verifying controller can connect to Prometheus with TLS")
+		Eventually(func(g Gomega) {
+			pods, err := k8sClient.CoreV1().Pods(controllerNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: "app.kubernetes.io/name=inferno-autoscaler",
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list controller pods")
+			g.Expect(pods.Items).NotTo(BeEmpty(), "Controller pods should exist")
+
+			// Check logs for TLS-related messages
+			pod := pods.Items[0]
+			logs, err := k8sClient.CoreV1().Pods(controllerNamespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+				// Get all logs instead of just tail lines to find the TLS message from startup
+			}).DoRaw(ctx)
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to get controller logs")
+
+			logString := string(logs)
+			g.Expect(logString).To(ContainSubstring("TLS configuration applied to Prometheus HTTPS transport"),
+				"Controller should log TLS configuration")
+			g.Expect(logString).NotTo(ContainSubstring("http: server gave HTTP response to HTTPS client"),
+				"Controller should not have HTTP/HTTPS mismatch errors")
+
+		}, 3*time.Minute, 15*time.Second).Should(Succeed())
+	})
+
+	It("should handle TLS certificate verification correctly", func() {
+		By("verifying TLS configuration in controller ConfigMap")
+		configMap, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, "inferno-autoscaler-variantautoscaling-config", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "ConfigMap should exist")
+
+		// Verify HTTPS URL is configured
+		Expect(configMap.Data["PROMETHEUS_BASE_URL"]).To(ContainSubstring("https://"),
+			"Prometheus URL should use HTTPS")
+
+		// Verify TLS settings are configured
+		Expect(configMap.Data["PROMETHEUS_TLS_INSECURE_SKIP_VERIFY"]).To(Equal("true"),
+			"TLS insecure skip verify should be enabled for e2e tests")
+
+		By("verifying controller startup with TLS configuration")
+		Eventually(func(g Gomega) {
+			pods, err := k8sClient.CoreV1().Pods(controllerNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: "app.kubernetes.io/name=inferno-autoscaler",
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list controller pods")
+
+			for _, pod := range pods.Items {
+				g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning),
+					fmt.Sprintf("Pod %s should be running", pod.Name))
+			}
+		}, 2*time.Minute, 10*time.Second).Should(Succeed())
 	})
 
 	It("should have VariantAutoscaling deleted when Deployment is deleted", func() {

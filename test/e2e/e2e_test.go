@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	v1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
@@ -118,14 +119,14 @@ func isPortAvailable(port int) bool {
 func startPortForwarding(service *corev1.Service, namespace string, port int) *exec.Cmd {
 	// Check if the port is already in use
 	if !isPortAvailable(port) {
-		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding.", port))
+		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s.", port, service.Name))
 	}
 
 	portForwardCmd := exec.Command("kubectl", "port-forward",
 		fmt.Sprintf("service/%s", service.Name),
 		fmt.Sprintf("%d:80", port), "-n", namespace)
 	err := portForwardCmd.Start()
-	Expect(err).NotTo(HaveOccurred(), "Port-forward command should start successfully")
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward command should start successfully for service: %s", service.Name))
 
 	// Check if the port-forward process is still running
 	Eventually(func() error {
@@ -133,7 +134,7 @@ func startPortForwarding(service *corev1.Service, namespace string, port int) *e
 			return fmt.Errorf("port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
 		}
 		return nil
-	}, 10*time.Second, 1*time.Second).Should(Succeed(), "Port-forward should keep running")
+	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Port-forward to port %d should keep running for service: %s", port, service.Name))
 
 	return portForwardCmd
 }
@@ -150,7 +151,7 @@ func startLoadGenerator(rate, contentLength int, port int) *exec.Cmd {
 		"--content", fmt.Sprintf("%d", contentLength),
 		"--model", "vllm")
 	err = loadGenCmd.Start()
-	Expect(err).NotTo(HaveOccurred(), "Failed to start load generator")
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to start load generator sending requests to \"http://localhost:%d/v1\"", port))
 
 	// Check if the loadgen process is still running
 	Eventually(func() error {
@@ -158,7 +159,7 @@ func startLoadGenerator(rate, contentLength int, port int) *exec.Cmd {
 			return fmt.Errorf("load generator exited unexpectedly with code: %d", loadGenCmd.ProcessState.ExitCode())
 		}
 		return nil
-	}, 10*time.Second, 1*time.Second).Should(Succeed(), "Load generator should keep running")
+	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Load generator sending requests to \"http://localhost:%d/v1\" should keep running", port))
 
 	return loadGenCmd
 }
@@ -194,6 +195,117 @@ func stopCmd(cmd *exec.Cmd) error {
 		// Wait for the kill to complete
 		<-done
 		return nil
+	}
+}
+
+// validateAppLabelUniqueness checks if the appLabel is already in use by other resources and fails if it's not unique
+func validateAppLabelUniqueness(namespace, appLabel string) {
+	// Create a context with timeout to prevent hanging tests
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Check if any pods exist with the specified app label
+	podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to check existing pods for label uniqueness: %v", err))
+	}
+
+	// Check if any deployments exist with the specified app label
+	deploymentList, err := k8sClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to check existing deployments for label uniqueness: %v", err))
+	}
+
+	// Check if any services exist with the specified app label
+	serviceList, err := k8sClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to check existing services for label uniqueness: %v", err))
+	}
+
+	// Check if any ServiceMonitors exist with the specified app label
+	serviceMonitorList := &unstructured.UnstructuredList{}
+	serviceMonitorList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	})
+	err = crClient.List(ctx, serviceMonitorList, client.InNamespace(namespace), client.MatchingLabels{"app": appLabel})
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to check existing ServiceMonitors for label uniqueness: %v", err))
+	}
+
+	// Collects conflicting resources to show in error logs
+	var conflicting []string
+
+	if len(podList.Items) > 0 {
+		for _, pod := range podList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Pod: %s", pod.Name))
+		}
+	}
+
+	if len(deploymentList.Items) > 0 {
+		for _, deployment := range deploymentList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Deployment: %s", deployment.Name))
+		}
+	}
+
+	if len(serviceList.Items) > 0 {
+		for _, service := range serviceList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Service: %s", service.Name))
+		}
+	}
+
+	if len(serviceMonitorList.Items) > 0 {
+		for _, serviceMonitor := range serviceMonitorList.Items {
+			name, found, err := unstructured.NestedString(serviceMonitor.Object, "metadata", "name")
+			if err != nil {
+				Fail(fmt.Sprintf("Wrong ServiceMonitor name: %v", err))
+			} else if !found {
+				Fail("ServiceMonitor name not found")
+			}
+			conflicting = append(conflicting, fmt.Sprintf("ServiceMonitor: %s", name))
+		}
+	}
+
+	// Fails if any conflicts are found
+	if len(conflicting) > 0 {
+		Fail(fmt.Sprintf("App label '%s' is not unique in namespace '%s'. Make sure to delete conflicting resources: %s",
+			appLabel, namespace, strings.Join(conflicting, ", ")))
+	}
+}
+
+// validateVariantAutoscalingUniqueness checks if the VariantAutoscaling configuration is unique within the namespace
+func validateVariantAutoscalingUniqueness(namespace, modelId, acc string) {
+	// Create a context with timeout to prevent hanging tests
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	variantAutoscalingList := &v1alpha1.VariantAutoscalingList{}
+	err := crClient.List(ctx, variantAutoscalingList, client.InNamespace(namespace), client.MatchingLabels{"inference.optimization/acceleratorName": acc})
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to check existing VariantAutoscalings for accelerator label uniqueness: %v", err))
+	}
+
+	// found VAs with the same accelerator
+	if len(variantAutoscalingList.Items) > 0 {
+		var conflicting []string
+		for _, va := range variantAutoscalingList.Items {
+			// check for same modelId
+			if va.Spec.ModelID == modelId {
+				conflicting = append(conflicting, fmt.Sprintf("VariantAutoscaling: %s", va.Name))
+			}
+		}
+		// Fails if any conflicts are found
+		if len(conflicting) > 0 {
+			Fail(fmt.Sprintf("VariantAutoscaling '%s' is not unique in namespace '%s'. Make sure to delete conflicting VAs: %s",
+				modelId, namespace, strings.Join(conflicting, ", ")))
+		}
 	}
 }
 
@@ -441,6 +553,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceName = "vllme-service"
 		serviceMonName = "vllme-servicemonitor"
 		appLabel = "vllme"
+
+		By("ensuring unique app label for deployment and service")
+		validateAppLabelUniqueness(namespace, appLabel)
+		validateVariantAutoscalingUniqueness(namespace, defaultModelId, defaultAcc)
 
 		By("creating vllme deployment")
 		deployment := createVllmeDeployment(namespace, deployName, defaultModelId, appLabel)
@@ -816,6 +932,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployName))
 
+		By("waiting for all pods to be deleted")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + appLabel})
+			if err != nil {
+				g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
+			}
+			g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: %s should be deleted", appLabel))
+		}, 1*time.Minute, 1*time.Second).Should(Succeed())
+
 		By("cleaning up Prometheus operator resources")
 		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
 		output, err := utils.Run(cmd)
@@ -850,6 +975,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceMonName = "vllme-servicemonitor"
 		deployName = "vllme-deployment"
 		appLabel = "vllme"
+
+		By("ensuring unique app label for deployment and service")
+		validateAppLabelUniqueness(namespace, appLabel)
+		validateVariantAutoscalingUniqueness(namespace, defaultModelId, defaultAcc)
 
 		By("creating vllme deployment")
 		deployment := createVllmeDeployment(namespace, deployName, defaultModelId, appLabel)
@@ -1085,6 +1214,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployName))
 
+		By("waiting for all pods to be deleted")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + appLabel})
+			if err != nil {
+				g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
+			}
+			g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: %s should be deleted", appLabel))
+		}, 1*time.Minute, 1*time.Second).Should(Succeed())
+
 		By("cleaning up Prometheus operator resources")
 		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
 		output, err := utils.Run(cmd)
@@ -1114,6 +1252,12 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}
 
 		initializeK8sClient()
+
+		By("ensuring unique app labels for deployment and service")
+		validateAppLabelUniqueness(namespace, firstAppLabel)
+		validateAppLabelUniqueness(namespace, secondAppLabel)
+		validateVariantAutoscalingUniqueness(namespace, defaultModelId, defaultAcc)
+		validateVariantAutoscalingUniqueness(namespace, llamaModelId, defaultAcc)
 
 		ctx = context.Background()
 		namespace = llmDNamespace
@@ -1724,6 +1868,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", firstDeployName))
 
+		By("waiting for all pods to be deleted")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + firstAppLabel})
+			if err != nil {
+				g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
+			}
+			g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: %s should be deleted", firstAppLabel))
+		}, 1*time.Minute, 1*time.Second).Should(Succeed())
+
 		By("deleting resources for second deployment")
 		variantAutoscaling = &v1alpha1.VariantAutoscaling{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1756,6 +1909,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, secondDeployName, metav1.DeleteOptions{})
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", secondDeployName))
+
+		By("waiting for all pods to be deleted")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + secondAppLabel})
+			if err != nil {
+				g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
+			}
+			g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: %s should be deleted", secondAppLabel))
+		}, 1*time.Minute, 1*time.Second).Should(Succeed())
 
 		By("cleaning up Prometheus operator resources")
 		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")

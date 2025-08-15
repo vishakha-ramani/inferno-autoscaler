@@ -187,8 +187,8 @@ func CreateSystemData(
 	// set optimizer configuration
 	// TODO: make it configurable
 	systemData.Spec.Optimizer.Spec = infernoConfig.OptimizerSpec{
-		Unlimited:        false,
-		SaturationPolicy: "PriorityRoundRobin",
+		Unlimited:        true,
+		SaturationPolicy: "None",
 	}
 
 	// initialize model data

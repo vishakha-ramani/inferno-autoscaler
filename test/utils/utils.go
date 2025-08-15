@@ -257,8 +257,8 @@ func IsCertManagerCRDsInstalled() bool {
 }
 
 // LoadImageToKindClusterWithName loads a local docker image to the kind cluster
-func LoadImageToKindClusterWithName(name string) error {
-	cluster, err := CheckIfClusterExistsOrCreate()
+func LoadImageToKindClusterWithName(name string, maxGPUs int) error {
+	cluster, err := CheckIfClusterExistsOrCreate(maxGPUs)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func LoadImageToKindClusterWithName(name string) error {
 	return err
 }
 
-func CheckIfClusterExistsOrCreate() (string, error) {
+func CheckIfClusterExistsOrCreate(maxGPUs int) (string, error) {
 	// Check if the kind cluster exists
 	existsCmd := exec.Command("kind", "get", "clusters")
 	output, err := Run(existsCmd)
@@ -287,7 +287,7 @@ func CheckIfClusterExistsOrCreate() (string, error) {
 	// Create the kind cluster if it doesn't exist
 	expectedVersion := os.Getenv("K8S_EXPECTED_VERSION")
 	if !clusterExists {
-		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "-g", "4", "K8S_VERSION="+expectedVersion)
+		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "-g", fmt.Sprintf("%d", maxGPUs), "K8S_VERSION="+expectedVersion)
 		if _, err := Run(scriptCmd); err != nil {
 			return "", fmt.Errorf("failed to create kind cluster: %v", err)
 		}

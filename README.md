@@ -306,6 +306,19 @@ You can change Kubernetes configuration file (default: **$HOME/.kube/config**) a
 make test-e2e KUBECONFIG="path/to/your/config" K8S_VERSION="vX.y.z"
 ```
 
+By default, all E2E tests are executed. You can focus on and/or skip certain tests by passing a pattern to the environment variables FOCUS and SKIP:
+```sh
+make test-e2e FOCUS="pattern" SKIP="pattern"
+
+# - FOCUS="pattern": Run all tests matching the pattern
+# - SKIP="pattern": Skip all tests matching the pattern
+
+# Examples:
+# - make test-e2e FOCUS="scale up and down"
+# - make test-e2e SKIP="continuous load"
+# - make test-e2e FOCUS="multiple VA|Manager"
+```
+
 ## Details on emulated mode deployment on Kind
 
 - Emulated deployment, creates fake gpu resources on the node and deploys inferno on the cluster where inferno consumes fake gpu resources. As well as the emulated vllm server (vllme).

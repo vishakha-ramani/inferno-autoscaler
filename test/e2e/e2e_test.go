@@ -106,20 +106,21 @@ func initializeK8sClient() {
 	}
 }
 
-func isPortAvailable(port int) bool {
+func isPortAvailable(port int) (bool, error) {
 	// Try to bind to the port to check if it's available
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
-		return false // Port is already in use
+
+		return false, err // Port is already in use
 	}
 	listener.Close()
-	return true // Port is available
+	return true, nil // Port is available
 }
 
 func startPortForwarding(service *corev1.Service, namespace string, port int) *exec.Cmd {
 	// Check if the port is already in use
-	if !isPortAvailable(port) {
-		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s.", port, service.Name))
+	if available, err := isPortAvailable(port); !available {
+		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s. Error: %v", port, service.Name, err))
 	}
 
 	portForwardCmd := exec.Command("kubectl", "port-forward",
@@ -752,9 +753,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		port := 8000
 		portForwardCmd := startPortForwarding(service, namespace, port)
 		defer func() {
-			if err := stopCmd(portForwardCmd); err != nil {
-				fmt.Printf("Warning: failed to stop port-forward command: %v\n", err)
-			}
+			err := stopCmd(portForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping port forward: %v\n", err))
 		}()
 
 		By("waiting for port-forward to be ready")
@@ -774,9 +774,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		loadRate := 50
 		loadGenCmd := startLoadGenerator(loadRate, 100, port)
 		defer func() {
-			if err := stopCmd(loadGenCmd); err != nil {
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("load generator sending requests to: %s should stop gracefully", serviceName))
-			}
+			err := stopCmd(loadGenCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("load generator sending requests to: %s should stop gracefully", serviceName))
 		}()
 
 		By("waiting for load to be processed and scaling decision to be made")
@@ -1239,13 +1238,11 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 
 	AfterAll(func() {
 		By("stopping load generator and port forward")
-		if err := stopCmd(loadGenCmd); err != nil {
-			fmt.Printf("Error stopping load generator: %v\n", err)
-		}
+		err := stopCmd(loadGenCmd)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping load generator: %v\n", err))
 
-		if err := stopCmd(portForwardCmd); err != nil {
-			fmt.Printf("Error stopping port forward: %v\n", err)
-		}
+		err = stopCmd(portForwardCmd)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping port forward: %v\n", err))
 
 		By("deleting VariantAutoscaling resource")
 		variantAutoscaling := &v1alpha1.VariantAutoscaling{
@@ -1254,7 +1251,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 				Namespace: namespace,
 			},
 		}
-		err := crClient.Delete(ctx, variantAutoscaling)
+		err = crClient.Delete(ctx, variantAutoscaling)
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", deployName))
 

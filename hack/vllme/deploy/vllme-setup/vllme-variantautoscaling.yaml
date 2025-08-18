@@ -28,4 +28,3 @@ spec:
         alpha: "20.58"
         beta: "0.41"
         maxBatchSize: 4
-        atTokens: 128

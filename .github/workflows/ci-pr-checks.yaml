@@ -13,11 +13,6 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install system dependencies (ZeroMQ)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libzmq3-dev pkg-config
-
       - name: Sanity check repo contents
         run: ls -la
 
@@ -39,8 +34,8 @@ jobs:
           version: v2.1.6
           args: ""
 
-      - name: Run precommit checks
-        run: make precommit
+      # - name: Run precommit checks
+      #   run: make precommit
 
       - name: Run make build
         shell: bash

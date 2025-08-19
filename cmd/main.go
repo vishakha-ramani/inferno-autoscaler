@@ -260,9 +260,8 @@ func main() {
 
 	// Sync the custom logger before starting the manager
 	if logger.Log != nil {
-		if err := logger.Log.Sync(); err != nil {
-			setupLog.Error("error syncing custom logger", zap.Error(err))
-		}
+		//ignore sync errors: https://github.com/uber-go/zap/issues/328
+		_ = logger.Log.Sync()
 	}
 
 	// Register custom metrics with the controller-runtime Prometheus registry

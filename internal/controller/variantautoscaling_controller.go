@@ -165,7 +165,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	for _, s := range system.Servers() {
 		modelAnalyzeResponse := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
 		if len(modelAnalyzeResponse.Allocations) == 0 {
-			logger.Log.Info("No allocations found for server - ", "serverName: ", s.Name())
+			logger.Log.Info("No potential allocations found for server - ", "serverName: ", s.Name())
 			continue
 		}
 		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse

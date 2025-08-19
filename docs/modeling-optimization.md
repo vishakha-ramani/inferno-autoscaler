@@ -10,11 +10,11 @@ WVA uses modeling, benchmarking, and optimization to find the best possible solu
 
 - An **accelerator** is a unit of allocation of (GPU) devices, of a given type and multiplicity, e.g. 2xH100 is an accelarator consisting of two H100 GPUs, in order to satisfy model memory constraints and/or performance.
 
-- An **accelerator configuration** (**topology**, for short) consists of one or more accelerators in parallel (tensor or pipeline parallelism) assigned to a model server.
+- An **accelerator arrangement** consists of one or more accelerators in parallel (tensor or pipeline parallelism) assigned to a model server.
 
-- A **variant** is a collection of model servers (variant instances or **replicas**) serving a given model, using the same accelerator configuration.
+- A **variant** is a collection of model servers (variant instances or **replicas**) serving a given model, using the same accelerator arrangement.
 
-- A **model-topology performance profile** captures performance characteristics when serving a given model on a given accelerator topology. The profile includes:
+- A **model-arrangement performance profile** captures performance characteristics when serving a given model on a given accelerator arrangement. The profile includes:
 
   1. functional description of the token generation time (TPOT) as a function of batch size, and
   2. characterization of conditions under which the server is saturated.
@@ -87,8 +87,28 @@ As such, one can estimate these parameters using either a model tuner that uses 
 
 The optimizer considers all variants in the system and the availability of accelerators in the cluster.
 Its objective is to mimize total cost, while satisfying the SLOs for all variants.
-In case there are not enough accelerators to satisfy all SLOs, the variant with higher priority will be satisfied first.
-The optimizer uses the model analyzer to estimate the number of replicas needed for each variant to satisfy its SLOs, given the observed load statistics.
+The optimizer uses the model analyzer to estimate the minimum number of replicas needed for each variant to satisfy its SLOs, given the observed load statistics.
+
+The behavior of the optimizer is configurable. The optimizer specifications include two parameters:
+
+1. **Unlimited**: A boolean to determine whether the optimizer can allocate acelerators to the variants beyond the cluster capacity, or not. In case of `Unlimited=true` and the total resource demand exceeds cluster capacity, then some pods will be in a Pending state. (This may trigger a cluster autoscaler.) On the other hand, in case of `Unlimited=false` and the total resource demand exceeds cluster capacity, then some variants will get an allocation that may not satisfy their SLOs. Hence, another policy is needed to deal with this overload situation.
+2. **SaturationPolicy**: Set an allocation policy under saturated condition.
+
+      - ***None***: no additional allocation beyond satisfying SLOs
+      - ***PriorityExhaustive***: allocating exhaustively to variants in priority ordering
+      - ***PriorityRoundRobin***: allocating in round-robin fashion within priority groups
+      - ***RoundRobin***: allocating in round-robin fashion across all variants
+
+The default optimizer specifications are as follows.
+
+```bash
+infernoConfig.OptimizerSpec{
+  Unlimited:        true,
+  SaturationPolicy: "None",
+}
+  ```
+
+If `Unlimited=false`, then the preferred saturation policy is `"PriorityRoundRobin"`. Accordingly, an unsatisfied variant with higher priority will get resources before lower priority ones, and unsatisfied variants of same priority will be equally allocated resources.
 
 ## References
 

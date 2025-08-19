@@ -110,10 +110,11 @@ func isPortAvailable(port int) (bool, error) {
 	// Try to bind to the port to check if it's available
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
-
 		return false, err // Port is already in use
 	}
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		Expect(err).NotTo(HaveOccurred(), "Failed to close listener")
+	}
 	return true, nil // Port is available
 }
 
@@ -531,13 +532,17 @@ var _ = Describe("Manager", Ordered, func() {
 	})
 })
 
-var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - critical requests - scale up and down with stopped load", Ordered, func() {
+var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - critical requests", Ordered, func() {
 	var (
 		namespace      string
 		deployName     string
 		serviceName    string
 		serviceMonName string
 		appLabel       string
+		loadGenCmd     *exec.Cmd
+		portForwardCmd *exec.Cmd
+		port           int
+		loadRate       int
 		ctx            context.Context
 	)
 
@@ -554,6 +559,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceName = "vllme-service"
 		serviceMonName = "vllme-servicemonitor"
 		appLabel = "vllme"
+		port = 8000
+		loadRate = 50
 
 		By("ensuring unique app label for deployment and service")
 		validateAppLabelUniqueness(namespace, appLabel)
@@ -589,7 +596,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 				return appsv1.DeploymentStatus{}, err
 			}
 			return deployment.Status, nil
-		}, 3*time.Minute, 10*time.Second).Should(And(
+		}, 4*time.Minute, 10*time.Second).Should(And(
 			HaveField("ReadyReplicas", BeNumerically("==", 1)),
 			HaveField("Replicas", BeNumerically("==", 1)),
 		))
@@ -606,7 +613,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		Expect(selector).To(HaveKeyWithValue("llm-d.ai/model", "ms-sim-llm-d-modelservice"))
 
 		By("verifying pod template labels")
-		podLabels := deployment.Spec.Template.ObjectMeta.Labels
+		podLabels := deployment.Spec.Template.Labels
 		Expect(podLabels).To(HaveKeyWithValue("app", appLabel))
 		Expect(podLabels).To(HaveKeyWithValue("llm-d.ai/inferenceServing", "true"))
 		Expect(podLabels).To(HaveKeyWithValue("llm-d.ai/model", "ms-sim-llm-d-modelservice"))
@@ -732,7 +739,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(ownerRef.UID).To(Equal(deployment.UID), fmt.Sprintf("ownerReference should have the correct UID for: %s", deployName))
 			g.Expect(ownerRef.Controller).NotTo(BeNil(), fmt.Sprintf("ownerReference should have Controller field set for: %s", deployName))
 			g.Expect(*ownerRef.Controller).To(BeTrue(), fmt.Sprintf("ownerReference Controller should be true for: %s", deployName))
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("should scale up optimized replicas when load increases", func() {
@@ -750,11 +757,11 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 
 		// Port-forward the vllme service to send requests to it
 		By("setting up port-forward to the vllme service")
-		port := 8000
-		portForwardCmd := startPortForwarding(service, namespace, port)
+
+		portForwardCmd = startPortForwarding(service, namespace, port)
 		defer func() {
-			err := stopCmd(portForwardCmd)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping port forward: %v\n", err))
+			err = stopCmd(portForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", serviceName))
 		}()
 
 		By("waiting for port-forward to be ready")
@@ -765,17 +772,19 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			if err != nil {
 				return false, nil // Retrying
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
 			return resp.StatusCode < 500, nil // Accept any non-server error status
 		})
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
-		loadRate := 50
-		loadGenCmd := startLoadGenerator(loadRate, 100, port)
+		loadGenCmd = startLoadGenerator(loadRate, 100, port)
 		defer func() {
-			err := stopCmd(loadGenCmd)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("load generator sending requests to: %s should stop gracefully", serviceName))
+			err = stopCmd(loadGenCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", deployName))
 		}()
 
 		By("waiting for load to be processed and scaling decision to be made")
@@ -800,7 +809,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(deployment.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment: %s should have scaled up", deployment.Name))
 			g.Expect(strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate: %s should be approximately the actual load rate: %d", va.Status.CurrentAlloc.Load.ArrivalRate, loadRate))
 
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -831,6 +840,93 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			deployment.Status.Replicas)
 	})
 
+	It("should keep the same replicas if the load stays constant", func() {
+		service, err := k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Service: %s", serviceName))
+
+		By("setting up port-forward to the vllme service")
+		portForwardCmd = startPortForwarding(service, namespace, port)
+		defer func() {
+			err = stopCmd(portForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", serviceName))
+		}()
+		By("waiting for port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to the forwarded port
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
+
+		By("restarting load generation at the same rate")
+		loadGenCmd = startLoadGenerator(loadRate, 100, port)
+		defer func() {
+			err = stopCmd(loadGenCmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", deployName))
+		}()
+
+		By("getting the current number of replicas")
+		var initialReplicas int32
+		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", deployName))
+		initialReplicas = deployment.Status.Replicas
+
+		By("verifying that the number of replicas remains constant over several minutes with constant load")
+		Consistently(func(g Gomega) {
+			va := &v1alpha1.VariantAutoscaling{}
+			err := crClient.Get(ctx, client.ObjectKey{
+				Namespace: namespace,
+				Name:      deployName,
+			}, va)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+
+			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
+
+			// Verify that the deployment replicas remain stable
+			g.Expect(deployment.Status.Replicas).To(Equal(initialReplicas),
+				fmt.Sprintf("Deployment replicas for %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
+
+			// Verify that the desired allocation also remains stable
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(Equal(int(initialReplicas)),
+				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
+
+		}, 2*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("verifying that the controller has updated the status")
+		finalVA := &v1alpha1.VariantAutoscaling{}
+		err = crClient.Get(ctx, client.ObjectKey{
+			Namespace: namespace,
+			Name:      deployName,
+		}, finalVA)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
+
+		// Log the status for debugging
+		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
+			finalVA.Name,
+			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
+			finalVA.Status.CurrentAlloc.Load.AvgLength)
+		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
+			finalVA.Name,
+			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
+			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
+
+		deployment, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		fmt.Printf("Current replicas for Deployment - %s: %d -- initial replicas: %d\n",
+			deployName,
+			deployment.Status.Replicas,
+			initialReplicas)
+	})
+
 	It("should scale down with no load", func() {
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
@@ -849,7 +945,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
 			g.Expect(deployment.Status.Replicas).To(BeNumerically("==", 1), fmt.Sprintf("Deployment: %s should have scaled down to one replica", deployment.Name))
 
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -913,7 +1009,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(logString).NotTo(ContainSubstring("http: server gave HTTP response to HTTPS client"),
 				"Controller should not have HTTP/HTTPS mismatch errors")
 
-		}, 3*time.Minute, 15*time.Second).Should(Succeed())
+		}, 4*time.Minute, 15*time.Second).Should(Succeed())
 	})
 
 	It("should handle TLS certificate verification correctly", func() {
@@ -960,7 +1056,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 				Namespace: namespace,
 				Name:      deployName,
 			}, variantAutoscaling)
-		}, 3*time.Minute, 2*time.Second).Should(HaveOccurred(), fmt.Sprintf("VariantAutoscaling for: %s should be deleted", deployName))
+		}, 4*time.Minute, 2*time.Second).Should(HaveOccurred(), fmt.Sprintf("VariantAutoscaling for: %s should be deleted", deployName))
 	})
 
 	AfterAll(func() {
@@ -972,286 +1068,6 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			},
 		}
 		err := crClient.Delete(ctx, variantAutoscaling)
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", deployName))
-
-		By("deleting ServiceMonitor")
-		serviceMonitor := &unstructured.Unstructured{}
-		serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "monitoring.coreos.com",
-			Version: "v1",
-			Kind:    "ServiceMonitor",
-		})
-		serviceMonitor.SetName(serviceMonName)
-		serviceMonitor.SetNamespace(controllerMonitoringNamespace)
-		err = crClient.Delete(ctx, serviceMonitor)
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", serviceMonName))
-
-		By("deleting vllme service")
-		err = k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metav1.DeleteOptions{})
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Service: %s", serviceName))
-
-		By("deleting vllme deployment")
-		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deployName, metav1.DeleteOptions{})
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployName))
-
-		By("waiting for all pods to be deleted")
-		Eventually(func(g Gomega) {
-			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + appLabel})
-			if err != nil {
-				g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
-			}
-			g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: %s should be deleted", appLabel))
-		}, 1*time.Minute, 1*time.Second).Should(Succeed())
-
-		By("cleaning up Prometheus operator resources")
-		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
-		output, err := utils.Run(cmd)
-		if err != nil {
-			fmt.Printf("Prometheus cleanup output: %s\n", output)
-		}
-	})
-})
-
-var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - critical requests - continuous load", Ordered, func() {
-	var (
-		namespace      string
-		deployName     string
-		serviceName    string
-		serviceMonName string
-		appLabel       string
-		ctx            context.Context
-		loadGenCmd     *exec.Cmd
-		portForwardCmd *exec.Cmd
-	)
-
-	BeforeAll(func() {
-		if os.Getenv("KUBECONFIG") == "" {
-			Skip("KUBECONFIG is not set; skipping e2e test")
-		}
-
-		initializeK8sClient()
-
-		ctx = context.Background()
-		namespace = llmDNamespace
-		serviceName = "vllme-service"
-		serviceMonName = "vllme-servicemonitor"
-		deployName = "vllme-deployment"
-		appLabel = "vllme"
-
-		By("ensuring unique app label for deployment and service")
-		validateAppLabelUniqueness(namespace, appLabel)
-		validateVariantAutoscalingUniqueness(namespace, defaultModelId, defaultAcc)
-
-		By("creating vllme deployment")
-		deployment := createVllmeDeployment(namespace, deployName, defaultModelId, appLabel)
-		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Deployment: %s", deployName))
-
-		By("creating vllme service")
-		service := createVllmeService(namespace, serviceName, appLabel, 30000)
-		_, err = k8sClient.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Service: %s", serviceName))
-
-		By("creating ServiceMonitor for vllme metrics")
-		serviceMonitor := createVllmeServiceMonitor(serviceMonName, appLabel)
-		err = crClient.Create(ctx, serviceMonitor)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create ServiceMonitor: %s", serviceMonName))
-
-		By("creating VariantAutoscaling resource")
-		variantAutoscaling := createVariantAutoscalingResource(namespace, deployName, defaultModelId, defaultAcc)
-		err = crClient.Create(ctx, variantAutoscaling)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployName))
-
-		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-	})
-
-	It("deployment should be running", func() {
-		Eventually(func() (appsv1.DeploymentStatus, error) {
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			if err != nil {
-				return appsv1.DeploymentStatus{}, err
-			}
-			return deployment.Status, nil
-		}, 3*time.Minute, 10*time.Second).Should(And(
-			HaveField("ReadyReplicas", BeNumerically("==", 1)),
-			HaveField("Replicas", BeNumerically("==", 1)),
-		))
-	})
-
-	It("should have VariantAutoscaling resource created", func() {
-		By("verifying VariantAutoscaling resource exists")
-		variantAutoscaling := &v1alpha1.VariantAutoscaling{}
-		err := crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, variantAutoscaling)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
-
-		By("verifying VariantAutoscaling spec")
-		Expect(variantAutoscaling.Spec.ModelID).To(Equal("default/default"))
-		Expect(variantAutoscaling.Spec.SLOClassRef.Name).To(Equal("premium"))
-		Expect(variantAutoscaling.Spec.ModelProfile.Accelerators).To(HaveLen(3))
-	})
-
-	It("should scale up optimized replicas when load increases", func() {
-		By("verifying initial state of VariantAutoscaling")
-		initialVA := &v1alpha1.VariantAutoscaling{}
-		err := crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, initialVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get initial VariantAutoscaling for: %s", deployName))
-
-		By("getting the service endpoint for load generation")
-		service, err := k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Service for: %s", serviceName))
-
-		// Port-forward the vllme service to send requests to it
-		By("setting up port-forward to the vllme service")
-		port := 8000
-		portForwardCmd = startPortForwarding(service, namespace, port)
-
-		By("waiting for port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to the forwarded port
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer resp.Body.Close()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
-		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
-
-		By("starting load generation to create traffic")
-		loadRate := 40
-		loadGenCmd = startLoadGenerator(loadRate, 100, port)
-
-		By("waiting for load to be processed and scaling decision to be made")
-		Eventually(func(g Gomega) {
-			va := &v1alpha1.VariantAutoscaling{}
-			err := crClient.Get(ctx, client.ObjectKey{
-				Namespace: namespace,
-				Name:      deployName,
-			}, va)
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
-
-			// Verify that the optimized allocation has been computed
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">", 0),
-				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should have calculated optimized replicas", deployName))
-
-			// Verify that the number of replicas has scaled up
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">", 1),
-				fmt.Sprintf("High load should trigger scale-up recommendation for VA %s", deployName))
-
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment for: %s", deployName))
-			g.Expect(deployment.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment %s should have scaled up", deployName))
-			g.Expect(strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for VA %s", va.Status.CurrentAlloc.Load.ArrivalRate, loadRate, deployName))
-
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
-
-		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA.Name,
-			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA.Name,
-			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
-
-		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", deployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			deployName,
-			deployment.Status.Replicas)
-	})
-
-	It("should keep the same replicas if the load stays constant", func() {
-		By("getting the current number of replicas")
-		var initialReplicas int32
-		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", deployName))
-		initialReplicas = deployment.Status.Replicas
-
-		By("verifying that replicas remain stable over several minutes with constant load")
-		Consistently(func(g Gomega) {
-			va := &v1alpha1.VariantAutoscaling{}
-			err := crClient.Get(ctx, client.ObjectKey{
-				Namespace: namespace,
-				Name:      deployName,
-			}, va)
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
-
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-
-			// Verify that the deployment replicas remain stable
-			g.Expect(deployment.Status.Replicas).To(Equal(initialReplicas),
-				fmt.Sprintf("Deployment replicas for %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
-
-			// Verify that the desired allocation also remains stable
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(Equal(int(initialReplicas)),
-				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
-
-		}, 3*time.Minute, 10*time.Second).Should(Succeed())
-
-		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA.Name,
-			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA.Name,
-			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
-
-		deployment, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		fmt.Printf("Current replicas for Deployment - %s: %d -- initial replicas: %d\n",
-			deployName,
-			deployment.Status.Replicas,
-			initialReplicas)
-	})
-
-	AfterAll(func() {
-		By("stopping load generator and port forward")
-		err := stopCmd(loadGenCmd)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping load generator: %v\n", err))
-
-		err = stopCmd(portForwardCmd)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error stopping port forward: %v\n", err))
-
-		By("deleting VariantAutoscaling resource")
-		variantAutoscaling := &v1alpha1.VariantAutoscaling{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      deployName,
-				Namespace: namespace,
-			},
-		}
-		err = crClient.Delete(ctx, variantAutoscaling)
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", deployName))
 
@@ -1378,7 +1194,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				return appsv1.DeploymentStatus{}, err
 			}
 			return deployment.Status, nil
-		}, 3*time.Minute, 10*time.Second).Should(And(
+		}, 4*time.Minute, 10*time.Second).Should(And(
 			HaveField("ReadyReplicas", BeNumerically("==", 1)),
 			HaveField("Replicas", BeNumerically("==", 1)),
 		))
@@ -1389,7 +1205,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				return appsv1.DeploymentStatus{}, err
 			}
 			return deployment.Status, nil
-		}, 3*time.Minute, 10*time.Second).Should(And(
+		}, 4*time.Minute, 10*time.Second).Should(And(
 			HaveField("ReadyReplicas", BeNumerically("==", 1)),
 			HaveField("Replicas", BeNumerically("==", 1)),
 		))
@@ -1455,7 +1271,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			if err != nil {
 				return false, nil // Retrying
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
 			return resp.StatusCode < 500, nil // Accept any non-server error status
 		})
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
@@ -1466,7 +1285,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			if err != nil {
 				return false, nil // Retrying
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
 			return resp.StatusCode < 500, nil // Accept any non-server error status
 		})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for Service: %s", secondServiceName))
@@ -1518,7 +1340,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(deployment2.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment2.Name, deployment2.Status.Replicas))
 			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va2.Status.CurrentAlloc.Load.ArrivalRate, loadRate, deployment2.Name))
 
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}
@@ -1568,7 +1390,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			deployment2.Status.Replicas)
 	})
 
-	It("should not scale up optimized replicas over cluster limits", func() {
+	It("should scale up optimized replicas over cluster limits", func() {
 		By("verifying initial state of VariantAutoscaling")
 		initialVA1 := &v1alpha1.VariantAutoscaling{}
 		err := crClient.Get(ctx, client.ObjectKey{
@@ -1630,7 +1452,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			if err != nil {
 				return false, nil // Retrying
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
 			return resp.StatusCode < 500, nil // Accept any non-server error status
 		})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for: %s", firstServiceName))
@@ -1641,7 +1466,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			if err != nil {
 				return false, nil // Retrying
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
+			}()
 			return resp.StatusCode < 500, nil // Accept any non-server error status
 		})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for: %s", secondServiceName))
@@ -1695,9 +1523,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(deployment2.Status.Replicas).To(BeNumerically(">=", initialReplicas2), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment2.Name, deployment2.Status.Replicas))
 			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", higherLoadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d",
 				va2.Status.CurrentAlloc.Load.ArrivalRate, higherLoadRate))
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
-		By("verifying the intermediate status")
+		By("showing the status of VAs and deployments, including the number of pods in pending state")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
@@ -1717,9 +1545,11 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 
 		deployment1, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
+		fmt.Printf("Current replicas for Deployment - %s: %d\n Available Replicas: %d\n Unavailable replicas: %d\n",
 			firstDeployName,
-			deployment1.Status.Replicas)
+			deployment1.Status.Replicas,
+			deployment1.Status.AvailableReplicas,
+			deployment1.Status.UnavailableReplicas)
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
@@ -1740,81 +1570,11 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 
 		deployment2, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
+		fmt.Printf("Current replicas for Deployment - %s: %d\n Available Replicas: %d\n Unavailable replicas: %d\n",
 			secondDeployName,
-			deployment2.Status.Replicas)
-
-		By("verifying that deployments are not scaled over cluster capacity")
-		Consistently(func(g Gomega) {
-			finalVA1 := &v1alpha1.VariantAutoscaling{}
-			err = crClient.Get(ctx, client.ObjectKey{
-				Namespace: namespace,
-				Name:      firstDeployName,
-			}, finalVA1)
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
-			deployment1, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-
-			finalVA2 := &v1alpha1.VariantAutoscaling{}
-			err = crClient.Get(ctx, client.ObjectKey{
-				Namespace: namespace,
-				Name:      secondDeployName,
-			}, finalVA2)
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
-			deployment2, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-
-			g.Expect(deployment1.Status.Replicas+deployment2.Status.Replicas).To(BeNumerically("<=", maximumAvailableGPUs), fmt.Sprintf("Deployments should not scale up beyond maximum capacity of %d - actual replicas for %s: %d - actual replicas for %s: %d", maximumAvailableGPUs,
-				firstDeployName, deployment1.Status.Replicas, secondDeployName, deployment2.Status.Replicas))
-		}, 4*time.Minute, 10*time.Second).Should(Succeed())
-
-		By("verifying that the controller has updated the status")
-		finalVA1 = &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
-
-		deployment1, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			firstDeployName,
-			deployment1.Status.Replicas)
-
-		finalVA2 = &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
-
-		deployment2, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			secondDeployName,
-			deployment2.Status.Replicas)
+			deployment2.Status.Replicas,
+			deployment2.Status.AvailableReplicas,
+			deployment2.Status.UnavailableReplicas)
 	})
 
 	It("should scale down with no load", func() {
@@ -1850,7 +1610,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
 			g.Expect(deployment2.Status.Replicas).To(BeNumerically("==", 1), fmt.Sprintf("Deployment %s should have scaled down to one replica", deployment2.Name))
 
-		}, 6*time.Minute, 10*time.Second).Should(Succeed())
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}

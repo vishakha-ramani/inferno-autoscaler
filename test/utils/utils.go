@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	g "github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -38,7 +38,7 @@ const (
 )
 
 func warnError(err error) {
-	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	_, _ = fmt.Fprintf(g.GinkgoWriter, "warning: %v\n", err)
 }
 
 // Run executes the provided command within this context
@@ -47,12 +47,12 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		_, _ = fmt.Fprintf(g.GinkgoWriter, "chdir dir: %s\n", err)
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	_, _ = fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	_, _ = fmt.Fprintf(g.GinkgoWriter, "running: %s\n", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("%s failed with error: (%v) %s", command, err, string(output))
@@ -300,14 +300,14 @@ func CheckIfClusterExistsOrCreate(maxGPUs int) (string, error) {
 
 // checkKubernetesVersion verifies that the cluster is running the expected Kubernetes version
 func checkKubernetesVersion(expectedVersion string) {
-	By("checking Kubernetes cluster version")
+	g.By("checking Kubernetes cluster version")
 
 	expectedVersionClean := strings.TrimPrefix(expectedVersion, "v")
 
 	cmd := exec.Command("kubectl", "version")
 	output, err := Run(cmd)
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
+		g.Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
 	}
 
 	// Extract server version
@@ -325,12 +325,12 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	expectedMajor, err := strconv.Atoi(expectedParts[0])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
+		g.Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
 	}
 
 	expectedMinor, err := strconv.Atoi(expectedParts[1])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
+		g.Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
 	}
 
 	// Parse actual server version (e.g., "1.32.0" -> major=1, minor=32)
@@ -338,22 +338,18 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	serverMajor, err := strconv.Atoi(serverParts[0])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse server major version: %v", err))
+		g.Fail(fmt.Sprintf("failed to parse server major version: %v", err))
 	}
 
 	serverMinor, err := strconv.Atoi(serverParts[1])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
+		g.Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
 	}
-
-	fmt.Fprintf(GinkgoWriter, "Expected Kubernetes version: %s\n", expectedVersion)
-	fmt.Fprintf(GinkgoWriter, "Actual Kubernetes server version: v%s\n", serverVersion)
 
 	// Check if actual version is >= expected version
 	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor < expectedMinor) {
-		Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
+		g.Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
 	}
-	fmt.Fprintf(GinkgoWriter, "Kubernetes version v%s meets minimum requirement %s\n", serverVersion, expectedVersion)
 }
 
 // GetNonEmptyLines converts given command output string into individual objects
@@ -376,7 +372,7 @@ func GetProjectDir() (string, error) {
 	if err != nil {
 		return wd, err
 	}
-	wd = strings.Replace(wd, "/test/e2e", "", -1)
+	wd = strings.ReplaceAll(wd, "/test/e2e", "")
 	return wd, nil
 }
 

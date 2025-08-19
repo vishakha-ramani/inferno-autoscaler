@@ -18,14 +18,13 @@ get-llm-d-latest() {
     rm -rf "$INFRA_REPO_DIR"
   fi
 
-  local OWNER="llm-d-incubation" 
-  local PROJECT="llm-d-infra"
-  local RELEASE_URL=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/$OWNER/$PROJECT/releases/latest)
-  local RELEASE_TAG=$(basename $RELEASE_URL)
-  
-  echo ">>> Cloning the latest release of $PROJECT from $OWNER: $RELEASE_TAG"
+  local owner="llm-d-incubation" 
+  local project="llm-d-infra"
+  local release="v1.1.1"
+
+  echo ">>> Cloning the latest release of $project from $owner: $release"
   echo ">>> Cloning into $INFRA_REPO_DIR"
-  git clone -b $RELEASE_TAG -- https://github.com/$OWNER/$PROJECT.git $INFRA_REPO_DIR 
+  git clone -b $release -- https://github.com/$owner/$project.git $INFRA_REPO_DIR
 }
 
 function apply_fix_for_vllme_comp() {
@@ -97,4 +96,4 @@ echo "kubectl port-forward -n $LLMD_NAMESPACE svc/$INFRA_RELEASE_NAME-inference-
 echo ">>> Then launch the load generator:"
 echo "cd $PROJ_ROOT_DIR/hack/vllme/vllm_emulator"
 echo "pip install -r requirements.txt"
-echo "python loadgen.py --model vllm  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50"
+echo "python loadgen.py --model default/default  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50"

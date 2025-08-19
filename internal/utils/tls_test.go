@@ -63,27 +63,47 @@ func TestCreateTLSConfig(t *testing.T) {
 
 func TestParsePrometheusConfigFromEnv(t *testing.T) {
 	// Test with HTTPS URL (default)
-	os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090")
+	if err := os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
 
 	config := ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://prometheus:9090", config.BaseURL)
 
 	// Test with explicit TLS configuration
-	os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090")
-	os.Setenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "true")
+	if err := os.Setenv("PROMETHEUS_BASE_URL", "https://prometheus:9090"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "true"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://prometheus:9090", config.BaseURL)
 	assert.True(t, config.InsecureSkipVerify)
 
 	// Test OpenShift configuration
-	os.Setenv("PROMETHEUS_BASE_URL", "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091")
-	os.Setenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false")
-	os.Setenv("PROMETHEUS_CA_CERT_PATH", "/etc/openshift-ca/ca.crt")
-	os.Setenv("PROMETHEUS_CLIENT_CERT_PATH", "")
-	os.Setenv("PROMETHEUS_CLIENT_KEY_PATH", "")
-	os.Setenv("PROMETHEUS_SERVER_NAME", "thanos-querier.openshift-monitoring.svc")
-	os.Setenv("PROMETHEUS_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err := os.Setenv("PROMETHEUS_BASE_URL", "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY", "false"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_CA_CERT_PATH", "/etc/openshift-ca/ca.crt"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_CLIENT_CERT_PATH", ""); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_CLIENT_KEY_PATH", ""); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_SERVER_NAME", "thanos-querier.openshift-monitoring.svc"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("PROMETHEUS_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
 
 	config = ParsePrometheusConfigFromEnv()
 	assert.Equal(t, "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091", config.BaseURL)
@@ -95,13 +115,27 @@ func TestParsePrometheusConfigFromEnv(t *testing.T) {
 	assert.Equal(t, "/var/run/secrets/kubernetes.io/serviceaccount/token", config.TokenPath)
 
 	// Clean up
-	os.Unsetenv("PROMETHEUS_BASE_URL")
-	os.Unsetenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY")
-	os.Unsetenv("PROMETHEUS_CA_CERT_PATH")
-	os.Unsetenv("PROMETHEUS_CLIENT_CERT_PATH")
-	os.Unsetenv("PROMETHEUS_CLIENT_KEY_PATH")
-	os.Unsetenv("PROMETHEUS_SERVER_NAME")
-	os.Unsetenv("PROMETHEUS_TOKEN_PATH")
+	if err := os.Unsetenv("PROMETHEUS_BASE_URL"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_TLS_INSECURE_SKIP_VERIFY"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_CA_CERT_PATH"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_CLIENT_CERT_PATH"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_CLIENT_KEY_PATH"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_SERVER_NAME"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
+	if err := os.Unsetenv("PROMETHEUS_TOKEN_PATH"); err != nil {
+		t.Fatalf("Failed to unset environment variable: %v", err)
+	}
 }
 
 func TestValidateTLSConfig(t *testing.T) {

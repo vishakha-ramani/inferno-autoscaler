@@ -27,5 +27,4 @@ data:
   # PROMETHEUS_TOKEN_PATH: "/path/to/token/file"        # Path to bearer token file (production with mounted secrets)
   
   # Optimization configuration
-  GLOBAL_OPT_INTERVAL: "60s"
-  GLOBAL_OPT_TRIGGER: "false" 
+  GLOBAL_OPT_INTERVAL: "60s" 

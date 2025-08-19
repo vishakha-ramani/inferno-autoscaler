@@ -21,12 +21,10 @@ get-llm-d-latest() {
   local owner="llm-d-incubation" 
   local project="llm-d-infra"
   local release="v1.1.1"
-  local release_url=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/$owner/$project/releases/tag/$release)
-  local release_tag=$(basename $release_url)
 
-  echo ">>> Cloning the latest release of $project from $owner: $release_tag"
+  echo ">>> Cloning the latest release of $project from $owner: $release"
   echo ">>> Cloning into $INFRA_REPO_DIR"
-  git clone -b $release_tag -- https://github.com/$owner/$project.git $INFRA_REPO_DIR
+  git clone -b $release -- https://github.com/$owner/$project.git $INFRA_REPO_DIR
 }
 
 function apply_fix_for_vllme_comp() {

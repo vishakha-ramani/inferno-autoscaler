@@ -114,11 +114,11 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
 
-	By("waiting for the controller-manager to be ready")
+	By("waiting for the controller-manager pods to be ready")
 	Eventually(func(g Gomega) {
-		podList, err := k8sClient.CoreV1().Pods(controllerNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=controller-manager"})
+		podList, err := k8sClient.CoreV1().Pods(controllerNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=inferno-autoscaler"})
 		if err != nil {
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to list Pod labelled: %s", "app=controller-manager"))
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list manager pods labelled")
 		}
 		g.Expect(podList.Items).NotTo(BeEmpty(), "Pod list should not be empty")
 		for _, pod := range podList.Items {

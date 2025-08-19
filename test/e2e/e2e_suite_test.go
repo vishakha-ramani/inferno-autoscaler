@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -112,6 +113,29 @@ var _ = BeforeSuite(func() {
 	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
+	By("waiting for the controller-manager to be ready")
+	Eventually(func(g Gomega) {
+		podList, err := k8sClient.CoreV1().Pods(controllerNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=controller-manager"})
+		if err != nil {
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to list Pod labelled: %s", "app=controller-manager"))
+		}
+		for _, pod := range podList.Items {
+			g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning), fmt.Sprintf("Pod %s is not running", pod.Name))
+		}
+	}, 1*time.Minute, 1*time.Second).Should(Succeed())
+
+	By("waiting for the controller-manager to acquire lease")
+	Eventually(func(g Gomega) {
+		leaseList, err := k8sClient.CoordinationV1().Leases(controllerNamespace).List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to get leases")
+		}
+		g.Expect(leaseList.Items).NotTo(BeEmpty(), "Lease list should not be empty")
+		for _, lease := range leaseList.Items {
+			g.Expect(*lease.Spec.HolderIdentity).To(ContainSubstring("controller-manager"), "Lease holder identity is not correct")
+		}
+	}, 1*time.Minute, 1*time.Second).Should(Succeed())
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

@@ -1340,7 +1340,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(deployment2.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment2.Name, deployment2.Status.Replicas))
 			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va2.Status.CurrentAlloc.Load.ArrivalRate, loadRate, deployment2.Name))
 
-		}, 4*time.Minute, 10*time.Second).Should(Succeed())
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}

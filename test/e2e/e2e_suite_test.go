@@ -120,6 +120,7 @@ var _ = BeforeSuite(func() {
 		if err != nil {
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to list Pod labelled: %s", "app=controller-manager"))
 		}
+		g.Expect(podList.Items).NotTo(BeEmpty(), "Pod list should not be empty")
 		for _, pod := range podList.Items {
 			g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning), fmt.Sprintf("Pod %s is not running", pod.Name))
 		}
@@ -133,7 +134,8 @@ var _ = BeforeSuite(func() {
 		}
 		g.Expect(leaseList.Items).NotTo(BeEmpty(), "Lease list should not be empty")
 		for _, lease := range leaseList.Items {
-			g.Expect(*lease.Spec.HolderIdentity).To(ContainSubstring("controller-manager"), "Lease holder identity is not correct")
+			g.Expect(lease.Spec.HolderIdentity).NotTo(BeNil(), "Lease holderIdentity should not be nil")
+			g.Expect(*lease.Spec.HolderIdentity).To(ContainSubstring("controller-manager"), "Lease holderIdentity is not correct")
 		}
 	}, 2*time.Minute, 1*time.Second).Should(Succeed())
 

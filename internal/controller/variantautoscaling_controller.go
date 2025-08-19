@@ -84,26 +84,10 @@ func initMetricsEmitter() {
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	interval, trigger, err := r.readOptimizationConfig(ctx)
+	interval, err := r.readOptimizationConfig(ctx)
 	if err != nil {
 		logger.Log.Error(err, "Unable to read optimization config")
 		return ctrl.Result{}, err
-	}
-
-	if trigger == "true" {
-		logger.Log.Info("Manual optimization trigger received")
-		// Reset the trigger
-		cm := &corev1.ConfigMap{}
-		if err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, cm); err != nil {
-			logger.Log.Error(err, "Failed to get ConfigMap during trigger reset")
-			return ctrl.Result{}, err
-		}
-
-		cm.Data["GLOBAL_OPT_TRIGGER"] = "false"
-		if err := r.Update(ctx, cm); err != nil {
-			logger.Log.Error(err, "Failed to update ConfigMap during trigger reset")
-			return ctrl.Result{}, err
-		}
 	}
 
 	// default requeue duration
@@ -571,15 +555,14 @@ func (r *VariantAutoscalingReconciler) getPrometheusConfigFromConfigMap(ctx cont
 	return config, nil
 }
 
-func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, trigger string, err error) {
+func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Context) (interval string, err error) {
 	cm := corev1.ConfigMap{}
 	err = utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
 
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get optimization configmap after retries: %w", err)
+		return "", fmt.Errorf("failed to get optimization configmap after retries: %w", err)
 	}
 
 	interval = cm.Data["GLOBAL_OPT_INTERVAL"]
-	trigger = cm.Data["GLOBAL_OPT_TRIGGER"]
-	return interval, trigger, nil
+	return interval, nil
 }

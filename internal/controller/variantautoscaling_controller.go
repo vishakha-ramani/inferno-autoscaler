@@ -341,7 +341,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 
 			// Patch metadata change (ownerReferences)
 			patch := client.MergeFrom(original)
-			if err := r.Client.Patch(ctx, &updateVa, patch); err != nil {
+			if err := r.Patch(ctx, &updateVa, patch); err != nil {
 				logger.Log.Error(err, "failed to patch ownerReference - ", "variantAutoscaling-name: ", updateVa.Name)
 				return err
 			}

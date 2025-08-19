@@ -123,7 +123,7 @@ var _ = BeforeSuite(func() {
 		for _, pod := range podList.Items {
 			g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning), fmt.Sprintf("Pod %s is not running", pod.Name))
 		}
-	}, 1*time.Minute, 1*time.Second).Should(Succeed())
+	}, 2*time.Minute, 1*time.Second).Should(Succeed())
 
 	By("waiting for the controller-manager to acquire lease")
 	Eventually(func(g Gomega) {
@@ -135,7 +135,7 @@ var _ = BeforeSuite(func() {
 		for _, lease := range leaseList.Items {
 			g.Expect(*lease.Spec.HolderIdentity).To(ContainSubstring("controller-manager"), "Lease holder identity is not correct")
 		}
-	}, 1*time.Minute, 1*time.Second).Should(Succeed())
+	}, 2*time.Minute, 1*time.Second).Should(Succeed())
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

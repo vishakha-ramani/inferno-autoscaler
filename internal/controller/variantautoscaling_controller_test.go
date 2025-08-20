@@ -58,7 +58,8 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name: "inferno-autoscaler-system",
 				},
 			}
-			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
+
 			By("creating the required configmap for optimization")
 			configMap := ctrlutils.CreateServiceClassConfigMap(ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
@@ -119,8 +120,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -129,8 +129,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -139,8 +138,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		})
 
 		It("should successfully reconcile the resource", func() {
@@ -206,17 +204,17 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name: "inferno-autoscaler-system",
 				},
 			}
-			k8sClient.Create(ctx, ns) // May already exist
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
 
 			By("creating the required configmaps")
 			configMap := ctrlutils.CreateServiceClassConfigMap(ns.Name)
-			k8sClient.Create(ctx, configMap)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
 
 			configMap = ctrlutils.CreateAcceleratorUnitCostConfigMap(ns.Name)
-			k8sClient.Create(ctx, configMap)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
 
 			configMap = ctrlutils.CreateVariantAutoscalingConfigMap(ns.Name)
-			k8sClient.Create(ctx, configMap)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -228,8 +226,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err := k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -238,8 +235,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -248,8 +244,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		})
 
 		It("should return empty on variant autoscaling optimization ConfigMap with missing interval value", func() {
@@ -570,7 +565,7 @@ data:
 					Name: "inferno-autoscaler-system",
 				},
 			}
-			k8sClient.Create(ctx, ns) // May already exist
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
 
 			By("creating the required configmaps")
 			// Use custom configmap creation function
@@ -686,8 +681,7 @@ data:
 				},
 			}
 			err := k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -696,8 +690,7 @@ data:
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -706,8 +699,7 @@ data:
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
-			client.IgnoreNotFound(err)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
 			var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
 			err = k8sClient.List(ctx, &variantAutoscalingList)
@@ -722,16 +714,14 @@ data:
 				deployment := &deploymentList.Items[i]
 				if strings.HasPrefix(deployment.Spec.Template.ObjectMeta.Labels["app"], "multi-test-resource") {
 					err = k8sClient.Delete(ctx, deployment)
-					client.IgnoreNotFound(err)
-					Expect(err).NotTo(HaveOccurred(), "Failed to delete deployment")
+					Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), "Failed to delete deployment")
 				}
 			}
 
 			// Clean up all VariantAutoscaling resources
 			for i := range variantAutoscalingList.Items {
 				err = k8sClient.Delete(ctx, &variantAutoscalingList.Items[i])
-				client.IgnoreNotFound(err)
-				Expect(err).NotTo(HaveOccurred(), "Failed to delete VariantAutoscaling resource")
+				Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), "Failed to delete VariantAutoscaling resource")
 			}
 		})
 

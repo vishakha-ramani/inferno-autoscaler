@@ -712,7 +712,7 @@ data:
 			// Clean up all deployments
 			for i := range deploymentList.Items {
 				deployment := &deploymentList.Items[i]
-				if strings.HasPrefix(deployment.Spec.Template.ObjectMeta.Labels["app"], "multi-test-resource") {
+				if strings.HasPrefix(deployment.Spec.Template.Labels["app"], "multi-test-resource") {
 					err = k8sClient.Delete(ctx, deployment)
 					Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), "Failed to delete deployment")
 				}

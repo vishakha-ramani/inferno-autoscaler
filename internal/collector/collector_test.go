@@ -236,6 +236,7 @@ var _ = Describe("Collector", func() {
 			name          string
 			modelID       string
 			testNamespace string
+			accCost       float64
 		)
 
 		BeforeEach(func() {
@@ -247,6 +248,7 @@ var _ = Describe("Collector", func() {
 			name = "test"
 			modelID = "default/default"
 			testNamespace = "default"
+			accCost = 40.0 // sample accelerator cost
 
 			deployment = appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -292,7 +294,7 @@ var _ = Describe("Collector", func() {
 				&model.Sample{Value: model.SampleValue(0.05)}, // 0.05 seconds
 			}
 
-			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, 40.0, mockProm)
+			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(allocation.Accelerator).To(Equal("A100"))
@@ -320,11 +322,10 @@ var _ = Describe("Collector", func() {
 				&model.Sample{Value: model.SampleValue(100.0)},
 			}
 
-			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, 40.0, mockProm)
+			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(allocation.Accelerator).To(Equal("")) // Empty due to missing label
-			fmt.Printf("Allocation: %+v\n", allocation)
+			Expect(allocation.Accelerator).To(Equal("")) // Empty due to deleted accName label
 		})
 
 		It("should handle Prometheus query errors", func() {
@@ -332,10 +333,11 @@ var _ = Describe("Collector", func() {
 			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
 			mockProm.queryErrors[arrivalQuery] = fmt.Errorf("prometheus connection failed")
 
-			_, err := AddMetricsToOptStatus(ctx, &va, deployment, 40.0, mockProm)
+			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("prometheus connection failed"))
+			Expect(allocation).To(Equal(llmdVariantAutoscalingV1alpha1.Allocation{})) // Expect empty allocation on error
 		})
 
 		It("should handle empty metric results gracefully", func() {
@@ -347,15 +349,17 @@ var _ = Describe("Collector", func() {
 			mockProm.queryResults[arrivalQuery] = model.Vector{}
 			mockProm.queryResults[tokenQuery] = model.Vector{}
 
-			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, 40.0, mockProm)
+			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
 
 			Expect(err).NotTo(HaveOccurred())
+			Expect(allocation.ITLAverage).To(Equal("0.00"))
+			Expect(allocation.WaitAverage).To(Equal("0.00"))
 			Expect(allocation.Load.ArrivalRate).To(Equal("0.00"))
 			Expect(allocation.Load.AvgLength).To(Equal("0.00"))
 		})
 	})
 
-	Context("When handling edge cases with FixValue func", func() {
+	Context("When testing FixValue func", func() {
 		It("should fix NaN values", func() {
 			val := math.NaN()
 			FixValue(&val)

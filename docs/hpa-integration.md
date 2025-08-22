@@ -222,8 +222,23 @@ sed -i 's#- kube-apiserver#- kube-apiserver\n    - --feature-gates=HPAScaleToZer
 
 sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml
 ```
+4. Verify that the feature is enabled:
 
-4. Specify the `minReplicas: 0` field in the `yaml` snippet for HPA and apply it following the integration steps
+```sh
+kubectl -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A2 feature-gates
+
+      - --feature-gates=HPAScaleToZero=true
+      - --advertise-address=172.18.0.3
+      - --allow-privileged=true
+
+kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | grep -A2 feature-gates
+
+      - --feature-gates=HPAScaleToZero=true
+      - --allocate-node-cidrs=true
+      - --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf
+```
+
+5. Specify the `minReplicas: 0` field in the `yaml` snippet for HPA and apply it following the integration steps
 
 ## Configuration Files
 

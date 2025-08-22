@@ -752,7 +752,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceMonName = "vllme-servicemonitor"
 		appLabel = "vllme"
 		port = 8000
-		loadRate = 50
+		loadRate = 25
 
 		By("ensuring unique app label for deployment and service")
 		validateAppLabelUniqueness(namespace, appLabel)
@@ -1518,7 +1518,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		))
 	})
 
-	It("should have VariantAutoscaling resource created", func() {
+	It("should have VariantAutoscaling resources created", func() {
 		By("verifying VariantAutoscaling resources exist")
 		variantAutoscaling := &v1alpha1.VariantAutoscaling{}
 		err := crClient.Get(ctx, client.ObjectKey{

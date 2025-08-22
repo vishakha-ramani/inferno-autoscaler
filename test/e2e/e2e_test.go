@@ -752,6 +752,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceMonName = "vllme-servicemonitor"
 		appLabel = "vllme"
 		port = 8000
+		// Consider adjusting the load rate based on test environment capabilities
+		// TODO: lowering the load rate to 20 makes checks pass quicker, but causes instabilities in the `constant load` test case
 		loadRate = 25
 
 		By("ensuring unique app label for deployment and service")

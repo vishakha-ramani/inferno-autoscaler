@@ -1072,14 +1072,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			deployName,
-			deployment.Status.Replicas)
-
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas))
 	})
 
@@ -1156,7 +1149,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 		initialDesiredReplicas := initialVA.Status.DesiredOptimizedAlloc.NumReplicas
 
-		var currentReplicas, desiredReplicas float64
+		var desiredReplicas float64
 		By("verifying that the number of replicas remains constant over several minutes with constant load")
 		Consistently(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -1171,7 +1164,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should stay at %d replicas with constant load equal to %s", deployName, initialDesiredReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
 
 			// Verify Prometheus replica metrics
-			currentReplicas, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1198,8 +1191,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas))
 	})
 
@@ -1234,7 +1226,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		})
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
-		var currentReplicas, desiredReplicas float64
+		var desiredReplicas float64
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -1249,7 +1241,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 				fmt.Sprintf("No load should trigger scale-down recommendation for: %s", va.Name))
 
 			// Verify Prometheus replica metrics
-			currentReplicas, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1276,8 +1268,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas))
 	})
 
@@ -1645,7 +1636,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", secondServiceName))
 		}()
 
-		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
+		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1660,7 +1651,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s", va1.Name))
 
 			// Verify Prometheus replica metrics
-			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1682,7 +1673,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s", va2.Name))
 
 			// Verify Prometheus replica metrics
-			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1712,8 +1703,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas1),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
@@ -1733,8 +1723,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas2),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas2))
 	})
 
@@ -1857,7 +1846,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", secondDeployName))
 		}()
 
-		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
+		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1872,7 +1861,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.DesiredOptimizedAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
-			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1895,7 +1884,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.DesiredOptimizedAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
-			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -1925,8 +1914,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas1),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
@@ -1946,8 +1934,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas2),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas2))
 	})
 
@@ -1982,7 +1969,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		})
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
-		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
+		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1997,7 +1984,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("No load should trigger scale-down recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
-			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -2016,7 +2003,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
-			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			_, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
 
 			// Verify that the desired number of replicas has same value as Prometheus result
@@ -2043,8 +2030,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas1),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
@@ -2064,8 +2050,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
-			int(currentReplicas2),
+		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
 			int(desiredReplicas2))
 	})
 

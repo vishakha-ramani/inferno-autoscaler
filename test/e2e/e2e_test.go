@@ -218,7 +218,7 @@ func isPermanentPrometheusError(err error) bool {
 
 // getInfernoReplicaMetrics queries Prometheus for replica metrics emitted by the Inferno autoscaler
 func getInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (currentReplicas, desiredReplicas float64, err error) {
-	//
+
 	client, err := NewPrometheusClient("https://localhost:9090", true)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to create prometheus client: %w", err)
@@ -226,7 +226,7 @@ func getInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (c
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	//
+
 	labels := fmt.Sprintf(`variant_name="%s",exported_namespace="%s",accelerator_type="%s"`, variantName, namespace, acceleratorType)
 
 	// Query both metrics with retries
@@ -241,17 +241,6 @@ func getInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (c
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
 	}
-	// currentQuery := fmt.Sprintf(`inferno_current_replicas{%s}`, labels)
-	// currentReplicas, err = queryPrometheus(currentQuery)
-	// if err != nil {
-	// 	return 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
-	// }
-
-	// desiredQuery := fmt.Sprintf(`inferno_desired_replicas{%s}`, labels)
-	// desiredReplicas, err = queryPrometheus(desiredQuery)
-	// if err != nil {
-	// 	return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
-	// }
 
 	return currentReplicas, desiredReplicas, nil
 }
@@ -1698,7 +1687,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
 				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va2.Name, desiredReplicas2))
 
-			// // Verify load detection accuracy
+			// Verify load detection accuracy
 			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va2.Status.CurrentAlloc.Load.ArrivalRate, loadRate, secondDeployName))
 
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())

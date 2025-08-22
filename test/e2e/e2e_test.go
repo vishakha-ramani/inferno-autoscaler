@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -31,6 +32,9 @@ import (
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	promAPI "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -75,6 +79,181 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+}
+
+// PrometheusQueryResult represents the response from Prometheus API
+type PrometheusQueryResult struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Metric map[string]string `json:"metric"`
+			Value  []any             `json:"value"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+// PrometheusClient wraps the official Prometheus client
+type PrometheusClient struct {
+	client promv1.API
+}
+
+// creates a new Prometheus client for e2e tests
+func NewPrometheusClient(baseURL string, insecureSkipVerify bool) (*PrometheusClient, error) {
+	config := promAPI.Config{
+		Address: baseURL,
+	}
+
+	if insecureSkipVerify {
+		roundTripper := promAPI.DefaultRoundTripper
+		if rt, ok := roundTripper.(*http.Transport); ok {
+			rt.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		}
+		config.RoundTripper = roundTripper
+	}
+
+	client, err := promAPI.NewClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prometheus client: %w", err)
+	}
+
+	return &PrometheusClient{
+		client: promv1.NewAPI(client),
+	}, nil
+}
+
+// QueryWithRetry queries Prometheus API with retries and returns the metric value
+func (p *PrometheusClient) QueryWithRetry(ctx context.Context, query string) (float64, error) {
+	var result float64
+
+	// Define the backoff strategy
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond, // Initial delay
+		Factor:   2.0,                    // Exponential factor
+		Jitter:   0.25,                   // 25% jitter
+		Steps:    5,                      // Max 5 attempts
+		Cap:      5 * time.Second,        // Max delay cap
+	}
+
+	// Use wait.ExponentialBackoff for retries
+	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		value, queryErr := p.executeQuery(ctx, query)
+		if queryErr == nil {
+			result = value
+			return true, nil // Success, stop retrying
+		}
+
+		// Check if this is a permanent error (don't retry)
+		if isPermanentPrometheusError(queryErr) {
+			return false, queryErr // Stop retrying, return error
+		}
+
+		// Log retry attempt
+		fmt.Printf("Debug: Prometheus query failed, will retry: %v\n", queryErr)
+		return false, nil // Continue retrying
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
+// executeQuery performs a single query attempt using the official Prometheus API
+func (p *PrometheusClient) executeQuery(ctx context.Context, query string) (float64, error) {
+	result, warnings, err := p.client.Query(ctx, query, time.Now())
+	if err != nil {
+		return 0, fmt.Errorf("prometheus query failed: %w", err)
+	}
+
+	// Log any warnings from Prometheus
+	if len(warnings) > 0 {
+		fmt.Printf("Debug: Prometheus warnings: %v\n", warnings)
+	}
+
+	return extractValueFromResult(result)
+}
+
+// extractValueFromResult extracts float64 value from Prometheus query result
+func extractValueFromResult(result model.Value) (float64, error) {
+	switch v := result.(type) {
+	case model.Vector:
+		if len(v) == 0 {
+			return 0, fmt.Errorf("no data returned from prometheus query")
+		}
+		return float64(v[0].Value), nil
+	case *model.Scalar:
+		return float64(v.Value), nil
+	default:
+		return 0, fmt.Errorf("unexpected result type: %T", result)
+	}
+}
+
+// isPermanentPrometheusError determines if a Prometheus error should not be retried
+func isPermanentPrometheusError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Permanent errors that shouldn't be retried
+	permanentErrors := []string{
+		"bad_data",          // Invalid query syntax
+		"invalid parameter", // Bad parameters
+		"parse error",       // Query parsing failed
+		"unauthorized",      // Auth issues
+		"forbidden",         // Permission issues
+	}
+
+	for _, permErr := range permanentErrors {
+		if strings.Contains(strings.ToLower(errStr), permErr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getInfernoReplicaMetrics queries Prometheus for replica metrics emitted by the Inferno autoscaler
+func getInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (currentReplicas, desiredReplicas float64, err error) {
+	//
+	client, err := NewPrometheusClient("https://localhost:9090", true)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to create prometheus client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	//
+	labels := fmt.Sprintf(`variant_name="%s",exported_namespace="%s",accelerator_type="%s"`, variantName, namespace, acceleratorType)
+
+	// Query both metrics with retries
+	currentQuery := fmt.Sprintf(`inferno_current_replicas{%s}`, labels)
+	currentReplicas, err = client.QueryWithRetry(ctx, currentQuery)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
+	}
+
+	desiredQuery := fmt.Sprintf(`inferno_desired_replicas{%s}`, labels)
+	desiredReplicas, err = client.QueryWithRetry(ctx, desiredQuery)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
+	}
+	// currentQuery := fmt.Sprintf(`inferno_current_replicas{%s}`, labels)
+	// currentReplicas, err = queryPrometheus(currentQuery)
+	// if err != nil {
+	// 	return 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
+	// }
+
+	// desiredQuery := fmt.Sprintf(`inferno_desired_replicas{%s}`, labels)
+	// desiredReplicas, err = queryPrometheus(desiredQuery)
+	// if err != nil {
+	// 	return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
+	// }
+
+	return currentReplicas, desiredReplicas, nil
 }
 
 // initializeK8sClient initializes the Kubernetes client for testing
@@ -137,6 +316,30 @@ func startPortForwarding(service *corev1.Service, namespace string, port int) *e
 		}
 		return nil
 	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Port-forward to port %d should keep running for service: %s", port, service.Name))
+
+	return portForwardCmd
+}
+
+// startPrometheusPortForwarding sets up port forwarding specifically for Prometheus (9090:9090)
+func startPrometheusPortForwarding(service *corev1.Service, namespace string, localPort int) *exec.Cmd {
+	// Check if the port is already in use
+	if available, err := isPortAvailable(localPort); !available {
+		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for Prometheus service: %s. Error: %v", localPort, service.Name, err))
+	}
+
+	portForwardCmd := exec.Command("kubectl", "port-forward",
+		fmt.Sprintf("service/%s", service.Name),
+		fmt.Sprintf("%d:9090", localPort), "-n", namespace)
+	err := portForwardCmd.Start()
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Prometheus port-forward command should start successfully for service: %s", service.Name))
+
+	// Check if the port-forward process is still running
+	Eventually(func() error {
+		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
+			return fmt.Errorf("prometheus port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Prometheus port-forward to port %d should keep running for service: %s", localPort, service.Name))
 
 	return portForwardCmd
 }
@@ -764,6 +967,36 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", serviceName))
 		}()
 
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
+
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
+
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
+
 		By("waiting for port-forward to be ready")
 		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Try to connect to the forwarded port
@@ -787,6 +1020,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", deployName))
 		}()
 
+		var currentReplicas, desiredReplicas float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -804,12 +1038,26 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">", 1),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", va.Name, va.Status.CurrentAlloc.NumReplicas))
 
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-			g.Expect(deployment.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment: %s should have scaled up", deployment.Name))
+			// Verify load detection accuracy
 			g.Expect(strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate: %s should be approximately the actual load rate: %d", va.Status.CurrentAlloc.Load.ArrivalRate, loadRate))
 
-		}, 4*time.Minute, 10*time.Second).Should(Succeed())
+			// Verify Prometheus replica metrics
+			currentReplicas, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va.Name, err))
+
+			g.Expect(desiredReplicas).To(BeNumerically(">", 1),
+				fmt.Sprintf("Prometheus `inferno_desired_replicas` query should show scale-up for VA: %s - actual: %.2f", va.Name, desiredReplicas))
+			g.Expect(currentReplicas).To(BeNumerically(">=", 1),
+				fmt.Sprintf("Prometheus `inferno_current_replicas` query should show at least 1 replica for VA: %s - actual: %.2f", va.Name, currentReplicas))
+
+			// Verify that the current and desired number of replicas have the same value as Prometheus results
+			g.Expect(va.Status.CurrentAlloc.NumReplicas).To(BeNumerically("==", currentReplicas),
+				fmt.Sprintf("Current replicas %d for VA %s should be the same as Prometheus result: %.2f", va.Status.CurrentAlloc.NumReplicas, deployName, currentReplicas))
+
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas),
+				fmt.Sprintf("Desired replicas %d for VA %s should be the same as Prometheus result: %.2f", va.Status.DesiredOptimizedAlloc.NumReplicas, deployName, desiredReplicas))
+
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
@@ -838,13 +1086,48 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		fmt.Printf("Current replicas for Deployment - %s: %d\n",
 			deployName,
 			deployment.Status.Replicas)
+
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas),
+			int(desiredReplicas))
 	})
 
 	It("should keep the same replicas if the load stays constant", func() {
+
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
+
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
+
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
+
+		By("setting up port-forward to the vllme service")
 		service, err := k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Service: %s", serviceName))
 
-		By("setting up port-forward to the vllme service")
 		portForwardCmd = startPortForwarding(service, namespace, port)
 		defer func() {
 			err = stopCmd(portForwardCmd)
@@ -874,11 +1157,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}()
 
 		By("getting the current number of replicas")
-		var initialReplicas int32
-		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", deployName))
-		initialReplicas = deployment.Status.Replicas
+		initialVA := &v1alpha1.VariantAutoscaling{}
+		err = crClient.Get(ctx, client.ObjectKey{
+			Namespace: namespace,
+			Name:      deployName,
+		}, initialVA)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		initialDesiredReplicas := initialVA.Status.DesiredOptimizedAlloc.NumReplicas
 
+		var currentReplicas, desiredReplicas float64
 		By("verifying that the number of replicas remains constant over several minutes with constant load")
 		Consistently(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -888,16 +1175,17 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			}, va)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-
-			// Verify that the deployment replicas remain stable
-			g.Expect(deployment.Status.Replicas).To(Equal(initialReplicas),
-				fmt.Sprintf("Deployment replicas for %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
-
 			// Verify that the desired allocation also remains stable
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(Equal(int(initialReplicas)),
-				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should stay at %d replicas with constant load equal to %s", deployName, initialReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(Equal(initialDesiredReplicas),
+				fmt.Sprintf("DesiredOptimizedAlloc for VA %s should stay at %d replicas with constant load equal to %s", deployName, initialDesiredReplicas, va.Status.CurrentAlloc.Load.ArrivalRate))
+
+			// Verify Prometheus replica metrics
+			currentReplicas, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas),
+				fmt.Sprintf("Desired replicas %d for VA %s should be the same as Prometheus result: %.2f", va.Status.DesiredOptimizedAlloc.NumReplicas, deployName, desiredReplicas))
 
 		}, 2*time.Minute, 10*time.Second).Should(Succeed())
 
@@ -919,15 +1207,43 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		fmt.Printf("Current replicas for Deployment - %s: %d -- initial replicas: %d\n",
-			deployName,
-			deployment.Status.Replicas,
-			initialReplicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas),
+			int(desiredReplicas))
 	})
 
 	It("should scale down with no load", func() {
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
+
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
+
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
+
+		var currentReplicas, desiredReplicas float64
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -941,15 +1257,19 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
 				fmt.Sprintf("No load should trigger scale-down recommendation for: %s", va.Name))
 
-			deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-			g.Expect(deployment.Status.Replicas).To(BeNumerically("==", 1), fmt.Sprintf("Deployment: %s should have scaled down to one replica", deployment.Name))
+			// Verify Prometheus replica metrics
+			currentReplicas, desiredReplicas, err = getInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", deployName, desiredReplicas))
 
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA := &v1alpha1.VariantAutoscaling{}
-		err := crClient.Get(ctx, client.ObjectKey{
+		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      deployName,
 		}, finalVA)
@@ -965,11 +1285,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, deployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Deployment: %s", deployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			deployName,
-			deployment.Status.Replicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas),
+			int(desiredReplicas))
 	})
 
 	It("should connect to Prometheus using HTTPS with TLS", func() {
@@ -1044,7 +1362,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		err := k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deployName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployName))
 
-		By("verifying VariantAutoscaling is deleted")
+		By("verifying VariantAutoscaling is deleted due to owner reference")
 		variantAutoscaling := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
@@ -1237,6 +1555,36 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, initialVA)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", firstDeployName))
 
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
+
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
+
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
+
 		By("getting the first service endpoint for load generation")
 		firstService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, firstServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -1306,6 +1654,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", secondServiceName))
 		}()
 
+		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1319,10 +1668,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">", 1),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s", va1.Name))
 
-			deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-			g.Expect(deployment1.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment1.Name, deployment1.Status.Replicas))
-			g.Expect(strconv.ParseFloat(va1.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va1.Status.CurrentAlloc.Load.ArrivalRate, loadRate, deployment1.Name))
+			// Verify Prometheus replica metrics
+			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas1),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va1.Name, desiredReplicas1))
+
+			// Verify load detection accuracy
+			g.Expect(strconv.ParseFloat(va1.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va1.Status.CurrentAlloc.Load.ArrivalRate, loadRate, firstDeployName))
 
 			va2 := &v1alpha1.VariantAutoscaling{}
 			err = crClient.Get(ctx, client.ObjectKey{
@@ -1335,12 +1690,18 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">", 1),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s", va2.Name))
 
-			deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-			g.Expect(deployment2.Status.Replicas).To(BeNumerically(">", 1), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment2.Name, deployment2.Status.Replicas))
-			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va2.Status.CurrentAlloc.Load.ArrivalRate, loadRate, deployment2.Name))
+			// Verify Prometheus replica metrics
+			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
 
-		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va2.Name, desiredReplicas2))
+
+			// // Verify load detection accuracy
+			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s", va2.Status.CurrentAlloc.Load.ArrivalRate, loadRate, secondDeployName))
+
+		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}
@@ -1360,11 +1721,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			firstDeployName,
-			deployment1.Status.Replicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas1),
+			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
@@ -1383,11 +1742,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			secondDeployName,
-			deployment2.Status.Replicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas2),
+			int(desiredReplicas2))
 	})
 
 	It("should scale up optimized replicas over cluster limits", func() {
@@ -1409,14 +1766,35 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		initialOptimized1 := initialVA1.Status.DesiredOptimizedAlloc.NumReplicas
 		initialOptimized2 := initialVA2.Status.DesiredOptimizedAlloc.NumReplicas
 
-		deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
 
-		deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
 
-		initialReplicas1 := deployment1.Status.Replicas
-		initialReplicas2 := deployment2.Status.Replicas
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("getting the first service endpoint for load generation")
 		firstService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, firstServiceName, metav1.GetOptions{})
@@ -1488,6 +1866,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", secondDeployName))
 		}()
 
+		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1501,11 +1880,17 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">=", initialOptimized1),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.DesiredOptimizedAlloc.NumReplicas))
 
-			deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-			g.Expect(deployment1.Status.Replicas).To(BeNumerically(">=", initialReplicas1), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment1.Name, deployment1.Status.Replicas))
-			g.Expect(strconv.ParseFloat(va1.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d",
-				va1.Status.CurrentAlloc.Load.ArrivalRate, loadRate))
+			// Verify Prometheus replica metrics
+			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas1),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va1.Name, desiredReplicas1))
+
+			// Verify load detection accuracy
+			g.Expect(strconv.ParseFloat(va1.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", loadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s",
+				va1.Status.CurrentAlloc.Load.ArrivalRate, loadRate, firstDeployName))
 
 			va2 := &v1alpha1.VariantAutoscaling{}
 			err = crClient.Get(ctx, client.ObjectKey{
@@ -1518,14 +1903,20 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically(">=", initialOptimized2),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.DesiredOptimizedAlloc.NumReplicas))
 
-			deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-			g.Expect(deployment2.Status.Replicas).To(BeNumerically(">=", initialReplicas2), fmt.Sprintf("Deployment %s should have scaled up - actual replicas: %d", deployment2.Name, deployment2.Status.Replicas))
-			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", higherLoadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d",
-				va2.Status.CurrentAlloc.Load.ArrivalRate, higherLoadRate))
+			// Verify Prometheus replica metrics
+			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va2.Name, desiredReplicas2))
+
+			// Verify load detection accuracy
+			g.Expect(strconv.ParseFloat(va2.Status.CurrentAlloc.Load.ArrivalRate, 64)).To(BeNumerically("~", higherLoadRate, loadThresholdDiff), fmt.Sprintf("Detected load rate %s should be approximately the actual load rate %d for %s",
+				va2.Status.CurrentAlloc.Load.ArrivalRate, higherLoadRate, secondDeployName))
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
-		By("showing the status of VAs and deployments, including the number of pods in pending state")
+		By("showing the status of VAs and Inferno metrics")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
@@ -1543,13 +1934,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment1, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n Available Replicas: %d\n Unavailable replicas: %d\n",
-			firstDeployName,
-			deployment1.Status.Replicas,
-			deployment1.Status.AvailableReplicas,
-			deployment1.Status.UnavailableReplicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas1),
+			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
@@ -1568,16 +1955,43 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment2, err = k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-		fmt.Printf("Current replicas for Deployment - %s: %d\n Available Replicas: %d\n Unavailable replicas: %d\n",
-			secondDeployName,
-			deployment2.Status.Replicas,
-			deployment2.Status.AvailableReplicas,
-			deployment2.Status.UnavailableReplicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas2),
+			int(desiredReplicas2))
 	})
 
 	It("should scale down with no load", func() {
+		// Set up port-forwarding for Prometheus to enable metrics queries
+		By("setting up port-forward to Prometheus service")
+		prometheusService, err := k8sClient.CoreV1().Services("inferno-autoscaler-monitoring").Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
+
+		prometheusPortForwardCmd := startPrometheusPortForwarding(prometheusService, "inferno-autoscaler-monitoring", 9090)
+		defer func() {
+			err = stopCmd(prometheusPortForwardCmd)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
+		}()
+
+		By("waiting for Prometheus port-forward to be ready")
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			// Try to connect to Prometheus with HTTPS and TLS skip verify
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
+			if err != nil {
+				return false, nil // Retrying
+			}
+			defer func() {
+				err := resp.Body.Close()
+				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
+			}()
+			return resp.StatusCode < 500, nil // Accept any non-server error status
+		})
+		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
+
+		var currentReplicas1, desiredReplicas1, currentReplicas2, desiredReplicas2 float64
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va1 := &v1alpha1.VariantAutoscaling{}
@@ -1591,9 +2005,13 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
 				fmt.Sprintf("No load should trigger scale-down recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.CurrentAlloc.NumReplicas))
 
-			deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", firstDeployName))
-			g.Expect(deployment1.Status.Replicas).To(BeNumerically("==", 1), fmt.Sprintf("Deployment %s should have scaled down to one replica", deployment1.Name))
+			// Verify Prometheus replica metrics
+			currentReplicas1, desiredReplicas1, err = getInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va1.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas1),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va1.Name, desiredReplicas1))
 
 			va2 := &v1alpha1.VariantAutoscaling{}
 			err = crClient.Get(ctx, client.ObjectKey{
@@ -1606,15 +2024,19 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.CurrentAlloc.NumReplicas))
 
-			deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Deployment: %s", secondDeployName))
-			g.Expect(deployment2.Status.Replicas).To(BeNumerically("==", 1), fmt.Sprintf("Deployment %s should have scaled down to one replica", deployment2.Name))
+			// Verify Prometheus replica metrics
+			currentReplicas2, desiredReplicas2, err = getInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to query Prometheus metrics for: %s - got error: %v", va2.Name, err))
+
+			// Verify that the desired number of replicas has same value as Prometheus result
+			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
+				fmt.Sprintf("Current replicas for VA %s should stay at %.2f with no load", va2.Name, desiredReplicas2))
 
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
 		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err := crClient.Get(ctx, client.ObjectKey{
+		err = crClient.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      firstDeployName,
 		}, finalVA1)
@@ -1630,11 +2052,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment1, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, firstDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			firstDeployName,
-			deployment1.Status.Replicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas1),
+			int(desiredReplicas1))
 
 		finalVA2 := &v1alpha1.VariantAutoscaling{}
 		err = crClient.Get(ctx, client.ObjectKey{
@@ -1653,11 +2073,9 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
 			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
 
-		deployment2, err := k8sClient.AppsV1().Deployments(namespace).Get(ctx, secondDeployName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		fmt.Printf("Current replicas for Deployment - %s: %d\n",
-			secondDeployName,
-			deployment2.Status.Replicas)
+		fmt.Printf("Prometheus metrics - current replicas: %d - desired replicas: %d\n",
+			int(currentReplicas2),
+			int(desiredReplicas2))
 	})
 
 	AfterAll(func() {

@@ -48,12 +48,7 @@ helm install prometheus-adapter prometheus-community/prometheus-adapter \
   -f config/samples/prometheus-adapter-values.yaml
 ```
 
-### 3. Wait for Prometheus to discover and fetch metrics emitted by the Inferno-autoscaler
-
-```sh
-# Wait for Prometheus to discover and scrape Inferno-autoscaler metrics (30-60 seconds)
-sleep 60
-```
+### 3. Wait for Prometheus to discover and fetch metrics emitted by the Inferno-autoscaler (30-60 seconds)
 
 ### 4. Create the VariantAutoscaling resource 
 
@@ -75,11 +70,7 @@ kubectl apply -f config/samples/hpa-integration.yaml
 ### 6. Verify the integration
 - Wait for all components to be ready (1-2 minutes total)
 
-```sh
-sleep 90
-```
-
-- Check the status of HPA - should show actual values, not <unknown>
+- Check the status of HPA - should show actual values, not `<unknown>`
 ```sh
 kubectl get hpa -n llm-d-sim      
 NAME                   REFERENCE                     TARGETS     MINPODS   MAXPODS   REPLICAS   AGE

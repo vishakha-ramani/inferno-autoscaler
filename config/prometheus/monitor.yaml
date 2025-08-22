@@ -3,20 +3,25 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: controller-manager-metrics-monitor
-  namespace: system
+  namespace: inferno-autoscaler-system
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: inferno-autoscaler
     app.kubernetes.io/managed-by: kustomize
+    release: kube-prometheus-stack
 spec:
   endpoints:
   - port: https
     path: /metrics
     interval: 10s
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
   selector:
     matchLabels:
       control-plane: controller-manager
       app.kubernetes.io/name: inferno-autoscaler
   namespaceSelector:
     matchNames:
-    - system
+    - inferno-autoscaler-system

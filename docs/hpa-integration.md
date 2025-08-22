@@ -25,7 +25,7 @@ After deploying the Inferno-autoscaler following the provided guides, this guide
 Prometheus is deployed with TLS (HTTPS) for security. The Prometheus Adapter needs to connect to Prometheus at https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local. 
 But Prometheus uses self-signed certificates (not trusted by default). We will use a CA configmap for TLS Certificate Verification:
 
-```bash
+```sh
 # Extract the TLS certificate from the prometheus-tls secret
 kubectl get secret prometheus-tls -n inferno-autoscaler-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
 
@@ -37,7 +37,7 @@ kubectl create configmap prometheus-ca --from-file=ca.crt=/tmp/prometheus-ca.crt
 
 Note: a `yaml` example snippet for the Prometheus Adapter configuration with TLS can be found [here](#prometheus-adapter-values-configsamplesprometheus-adapter-valuesyaml). 
 
-```bash
+```sh
 # Add Prometheus community helm repo - already there if you deployed Inferno-autoscaler using the scripts
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
@@ -50,14 +50,14 @@ helm install prometheus-adapter prometheus-community/prometheus-adapter \
 
 ### 3. Wait for Prometheus to discover and fetch metrics emitted by the Inferno-autoscaler
 
-```bash
+```sh
 # Wait for Prometheus to discover and scrape Inferno-autoscaler metrics (30-60 seconds)
 sleep 60
 ```
 
 ### 4. Create the VariantAutoscaling resource 
 
-```bash
+```sh
 # Apply the VariantAutoscaling resource if not already there
 kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 ```
@@ -66,7 +66,7 @@ kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 
 Note: a `yaml` example snippet for HPA can be found [here](#hpa-configuration-example-configsampleshpa-integrationyaml). 
 
-```bash
+```sh
 # After creating the file `config/samples/hpa-integration.yaml`
 # Deploy HPA for your deployments
 kubectl apply -f config/samples/hpa-integration.yaml
@@ -75,12 +75,12 @@ kubectl apply -f config/samples/hpa-integration.yaml
 ### 6. Verify the integration
 - Wait for all components to be ready (1-2 minutes total)
 
-```bash
+```sh
 sleep 90
 ```
 
 - Check the status of HPA - should show actual values, not <unknown>
-```bash
+```sh
 kubectl get hpa -n llm-d-sim      
 NAME                   REFERENCE                     TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
 vllme-deployment-hpa   Deployment/vllme-deployment   1/1 (avg)   1         10        1          3m14s
@@ -164,7 +164,7 @@ python loadgen.py --model default/default  --rate '[[1200, 40]]' --url http://lo
 
 3. After a few minutes, you can see the scale-up:
 
-```bash
+```sh
 kubectl get hpa -n llm-d-sim
 NAME                   REFERENCE                     TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
 vllme-deployment-hpa   Deployment/vllme-deployment   1/1 (avg)   1         10        2          20m

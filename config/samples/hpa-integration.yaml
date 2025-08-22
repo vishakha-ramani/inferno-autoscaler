@@ -1,0 +1,23 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vllme-deployment-hpa
+  namespace: llm-d-sim
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vllme-deployment
+  # minReplicas: 0  # scale to zero - alpha feature
+  maxReplicas: 10
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: inferno_desired_replicas
+        selector:
+          matchLabels:
+            variant_name: vllme-deployment
+      target:
+        type: AverageValue
+        averageValue: "1"

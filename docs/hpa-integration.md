@@ -163,6 +163,10 @@ vllme-deployment-hpa   Deployment/vllme-deployment   1/1 (avg)   1         10   
 kubectl get variantautoscaling -n llm-d-sim
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
 vllme-deployment   default/default   A100          1                 2           20m
+
+kubectl get deployments.apps -n llm-d-sim 
+NAME               READY   UP-TO-DATE   AVAILABLE   AGE
+vllme-deployment   2/2     2            2           21m
 ```
 
 It can be verified that the Inferno-autoscaler is optimizing and emitting metrics:

@@ -29,7 +29,22 @@ fi
 
 # Load the Docker image into the Kind cluster
 echo "Loading Docker image '${IMG}' into Kind cluster '${KIND_NAME}'..."
-docker pull "${IMG}"
+
+# Try to pull the image, or use local image if pull fails
+if ! docker pull "${IMG}"; then
+  echo "Warning: Failed to pull image '${IMG}' from registry. Attempting to use local image..."
+  
+  # Check if the image exists locally
+  if ! docker image inspect "${IMG}" >/dev/null 2>&1; then
+    echo "Error: Image '${IMG}' not found locally either. Please build the image or check the registry."
+    exit 1
+  else
+    echo "Using local image '${IMG}'"
+  fi
+else
+  echo "Successfully pulled image '${IMG}' from registry"
+fi
+
 _kind load docker-image ${IMG} --name ${KIND_NAME}
 
 echo "Creating namespace ${NAMESPACE}"

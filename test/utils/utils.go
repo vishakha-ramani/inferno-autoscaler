@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	gink "github.com/onsi/ginkgo/v2"
+	gom "github.com/onsi/gomega"
 	promAPI "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -59,7 +59,7 @@ const (
 )
 
 func warnError(err error) {
-	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	_, _ = fmt.Fprintf(gink.GinkgoWriter, "warning: %v\n", err)
 }
 
 // Run executes the provided command within this context
@@ -68,12 +68,12 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		_, _ = fmt.Fprintf(gink.GinkgoWriter, "chdir dir: %s\n", err)
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	_, _ = fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	_, _ = fmt.Fprintf(gink.GinkgoWriter, "running: %s\n", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("%s failed with error: (%v) %s", command, err, string(output))
@@ -321,14 +321,14 @@ func CheckIfClusterExistsOrCreate(maxGPUs int) (string, error) {
 
 // checkKubernetesVersion verifies that the cluster is running the expected Kubernetes version
 func checkKubernetesVersion(expectedVersion string) {
-	By("checking Kubernetes cluster version")
+	gink.By("checking Kubernetes cluster version")
 
 	expectedVersionClean := strings.TrimPrefix(expectedVersion, "v")
 
 	cmd := exec.Command("kubectl", "version")
 	output, err := Run(cmd)
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
+		gink.Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
 	}
 
 	// Extract server version
@@ -346,12 +346,12 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	expectedMajor, err := strconv.Atoi(expectedParts[0])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
 	}
 
 	expectedMinor, err := strconv.Atoi(expectedParts[1])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
 	}
 
 	// Parse actual server version (e.g., "1.32.0" -> major=1, minor=32)
@@ -359,17 +359,17 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	serverMajor, err := strconv.Atoi(serverParts[0])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse server major version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse server major version: %v", err))
 	}
 
 	serverMinor, err := strconv.Atoi(serverParts[1])
 	if err != nil {
-		Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
 	}
 
 	// Check if actual version is >= expected version
 	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor < expectedMinor) {
-		Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
+		gink.Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
 	}
 }
 
@@ -454,7 +454,7 @@ func isPortAvailable(port int) (bool, error) {
 		return false, err // Port is already in use
 	}
 	if err := listener.Close(); err != nil {
-		Expect(err).NotTo(HaveOccurred(), "Failed to close listener")
+		gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to close listener")
 	}
 	return true, nil // Port is available
 }
@@ -463,22 +463,22 @@ func isPortAvailable(port int) (bool, error) {
 func StartPortForwarding(service *corev1.Service, namespace string, port int) *exec.Cmd {
 	// Check if the port is already in use
 	if available, err := isPortAvailable(port); !available {
-		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s. Error: %v", port, service.Name, err))
+		gink.Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s. Error: %v", port, service.Name, err))
 	}
 
 	portForwardCmd := exec.Command("kubectl", "port-forward",
 		fmt.Sprintf("service/%s", service.Name),
 		fmt.Sprintf("%d:80", port), "-n", namespace)
 	err := portForwardCmd.Start()
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward command should start successfully for service: %s", service.Name))
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Port-forward command should start successfully for service: %s", service.Name))
 
 	// Check if the port-forward process is still running
-	Eventually(func() error {
+	gom.Eventually(func() error {
 		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
 			return fmt.Errorf("port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
 		}
 		return nil
-	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Port-forward to port %d should keep running for service: %s", port, service.Name))
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Port-forward to port %d should keep running for service: %s", port, service.Name))
 
 	return portForwardCmd
 }
@@ -488,7 +488,7 @@ func StartLoadGenerator(rate, contentLength int, port int, modelName string) *ex
 	// Install the load generator requirements
 	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
 	_, err := Run(requirementsCmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to install loadgen requirements")
+	gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to install loadgen requirements")
 	loadGenCmd := exec.Command("python",
 		"hack/vllme/vllm_emulator/loadgen.py",
 		"--url", fmt.Sprintf("http://localhost:%d/v1", port),
@@ -496,15 +496,15 @@ func StartLoadGenerator(rate, contentLength int, port int, modelName string) *ex
 		"--content", fmt.Sprintf("%d", contentLength),
 		"--model", modelName)
 	err = loadGenCmd.Start()
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to start load generator sending requests to model: %s, at \"http://localhost:%d/v1\"", modelName, port))
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Failed to start load generator sending requests to model: %s, at \"http://localhost:%d/v1\"", modelName, port))
 
 	// Check if the loadgen process is still running
-	Eventually(func() error {
+	gom.Eventually(func() error {
 		if loadGenCmd.ProcessState != nil && loadGenCmd.ProcessState.Exited() {
 			return fmt.Errorf("load generator exited unexpectedly with code: %d", loadGenCmd.ProcessState.ExitCode())
 		}
 		return nil
-	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Load generator sending requests to model: %s at \"http://localhost:%d/v1\" should keep running", modelName, port))
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Load generator sending requests to model: %s at \"http://localhost:%d/v1\" should keep running", modelName, port))
 
 	return loadGenCmd
 }
@@ -513,22 +513,22 @@ func StartLoadGenerator(rate, contentLength int, port int, modelName string) *ex
 func StartPrometheusPortForwarding(service *corev1.Service, namespace string, localPort int) *exec.Cmd {
 	// Check if the port is already in use
 	if available, err := isPortAvailable(localPort); !available {
-		Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for Prometheus service: %s. Error: %v", localPort, service.Name, err))
+		gink.Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for Prometheus service: %s. Error: %v", localPort, service.Name, err))
 	}
 
 	portForwardCmd := exec.Command("kubectl", "port-forward",
 		fmt.Sprintf("service/%s", service.Name),
 		fmt.Sprintf("%d:9090", localPort), "-n", namespace)
 	err := portForwardCmd.Start()
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Prometheus port-forward command should start successfully for service: %s", service.Name))
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Prometheus port-forward command should start successfully for service: %s", service.Name))
 
 	// Check if the port-forward process is still running
-	Eventually(func() error {
+	gom.Eventually(func() error {
 		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
 			return fmt.Errorf("prometheus port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
 		}
 		return nil
-	}, 10*time.Second, 1*time.Second).Should(Succeed(), fmt.Sprintf("Prometheus port-forward to port %d should keep running for service: %s", localPort, service.Name))
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Prometheus port-forward to port %d should keep running for service: %s", localPort, service.Name))
 
 	return portForwardCmd
 }
@@ -597,7 +597,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 		LabelSelector: fmt.Sprintf("app=%s", appLabel),
 	})
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to check existing pods for label uniqueness: %v", err))
+		gink.Fail(fmt.Sprintf("Failed to check existing pods for label uniqueness: %v", err))
 	}
 
 	// Check if any deployments exist with the specified app label
@@ -605,7 +605,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 		LabelSelector: fmt.Sprintf("app=%s", appLabel),
 	})
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to check existing deployments for label uniqueness: %v", err))
+		gink.Fail(fmt.Sprintf("Failed to check existing deployments for label uniqueness: %v", err))
 	}
 
 	// Check if any services exist with the specified app label
@@ -613,7 +613,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 		LabelSelector: fmt.Sprintf("app=%s", appLabel),
 	})
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to check existing services for label uniqueness: %v", err))
+		gink.Fail(fmt.Sprintf("Failed to check existing services for label uniqueness: %v", err))
 	}
 
 	// Check if any ServiceMonitors exist with the specified app label
@@ -625,7 +625,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 	})
 	err = crClient.List(ctx, serviceMonitorList, client.InNamespace(namespace), client.MatchingLabels{"app": appLabel})
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to check existing ServiceMonitors for label uniqueness: %v", err))
+		gink.Fail(fmt.Sprintf("Failed to check existing ServiceMonitors for label uniqueness: %v", err))
 	}
 
 	// Collects conflicting resources to show in error logs
@@ -653,9 +653,9 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 		for _, serviceMonitor := range serviceMonitorList.Items {
 			name, found, err := unstructured.NestedString(serviceMonitor.Object, "metadata", "name")
 			if err != nil {
-				Fail(fmt.Sprintf("Wrong ServiceMonitor name: %v", err))
+				gink.Fail(fmt.Sprintf("Wrong ServiceMonitor name: %v", err))
 			} else if !found {
-				Fail("ServiceMonitor name not found")
+				gink.Fail("ServiceMonitor name not found")
 			}
 			conflicting = append(conflicting, fmt.Sprintf("ServiceMonitor: %s", name))
 		}
@@ -663,7 +663,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 
 	// Fails if any conflicts are found
 	if len(conflicting) > 0 {
-		Fail(fmt.Sprintf("App label '%s' is not unique in namespace '%s'. Make sure to delete conflicting resources: %s",
+		gink.Fail(fmt.Sprintf("App label '%s' is not unique in namespace '%s'. Make sure to delete conflicting resources: %s",
 			appLabel, namespace, strings.Join(conflicting, ", ")))
 	}
 }
@@ -677,7 +677,7 @@ func ValidateVariantAutoscalingUniqueness(namespace, modelId, acc string, crClie
 	variantAutoscalingList := &v1alpha1.VariantAutoscalingList{}
 	err := crClient.List(ctx, variantAutoscalingList, client.InNamespace(namespace), client.MatchingLabels{"inference.optimization/acceleratorName": acc})
 	if err != nil {
-		Fail(fmt.Sprintf("Failed to check existing VariantAutoscalings for accelerator label uniqueness: %v", err))
+		gink.Fail(fmt.Sprintf("Failed to check existing VariantAutoscalings for accelerator label uniqueness: %v", err))
 	}
 
 	// found VAs with the same accelerator
@@ -691,7 +691,7 @@ func ValidateVariantAutoscalingUniqueness(namespace, modelId, acc string, crClie
 		}
 		// Fails if any conflicts are found
 		if len(conflicting) > 0 {
-			Fail(fmt.Sprintf("VariantAutoscaling '%s' is not unique in namespace '%s'. Make sure to delete conflicting VAs: %s",
+			gink.Fail(fmt.Sprintf("VariantAutoscaling '%s' is not unique in namespace '%s'. Make sure to delete conflicting VAs: %s",
 				modelId, namespace, strings.Join(conflicting, ", ")))
 		}
 	}

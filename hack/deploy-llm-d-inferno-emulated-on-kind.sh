@@ -12,6 +12,45 @@ LLMD_NAMESPACE="llm-d-sim"
 INFRA_RELEASE_NAME="infra-sim"
 EPP_RELEASE_NAME="gaie-sim"
 
+# Default values
+INFERNO_IMAGE="quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch"
+CLUSTER_NODES="3"
+CLUSTER_GPUS="4"
+CLUSTER_TYPE="mix"
+
+print_help() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  -i, --inferno-image IMAGE   Container image to use for the Inferno-autoscaler (default: quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch)
+  -n, --nodes NUM              Number of nodes for KIND cluster (default: 4)
+  -g, --gpus NUM               Number of GPUs per node (default: 5)  
+  -t, --type TYPE              GPU type: nvidia, amd, intel, or mix (default: nvidia)
+  -h, --help                   Show this help and exit
+
+Examples:
+  # Deploy with default values
+  $(basename "$0")
+  
+  # Deploy with custom inferno image and cluster configuration
+  $(basename "$0") -i my-registry/inferno:latest -n 3 -g 6 -t mix
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -i|--inferno-image)     INFERNO_IMAGE="$2"; shift 2 ;;
+      -n|--nodes)             CLUSTER_NODES="$2"; shift 2 ;;
+      -g|--gpus)              CLUSTER_GPUS="$2"; shift 2 ;;
+      -t|--type)              CLUSTER_TYPE="$2"; shift 2 ;;
+      -h|--help)              print_help; exit 0 ;;
+      *)                      echo "Unknown option: $1"; print_help; exit 1 ;;
+    esac
+  done
+}
+
 get-llm-d-latest() {
   if [ -d "$INFRA_REPO_DIR" ]; then
     echo ">>> Removing any existing llm-d infrastructure repo at $INFRA_REPO_DIR"
@@ -42,8 +81,8 @@ function apply_fix_for_vllme_comp() {
 }
 
 function deploy_inferno() {
-    echo ">>> Deploying Inferno Autoscaler..."
-    make deploy-inferno-emulated-on-kind "$@"
+    echo ">>> Deploying Inferno Autoscaler using image: $INFERNO_IMAGE"
+    make deploy-inferno-emulated-on-kind IMG="${INFERNO_IMAGE}" KIND_ARGS="-n ${CLUSTER_NODES} -g ${CLUSTER_GPUS} -t ${CLUSTER_TYPE}"
     echo "Inferno Autoscaler deployed successfully."
 }
 
@@ -67,6 +106,15 @@ function deploy-llm-d-infra() {
 
 echo ">>> Getting latest llm-d infrastructure release..."
 get-llm-d-latest
+
+main(){
+parse_args "$@"
+
+echo ">>> Using configuration:"
+echo "    Inferno Image: $INFERNO_IMAGE"
+echo "    Cluster Nodes: $CLUSTER_NODES"
+echo "    Cluster GPUs: $CLUSTER_GPUS"
+echo "    Cluster Type: $CLUSTER_TYPE"
 
 if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
   echo "ARM64 platform detected, using custom arm64 values.yaml"
@@ -97,3 +145,6 @@ echo ">>> Then launch the load generator:"
 echo "cd $PROJ_ROOT_DIR/hack/vllme/vllm_emulator"
 echo "pip install -r requirements.txt"
 echo "python loadgen.py --model default/default  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50"
+}
+
+main "$@"

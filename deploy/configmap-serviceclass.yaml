@@ -11,16 +11,16 @@ data:
       - model: default/default
         slo-tpot: 24
         slo-ttft: 500
-      - model: llama0-70b
+      - model: meta/llama0-70b
         slo-tpot: 80
         slo-ttft: 500
   freemium.yaml: |
     name: Freemium
     priority: 10
     data:
-      - model: granite-13b
+      - model: ibm/granite-13b
         slo-tpot: 200
         slo-ttft: 2000
-      - model: llama0-7b
+      - model: meta/llama0-7b
         slo-tpot: 150
         slo-ttft: 1500

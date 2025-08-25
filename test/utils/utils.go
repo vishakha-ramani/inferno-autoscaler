@@ -19,13 +19,34 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
-	g "github.com/onsi/ginkgo/v2"
+	"github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
+	gink "github.com/onsi/ginkgo/v2"
+	gom "github.com/onsi/gomega"
+	promAPI "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -38,7 +59,7 @@ const (
 )
 
 func warnError(err error) {
-	_, _ = fmt.Fprintf(g.GinkgoWriter, "warning: %v\n", err)
+	_, _ = fmt.Fprintf(gink.GinkgoWriter, "warning: %v\n", err)
 }
 
 // Run executes the provided command within this context
@@ -47,12 +68,12 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		_, _ = fmt.Fprintf(g.GinkgoWriter, "chdir dir: %s\n", err)
+		_, _ = fmt.Fprintf(gink.GinkgoWriter, "chdir dir: %s\n", err)
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	_, _ = fmt.Fprintf(g.GinkgoWriter, "running: %s\n", command)
+	_, _ = fmt.Fprintf(gink.GinkgoWriter, "running: %s\n", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("%s failed with error: (%v) %s", command, err, string(output))
@@ -300,14 +321,14 @@ func CheckIfClusterExistsOrCreate(maxGPUs int) (string, error) {
 
 // checkKubernetesVersion verifies that the cluster is running the expected Kubernetes version
 func checkKubernetesVersion(expectedVersion string) {
-	g.By("checking Kubernetes cluster version")
+	gink.By("checking Kubernetes cluster version")
 
 	expectedVersionClean := strings.TrimPrefix(expectedVersion, "v")
 
 	cmd := exec.Command("kubectl", "version")
 	output, err := Run(cmd)
 	if err != nil {
-		g.Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
+		gink.Fail(fmt.Sprintf("Failed to get Kubernetes version: %s\n", expectedVersion))
 	}
 
 	// Extract server version
@@ -325,12 +346,12 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	expectedMajor, err := strconv.Atoi(expectedParts[0])
 	if err != nil {
-		g.Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse expected major version: %v", err))
 	}
 
 	expectedMinor, err := strconv.Atoi(expectedParts[1])
 	if err != nil {
-		g.Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse expected minor version: %v", err))
 	}
 
 	// Parse actual server version (e.g., "1.32.0" -> major=1, minor=32)
@@ -338,17 +359,17 @@ func checkKubernetesVersion(expectedVersion string) {
 
 	serverMajor, err := strconv.Atoi(serverParts[0])
 	if err != nil {
-		g.Fail(fmt.Sprintf("failed to parse server major version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse server major version: %v", err))
 	}
 
 	serverMinor, err := strconv.Atoi(serverParts[1])
 	if err != nil {
-		g.Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
+		gink.Fail(fmt.Sprintf("failed to parse server minor version: %v", err))
 	}
 
 	// Check if actual version is >= expected version
 	if serverMajor < expectedMajor || (serverMajor == expectedMajor && serverMinor < expectedMinor) {
-		g.Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
+		gink.Fail(fmt.Sprintf("Kubernetes version v%s is below required minimum %s\n", serverVersion, expectedVersion))
 	}
 }
 
@@ -423,4 +444,628 @@ func UncommentCode(filename, target, prefix string) error {
 	// false positive
 	// nolint:gosec
 	return os.WriteFile(filename, out.Bytes(), 0644)
+}
+
+// isPortAvailable checks if the specified port is available
+func isPortAvailable(port int) (bool, error) {
+	// Try to bind to the port to check if it's available
+	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	if err != nil {
+		return false, err // Port is already in use
+	}
+	if err := listener.Close(); err != nil {
+		gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to close listener")
+	}
+	return true, nil // Port is available
+}
+
+// StartPrometheusPortForwarding sets up port forwarding to a Service on the specified port
+func StartPortForwarding(service *corev1.Service, namespace string, port int) *exec.Cmd {
+	// Check if the port is already in use
+	if available, err := isPortAvailable(port); !available {
+		gink.Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for service: %s. Error: %v", port, service.Name, err))
+	}
+
+	portForwardCmd := exec.Command("kubectl", "port-forward",
+		fmt.Sprintf("service/%s", service.Name),
+		fmt.Sprintf("%d:80", port), "-n", namespace)
+	err := portForwardCmd.Start()
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Port-forward command should start successfully for service: %s", service.Name))
+
+	// Check if the port-forward process is still running
+	gom.Eventually(func() error {
+		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
+			return fmt.Errorf("port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Port-forward to port %d should keep running for service: %s", port, service.Name))
+
+	return portForwardCmd
+}
+
+// StartLoadGenerator sets up and launches a load generator with rate and content specified, targeting the specified model, to the specified port
+func StartLoadGenerator(rate, contentLength int, port int, modelName string) *exec.Cmd {
+	// Install the load generator requirements
+	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
+	_, err := Run(requirementsCmd)
+	gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to install loadgen requirements")
+	loadGenCmd := exec.Command("python",
+		"hack/vllme/vllm_emulator/loadgen.py",
+		"--url", fmt.Sprintf("http://localhost:%d/v1", port),
+		"--rate", fmt.Sprintf("%d", rate),
+		"--content", fmt.Sprintf("%d", contentLength),
+		"--model", modelName)
+	err = loadGenCmd.Start()
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Failed to start load generator sending requests to model: %s, at \"http://localhost:%d/v1\"", modelName, port))
+
+	// Check if the loadgen process is still running
+	gom.Eventually(func() error {
+		if loadGenCmd.ProcessState != nil && loadGenCmd.ProcessState.Exited() {
+			return fmt.Errorf("load generator exited unexpectedly with code: %d", loadGenCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Load generator sending requests to model: %s at \"http://localhost:%d/v1\" should keep running", modelName, port))
+
+	return loadGenCmd
+}
+
+// StartPrometheusPortForwarding sets up port forwarding specifically for Prometheus (9090:9090)
+func StartPrometheusPortForwarding(service *corev1.Service, namespace string, localPort int) *exec.Cmd {
+	// Check if the port is already in use
+	if available, err := isPortAvailable(localPort); !available {
+		gink.Fail(fmt.Sprintf("Port %d is already in use. Cannot start port forwarding for Prometheus service: %s. Error: %v", localPort, service.Name, err))
+	}
+
+	portForwardCmd := exec.Command("kubectl", "port-forward",
+		fmt.Sprintf("service/%s", service.Name),
+		fmt.Sprintf("%d:9090", localPort), "-n", namespace)
+	err := portForwardCmd.Start()
+	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Prometheus port-forward command should start successfully for service: %s", service.Name))
+
+	// Check if the port-forward process is still running
+	gom.Eventually(func() error {
+		if portForwardCmd.ProcessState != nil && portForwardCmd.ProcessState.Exited() {
+			return fmt.Errorf("prometheus port-forward process exited unexpectedly with code: %d", portForwardCmd.ProcessState.ExitCode())
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Prometheus port-forward to port %d should keep running for service: %s", localPort, service.Name))
+
+	return portForwardCmd
+}
+
+func StopCmd(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return fmt.Errorf("command or process is nil")
+	}
+
+	// Check if process has already exited
+	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+		fmt.Printf("Warning: Process (PID %d) has already exited with code %d\n",
+			cmd.Process.Pid, cmd.ProcessState.ExitCode())
+		return nil
+	}
+
+	// Try graceful shutdown with SIGINT
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		// If we can't signal, the process might have already exited
+		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+			fmt.Printf("Warning: Process (PID %d) exited before signal could be sent (exit code: %d)\n",
+				cmd.Process.Pid, cmd.ProcessState.ExitCode())
+			return nil
+		}
+		return fmt.Errorf("failed to send interrupt signal: %w", err)
+	}
+
+	// Wait for graceful shutdown with timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		// Process exited, check if it was due to early termination
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				fmt.Printf("Warning: Process (PID %d) exited early with code %d\n",
+					cmd.Process.Pid, exitErr.ExitCode())
+				// Don't treat early exit as an error for cleanup purposes
+				return nil
+			}
+			return fmt.Errorf("process exited with error: %w", err)
+		}
+		return nil
+	case <-time.After(5 * time.Second):
+		// Timeout - force kill
+		if err := cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill process: %w", err)
+		}
+		// Wait for the kill to complete
+		<-done
+		return nil
+	}
+}
+
+// ValidateAppLabelUniqueness checks if the appLabel is already in use by other resources and fails if it's not unique
+func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernetes.Clientset, crClient client.Client) {
+	// Create a context with timeout to prevent hanging tests
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Check if any pods exist with the specified app label
+	podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		gink.Fail(fmt.Sprintf("Failed to check existing pods for label uniqueness: %v", err))
+	}
+
+	// Check if any deployments exist with the specified app label
+	deploymentList, err := k8sClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		gink.Fail(fmt.Sprintf("Failed to check existing deployments for label uniqueness: %v", err))
+	}
+
+	// Check if any services exist with the specified app label
+	serviceList, err := k8sClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appLabel),
+	})
+	if err != nil {
+		gink.Fail(fmt.Sprintf("Failed to check existing services for label uniqueness: %v", err))
+	}
+
+	// Check if any ServiceMonitors exist with the specified app label
+	serviceMonitorList := &unstructured.UnstructuredList{}
+	serviceMonitorList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	})
+	err = crClient.List(ctx, serviceMonitorList, client.InNamespace(namespace), client.MatchingLabels{"app": appLabel})
+	if err != nil {
+		gink.Fail(fmt.Sprintf("Failed to check existing ServiceMonitors for label uniqueness: %v", err))
+	}
+
+	// Collects conflicting resources to show in error logs
+	var conflicting []string
+
+	if len(podList.Items) > 0 {
+		for _, pod := range podList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Pod: %s", pod.Name))
+		}
+	}
+
+	if len(deploymentList.Items) > 0 {
+		for _, deployment := range deploymentList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Deployment: %s", deployment.Name))
+		}
+	}
+
+	if len(serviceList.Items) > 0 {
+		for _, service := range serviceList.Items {
+			conflicting = append(conflicting, fmt.Sprintf("Service: %s", service.Name))
+		}
+	}
+
+	if len(serviceMonitorList.Items) > 0 {
+		for _, serviceMonitor := range serviceMonitorList.Items {
+			name, found, err := unstructured.NestedString(serviceMonitor.Object, "metadata", "name")
+			if err != nil {
+				gink.Fail(fmt.Sprintf("Wrong ServiceMonitor name: %v", err))
+			} else if !found {
+				gink.Fail("ServiceMonitor name not found")
+			}
+			conflicting = append(conflicting, fmt.Sprintf("ServiceMonitor: %s", name))
+		}
+	}
+
+	// Fails if any conflicts are found
+	if len(conflicting) > 0 {
+		gink.Fail(fmt.Sprintf("App label '%s' is not unique in namespace '%s'. Make sure to delete conflicting resources: %s",
+			appLabel, namespace, strings.Join(conflicting, ", ")))
+	}
+}
+
+// ValidateVariantAutoscalingUniqueness checks if the VariantAutoscaling configuration is unique within the namespace
+func ValidateVariantAutoscalingUniqueness(namespace, modelId, acc string, crClient client.Client) {
+	// Create a context with timeout to prevent hanging tests
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	variantAutoscalingList := &v1alpha1.VariantAutoscalingList{}
+	err := crClient.List(ctx, variantAutoscalingList, client.InNamespace(namespace), client.MatchingLabels{"inference.optimization/acceleratorName": acc})
+	if err != nil {
+		gink.Fail(fmt.Sprintf("Failed to check existing VariantAutoscalings for accelerator label uniqueness: %v", err))
+	}
+
+	// found VAs with the same accelerator
+	if len(variantAutoscalingList.Items) > 0 {
+		var conflicting []string
+		for _, va := range variantAutoscalingList.Items {
+			// check for same modelId
+			if va.Spec.ModelID == modelId {
+				conflicting = append(conflicting, fmt.Sprintf("VariantAutoscaling: %s", va.Name))
+			}
+		}
+		// Fails if any conflicts are found
+		if len(conflicting) > 0 {
+			gink.Fail(fmt.Sprintf("VariantAutoscaling '%s' is not unique in namespace '%s'. Make sure to delete conflicting VAs: %s",
+				modelId, namespace, strings.Join(conflicting, ", ")))
+		}
+	}
+}
+
+// creates a vllme deployment with the specified configuration
+func CreateVllmeDeployment(namespace, deployName, modelName, appLabel string) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":                       appLabel,
+					"llm-d.ai/inferenceServing": "true",
+					"llm-d.ai/model":            "ms-sim-llm-d-modelservice",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":                       appLabel,
+						"llm-d.ai/inferenceServing": "true",
+						"llm-d.ai/model":            "ms-sim-llm-d-modelservice",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "vllme",
+							Image:           "quay.io/infernoautoscaler/vllme:0.2.1-multi-arch",
+							ImagePullPolicy: corev1.PullAlways,
+							Ports: []corev1.ContainerPort{
+								{ContainerPort: 80},
+							},
+							Env: []corev1.EnvVar{
+								{Name: "MODEL_NAME", Value: modelName},
+								{Name: "DECODE_TIME", Value: "20"},
+								{Name: "PREFILL_TIME", Value: "20"},
+								{Name: "MODEL_SIZE", Value: "25000"},
+								{Name: "KVC_PER_TOKEN", Value: "2"},
+								{Name: "MAX_SEQ_LEN", Value: "2048"},
+								{Name: "MEM_SIZE", Value: "80000"},
+								{Name: "AVG_TOKENS", Value: "128"},
+								{Name: "TOKENS_DISTRIBUTION", Value: "deterministic"},
+								{Name: "MAX_BATCH_SIZE", Value: "8"},
+								{Name: "REALTIME", Value: "True"},
+								{Name: "MUTE_PRINT", Value: "False"},
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:                    resource.MustParse("500m"),
+									corev1.ResourceMemory:                 resource.MustParse("1Gi"),
+									corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:                    resource.MustParse("100m"),
+									corev1.ResourceMemory:                 resource.MustParse("500Mi"),
+									corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+								},
+							},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
+				},
+			},
+		},
+	}
+}
+
+// creates a service for the vllme deployment
+func CreateVllmeService(namespace, serviceName, appLabel string, nodePort int) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app":                       appLabel,
+				"llm-d.ai/inferenceServing": "true",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app":                       appLabel,
+				"llm-d.ai/inferenceServing": "true",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       appLabel,
+					Port:       80,
+					Protocol:   corev1.ProtocolTCP,
+					TargetPort: intstr.FromInt(80),
+					NodePort:   int32(nodePort),
+				},
+			},
+			Type: corev1.ServiceTypeNodePort,
+		},
+	}
+}
+
+// creates a VariantAutoscaling resource with owner reference to deployment
+func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc string) *v1alpha1.VariantAutoscaling {
+	return &v1alpha1.VariantAutoscaling{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"inference.optimization/acceleratorName": acc,
+			},
+		},
+		Spec: v1alpha1.VariantAutoscalingSpec{
+			ModelID: modelId,
+			SLOClassRef: v1alpha1.ConfigMapKeyRef{
+				Name: "premium",
+				Key:  "slo",
+			},
+			ModelProfile: v1alpha1.ModelProfile{
+				Accelerators: []v1alpha1.AcceleratorProfile{
+					{
+						Acc:          "A100",
+						AccCount:     1,
+						Alpha:        "20.58",
+						Beta:         "0.41",
+						MaxBatchSize: 4,
+					},
+					{
+						Acc:          "MI300X",
+						AccCount:     1,
+						Alpha:        "7.77",
+						Beta:         "0.15",
+						MaxBatchSize: 4,
+					},
+					{
+						Acc:          "G2",
+						AccCount:     1,
+						Alpha:        "17.15",
+						Beta:         "0.34",
+						MaxBatchSize: 4,
+					},
+				},
+			},
+		},
+	}
+}
+
+// creates a ServiceMonitor for vllme metrics collection
+func CreateVllmeServiceMonitor(name, namespace, appLabel string) *unstructured.Unstructured {
+	serviceMonitor := &unstructured.Unstructured{}
+	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	})
+	serviceMonitor.SetName(name)
+	serviceMonitor.SetNamespace(namespace)
+	serviceMonitor.SetLabels(map[string]string{
+		"app":     appLabel,
+		"release": "kube-prometheus-stack",
+	})
+
+	spec := map[string]any{
+		"selector": map[string]any{
+			"matchLabels": map[string]any{
+				"app": appLabel,
+			},
+		},
+		"endpoints": []any{
+			map[string]any{
+				"port":     appLabel,
+				"path":     "/metrics",
+				"interval": "15s",
+			},
+		},
+		"namespaceSelector": map[string]any{
+			"any": true,
+		},
+	}
+	serviceMonitor.Object["spec"] = spec
+
+	return serviceMonitor
+}
+
+// creates an InferenceModel resource for the specified model
+func CreateInferenceModel(name, namespace, modelName string) *unstructured.Unstructured {
+	inferenceModel := &unstructured.Unstructured{}
+	inferenceModel.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "inference.networking.x-k8s.io",
+		Version: "v1alpha2",
+		Kind:    "InferenceModel",
+	})
+	inferenceModel.SetName(name)
+	inferenceModel.SetNamespace(namespace)
+
+	spec := map[string]any{
+		"modelName":   modelName,
+		"criticality": "Critical",
+		"poolRef": map[string]any{
+			"name": "gaie-sim",
+		},
+		"targetModels": []any{
+			map[string]any{
+				"name":   modelName,
+				"weight": 100,
+			},
+		},
+	}
+	inferenceModel.Object["spec"] = spec
+
+	return inferenceModel
+}
+
+// PrometheusQueryResult represents the response from Prometheus API
+type PrometheusQueryResult struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Metric map[string]string `json:"metric"`
+			Value  []any             `json:"value"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+// PrometheusClient wraps the official Prometheus client
+type PrometheusClient struct {
+	client promv1.API
+}
+
+// creates a new Prometheus client for e2e tests
+func NewPrometheusClient(baseURL string, insecureSkipVerify bool) (*PrometheusClient, error) {
+	config := promAPI.Config{
+		Address: baseURL,
+	}
+
+	if insecureSkipVerify {
+		roundTripper := promAPI.DefaultRoundTripper
+		if rt, ok := roundTripper.(*http.Transport); ok {
+			rt.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		}
+		config.RoundTripper = roundTripper
+	}
+
+	client, err := promAPI.NewClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prometheus client: %w", err)
+	}
+
+	return &PrometheusClient{
+		client: promv1.NewAPI(client),
+	}, nil
+}
+
+// QueryWithRetry queries Prometheus API with retries and returns the metric value
+func (p *PrometheusClient) QueryWithRetry(ctx context.Context, query string) (float64, error) {
+	var result float64
+
+	// Define the backoff strategy
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond, // Initial delay
+		Factor:   2.0,                    // Exponential factor
+		Jitter:   0.25,                   // 25% jitter
+		Steps:    5,                      // Max 5 attempts
+		Cap:      5 * time.Second,        // Max delay cap
+	}
+
+	// Use wait.ExponentialBackoff for retries
+	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		value, queryErr := p.executeQuery(ctx, query)
+		if queryErr == nil {
+			result = value
+			return true, nil // Success, stop retrying
+		}
+
+		// Check if this is a permanent error (don't retry)
+		if isPermanentPrometheusError(queryErr) {
+			return false, queryErr // Stop retrying, return error
+		}
+
+		// Log retry attempt
+		fmt.Printf("Debug: Prometheus query failed, will retry: %v\n", queryErr)
+		return false, nil // Continue retrying
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
+// executeQuery performs a single query attempt using the official Prometheus API
+func (p *PrometheusClient) executeQuery(ctx context.Context, query string) (float64, error) {
+	result, warnings, err := p.client.Query(ctx, query, time.Now())
+	if err != nil {
+		return 0, fmt.Errorf("prometheus query failed: %w", err)
+	}
+
+	// Log any warnings from Prometheus
+	if len(warnings) > 0 {
+		fmt.Printf("Debug: Prometheus warnings: %v\n", warnings)
+	}
+
+	return extractValueFromResult(result)
+}
+
+// extractValueFromResult extracts float64 value from Prometheus query result
+func extractValueFromResult(result model.Value) (float64, error) {
+	switch v := result.(type) {
+	case model.Vector:
+		if len(v) == 0 {
+			return 0, fmt.Errorf("no data returned from prometheus query")
+		}
+		return float64(v[0].Value), nil
+	case *model.Scalar:
+		return float64(v.Value), nil
+	default:
+		return 0, fmt.Errorf("unexpected result type: %T", result)
+	}
+}
+
+// isPermanentPrometheusError determines if a Prometheus error should not be retried
+func isPermanentPrometheusError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Permanent errors that shouldn't be retried
+	permanentErrors := []string{
+		"bad_data",          // Invalid query syntax
+		"invalid parameter", // Bad parameters
+		"parse error",       // Query parsing failed
+		"unauthorized",      // Auth issues
+		"forbidden",         // Permission issues
+	}
+
+	for _, permErr := range permanentErrors {
+		if strings.Contains(strings.ToLower(errStr), permErr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetInfernoReplicaMetrics queries Prometheus for replica metrics emitted by the Inferno autoscaler
+func GetInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (currentReplicas, desiredReplicas float64, err error) {
+
+	client, err := NewPrometheusClient("https://localhost:9090", true)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to create prometheus client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	labels := fmt.Sprintf(`variant_name="%s",exported_namespace="%s",accelerator_type="%s"`, variantName, namespace, acceleratorType)
+
+	// Query both metrics with retries
+	currentQuery := fmt.Sprintf(`inferno_current_replicas{%s}`, labels)
+	currentReplicas, err = client.QueryWithRetry(ctx, currentQuery)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
+	}
+
+	desiredQuery := fmt.Sprintf(`inferno_desired_replicas{%s}`, labels)
+	desiredReplicas, err = client.QueryWithRetry(ctx, desiredQuery)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
+	}
+
+	return currentReplicas, desiredReplicas, nil
 }

@@ -30,8 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
-
-	ctrlutils "github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
 )
 
 var (
@@ -46,6 +44,12 @@ var (
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
+)
+
+const (
+	maximumAvailableGPUs = 4
+	numNodes             = 3
+	gpuTypes             = "mix"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -64,56 +68,41 @@ var _ = BeforeSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
 
-	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image on Kind")
-	err = utils.LoadImageToKindClusterWithName(projectImage, maximumAvailableGPUs)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+	// Deploy llm-d and Inferno-autoscaler on the Kind cluster
+	By("deploying llm-d and Inferno-autoscaler on Kind")
+	launchCmd := exec.Command("make", "deploy-llm-d-inferno-emulated-on-kind", fmt.Sprintf("KIND_ARGS=-n %d -g %d -t %s -i %s", numNodes, maximumAvailableGPUs, gpuTypes, projectImage))
+	_, err = utils.Run(launchCmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install llm-d and Inferno-autoscaler")
+
+	// The script automatically applies a vLLM-e deployment
+	// We want to start tests with a clean slate
+	By("deleting automatically created deployments")
+	cmd = exec.Command("kubectl", "delete", "deployments", "vllme-deployment", "-n", llmDNamespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to delete vLLM-e deployment")
+
+	By("deleting automatically created service")
+	cmd = exec.Command("kubectl", "delete", "svc", "vllme-service", "-n", llmDNamespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to delete vLLM-e service")
+
+	By("deleting automatically created ServiceMonitors")
+	cmd = exec.Command("kubectl", "delete", "servicemonitor", "vllme-servicemonitor", "-n", controllerMonitoringNamespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to delete vLLM-e ServiceMonitor")
 
 	initializeK8sClient()
 
-	By("creating Inferno-autoscaler-system namespace")
-	cmd = exec.Command("kubectl", "create", "ns", controllerNamespace)
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
+	By("waiting for all vLLM-e pods to be deleted")
+	Eventually(func(g Gomega) {
+		podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=vllme"})
+		if err != nil {
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list Pods")
+		}
+		g.Expect(podList.Items).To(BeEmpty(), fmt.Sprintf("All Pods labelled: \"vLLM-e\" should be deleted. Found: %v", podList.Items))
+	}, 1*time.Minute, 1*time.Second).Should(Succeed())
 
-	By("creating llm-d-sim namespace")
-	cmd = exec.Command("kubectl", "create", "ns", llmDNamespace)
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create namespace", llmDNamespace)
-
-	By("installing Prometheus")
-	Expect(utils.InstallPrometheusOperator()).To(Succeed(), "Failed to install Prometheus Operator")
-
-	By("installing CRDs")
-	cmd = exec.Command("make", "install")
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
-
-	By("creating the serviceclass ConfigMap")
-	serviceclassConfigMap := ctrlutils.CreateServiceClassConfigMap(controllerNamespace)
-	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), serviceclassConfigMap, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Failed to create serviceclass ConfigMap")
-
-	By("creating the accelerator unitcost ConfigMap")
-	acceleratorConfigMap := ctrlutils.CreateAcceleratorUnitCostConfigMap(controllerNamespace)
-	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), acceleratorConfigMap, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Failed to create accelerator unitcost ConfigMap")
-
-	By("creating the Prometheus configuration ConfigMap with TLS settings")
-	prometheusConfigMap := createPrometheusConfigMapWithTLS(controllerNamespace)
-	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Create(context.Background(), prometheusConfigMap, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Failed to create Prometheus configuration ConfigMap")
-
-	cmd = exec.Command("kubectl", "apply", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml")
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to deploy Prometheus resources")
-
-	By("deploying the controller-manager")
-	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
-
+	// Waiting for the Inferno-autoscaler pods to be ready and for leader election
 	By("waiting for the controller-manager pods to be ready")
 	Eventually(func(g Gomega) {
 		podList, err := k8sClient.CoreV1().Pods(controllerNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=inferno-autoscaler"})
@@ -167,24 +156,3 @@ var _ = AfterSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to destroy Kind cluster")
 })
-
-// createPrometheusConfigMapWithTLS creates a ConfigMap with Prometheus configuration including TLS settings
-func createPrometheusConfigMapWithTLS(namespace string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "inferno-autoscaler-variantautoscaling-config",
-			Namespace: namespace,
-		},
-		Data: map[string]string{
-			// Prometheus configuration with HTTPS and TLS
-			"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
-
-			// TLS configuration for e2e tests (using self-signed certificates)
-			"PROMETHEUS_TLS_INSECURE_SKIP_VERIFY": "true",
-
-			// Optimization configuration
-			"GLOBAL_OPT_INTERVAL": "60s",
-			"GLOBAL_OPT_TRIGGER":  "false",
-		},
-	}
-}

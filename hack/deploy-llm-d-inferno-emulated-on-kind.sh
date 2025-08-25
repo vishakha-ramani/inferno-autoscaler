@@ -107,7 +107,7 @@ function deploy-llm-d-infra() {
 echo ">>> Getting latest llm-d infrastructure release..."
 get-llm-d-latest
 
-main(){
+main() {
 parse_args "$@"
 
 echo ">>> Using configuration:"

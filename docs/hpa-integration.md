@@ -230,7 +230,7 @@ kubectl -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A2 fe
 5. Apply the feature flag to the `controller-manager` manifest:
 **Note**: these changes may take some time to be applied.
 ```sh 
-sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml\
+sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml
 ### Wait for some time
 ```
 

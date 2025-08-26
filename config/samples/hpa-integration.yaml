@@ -13,16 +13,12 @@ spec:
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0
-      # When the metrics indicate that the target should be scaled up, the algorithm looks into previously computed desired states, and uses the highest value from the specified interval.
-      # In the above example, all desired states from the past 60 seconds will be considered.
       policies:
       - type: Pods
         value: 10
         periodSeconds: 15
     scaleDown:
       stabilizationWindowSeconds: 0
-      # When the metrics indicate that the target should be scaled down, the algorithm looks into previously computed desired states, and uses the highest value from the specified interval.
-      # In the above example, all desired states from the past 60 seconds will be considered.
       policies:
       - type: Pods
         value: 10

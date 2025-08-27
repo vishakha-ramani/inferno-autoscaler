@@ -104,8 +104,8 @@ undeploy-inferno-on-kind:
 .PHONY: deploy-llm-d-inferno-emulated-on-kind
 deploy-llm-d-inferno-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and Inferno-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
-		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS)
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS) -i $(IMG)
 
 ## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
 .PHONY: deploy-inferno-on-openshift

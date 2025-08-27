@@ -12,13 +12,13 @@ spec:
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 45
       policies:
       - type: Pods
         value: 10
         periodSeconds: 15
     scaleDown:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 45
       policies:
       - type: Pods
         value: 10
@@ -27,10 +27,10 @@ spec:
   - type: External
     external:
       metric:
-        name: inferno_desired_replicas
+        name: inferno_desired_ratio
         selector:
           matchLabels:
             variant_name: vllme-deployment
       target:
-        type: AverageValue
-        averageValue: "1"
+        type: Value
+        value: "1"

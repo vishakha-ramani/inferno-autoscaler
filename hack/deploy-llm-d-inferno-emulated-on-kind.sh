@@ -23,7 +23,7 @@ print_help() {
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  -i, --inferno-image IMAGE   Container image to use for the Inferno-autoscaler (default: quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch)
+  -i, --inferno-image IMAGE    Container image to use for the Inferno-autoscaler (default: quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch)
   -n, --nodes NUM              Number of nodes for KIND cluster (default: 4)
   -g, --gpus NUM               Number of GPUs per node (default: 5)  
   -t, --type TYPE              GPU type: nvidia, amd, intel, or mix (default: nvidia)

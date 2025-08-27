@@ -70,14 +70,14 @@ kubectl apply -f config/samples/hpa-integration.yaml
 ### 6. Verify the integration
 - Wait for all components to be ready (1-2 minutes total)
 
-- Check the status of HPA - should show actual values, not `<unknown>`
+- Check the status of HPA (should show actual target values, not `<unknown>/1`):
 ```sh
-kubectl get hpa -n llm-d-sim      
+kubectl get hpa -n llm-d-sim
 NAME                   REFERENCE                     TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
 vllme-deployment-hpa   Deployment/vllme-deployment   1/1 (avg)   1         10        1          3m14s
 ```
 
-- Check the VariantAutoscaling resource
+- Check the VariantAutoscaling resource:
 ```sh
 kubectl get variantautoscaling -n llm-d-sim
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
@@ -153,7 +153,7 @@ pip install -r requirements.txt
 python loadgen.py --model default/default  --rate '[[1200, 40]]' --url http://localhost:8000/v1 --content 50
 ```
 
-3. After a few minutes, you can see the scale-up:
+3. After a few minutes, you can see the scale out:
 
 ```sh
 kubectl get hpa -n llm-d-sim
@@ -164,7 +164,7 @@ kubectl get variantautoscaling -n llm-d-sim
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
 vllme-deployment   default/default   A100          1                 2           20m
 
-kubectl get deployments.apps -n llm-d-sim 
+kubectl get deployments.apps -n llm-d-sim
 NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 vllme-deployment   2/2     2            2           21m
 ```
@@ -211,21 +211,31 @@ b10130b20176   kindest/node:v1.32.0   "/usr/local/bin/entr…"   About an hour a
 docker exec -it kind-inferno-gpu-cluster-control-plane bash
 ```
 
-3. Apply the feature flag to both the `controller-manager` and the `api-server` manifests:
+3. Apply the feature flag to the `api-server` manifest:
+**Note**: these changes may take some time to be applied.
 ```sh
 sed -i 's#- kube-apiserver#- kube-apiserver\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-apiserver.yaml
-
-sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml
+### Wait for some time
 ```
-4. Verify that the feature is enabled:
 
+4. Verify that the feature is enabled on the `api-server`:
 ```sh
 kubectl -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A2 feature-gates
 
       - --feature-gates=HPAScaleToZero=true
       - --advertise-address=172.18.0.3
       - --allow-privileged=true
+```
 
+5. Apply the feature flag to the `controller-manager` manifest:
+**Note**: these changes may take some time to be applied.
+```sh 
+sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml
+### Wait for some time
+```
+
+6. Verify that the feature is enabled on the `api-server`:
+```sh 
 kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | grep -A2 feature-gates
 
       - --feature-gates=HPAScaleToZero=true
@@ -233,7 +243,7 @@ kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | gr
       - --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf
 ```
 
-5. Specify the `minReplicas: 0` field in the `yaml` snippet for HPA and apply it following the integration steps
+7. Specify the `minReplicas: 0` field in the `yaml` snippet for HPA and apply it following the integration steps
 
 ## Configuration Files
 
@@ -287,8 +297,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: vllme-deployment
-  # minReplicas: 0  # scale to zero - alpha feature
+  minReplicas: 0  # HPAScaleToZero - alpha feature
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 10
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 10
+        periodSeconds: 15
   metrics:
   - type: External
     external:

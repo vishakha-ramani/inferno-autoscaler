@@ -8,8 +8,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: vllme-deployment
-  # minReplicas: 0  # scale to zero - alpha feature
+  minReplicas: 0  # scale to zero - alpha feature
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 10
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 10
+        periodSeconds: 15
   metrics:
   - type: External
     external:

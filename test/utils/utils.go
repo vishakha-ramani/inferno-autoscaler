@@ -1041,12 +1041,12 @@ func isPermanentPrometheusError(err error) bool {
 	return false
 }
 
-// GetInfernoReplicaMetrics queries Prometheus for replica metrics emitted by the Inferno autoscaler
-func GetInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (currentReplicas, desiredReplicas float64, err error) {
+// GetInfernoReplicaMetrics queries Prometheus for metrics emitted by the Inferno autoscaler
+func GetInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (currentReplicas, desiredReplicas, desiredRatio float64, err error) {
 
 	client, err := NewPrometheusClient("https://localhost:9090", true)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to create prometheus client: %w", err)
+		return 0, 0, 0, fmt.Errorf("failed to create prometheus client: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1058,14 +1058,20 @@ func GetInfernoReplicaMetrics(variantName, namespace, acceleratorType string) (c
 	currentQuery := fmt.Sprintf(`inferno_current_replicas{%s}`, labels)
 	currentReplicas, err = client.QueryWithRetry(ctx, currentQuery)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
+		return 0, 0, 0, fmt.Errorf("failed to query current replicas: %w", err)
 	}
 
 	desiredQuery := fmt.Sprintf(`inferno_desired_replicas{%s}`, labels)
 	desiredReplicas, err = client.QueryWithRetry(ctx, desiredQuery)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
+		return 0, 0, 0, fmt.Errorf("failed to query desired replicas: %w", err)
 	}
 
-	return currentReplicas, desiredReplicas, nil
+	desiredRatioQuery := fmt.Sprintf(`inferno_desired_ratio{%s}`, labels)
+	desiredRatio, err = client.QueryWithRetry(ctx, desiredRatioQuery)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to query desired ratio: %w", err)
+	}
+
+	return currentReplicas, desiredReplicas, desiredRatio, nil
 }

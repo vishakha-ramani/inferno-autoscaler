@@ -5,10 +5,10 @@ This guide shows how to integrate Kubernetes HorizontalPodAutoscaler (HPA) with 
 ## Overview
 
 After deploying the Inferno-autoscaler following the provided guides, this guide allows the integration of the following components:
-1. **Inferno Controller** processes VariantAutoscaling objects and emits the `inferno_desired_replicas` metrics
+1. **Inferno Controller** processes VariantAutoscaling objects and emits the `inferno_current_replicas`, the `inferno_desired_replicas` and the `inferno_desired_ratio` metrics
 2. **Prometheus** scrapes these metrics from the Inferno-autoscaler `/metrics` endpoint using TLS
 3. **Prometheus Adapter** exposes the metrics to Kubernetes external metrics API
-4. **HPA** reads the value for the `inferno_desired_replicas` metrics and adjusts Deployment replicas accordingly
+4. **HPA** reads the value for the `inferno_desired_ratio` metrics and adjusts Deployment replicas accordingly
 
 ## Prerequisites
 
@@ -94,7 +94,7 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq
   "groupVersion": "external.metrics.k8s.io/v1beta1",
   "resources": [
     {
-      "name": "inferno_desired_replicas",
+      "name": "inferno_desired_ratio",
       "singularName": "",
       "namespaced": true,
       "kind": "ExternalMetricValueList",
@@ -106,18 +106,18 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq
 }
 ```
 
-- Get the latest value for the `inferno_desired_replicas` metric:
+- Get the latest value for the `inferno_desired_ratio` metric:
 ```sh
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-sim/inferno_desired_replicas?labelSelector=variant_name%3Dvllme-deployment" | jq
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-sim/inferno_desired_ratio?labelSelector=variant_name%3Dvllme-deployment" | jq
 {
   "kind": "ExternalMetricValueList",
   "apiVersion": "external.metrics.k8s.io/v1beta1",
   "metadata": {},
   "items": [
     {
-      "metricName": "inferno_desired_replicas",
+      "metricName": "inferno_desired_ratio",
       "metricLabels": {
-        "__name__": "inferno_desired_replicas",
+        "__name__": "inferno_desired_ratio",
         "accelerator_type": "A100",
         "endpoint": "https",
         "exported_namespace": "llm-d-sim",
@@ -255,15 +255,15 @@ prometheus:
 
 rules:
   external:
-  - seriesQuery: 'inferno_desired_replicas{variant_name!="",exported_namespace!=""}'
+  - seriesQuery: 'inferno_desired_ratio{variant_name!="",exported_namespace!=""}'
     resources:
       overrides:
         exported_namespace: {resource: "namespace"}
         variant_name: {resource: "deployment"}  
     name:
-      matches: "^inferno_desired_replicas"
-      as: "inferno_desired_replicas"
-    metricsQuery: 'inferno_desired_replicas{<<.LabelMatchers>>}'
+      matches: "^inferno_desired_ratio"
+      as: "inferno_desired_ratio"
+    metricsQuery: 'inferno_desired_ratio{<<.LabelMatchers>>}'
 
 replicas: 2
 logLevel: 4
@@ -301,13 +301,13 @@ spec:
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 60
       policies:
       - type: Pods
         value: 10
         periodSeconds: 15
     scaleDown:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 60
       policies:
       - type: Pods
         value: 10
@@ -316,11 +316,11 @@ spec:
   - type: External
     external:
       metric:
-        name: inferno_desired_replicas
+        name: inferno_desired_ratio
         selector:
           matchLabels:
             variant_name: vllme-deployment
       target:
-        type: AverageValue
-        averageValue: "1"
+        type: Value
+        value: "1"
 ```

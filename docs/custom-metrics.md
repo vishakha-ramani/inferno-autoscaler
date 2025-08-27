@@ -19,7 +19,7 @@ All custom metrics are prefixed with `inferno_` and include labels for `variant_
   - `variant_name`: Name of the variant
   - `namespace`: Kubernetes namespace
   - `accelerator_type`: Type of accelerator being used
-- **Use Case**: Monitor current scaling state
+- **Use Case**: Monitor current number of replicas per variant
 
 ### `inferno_desired_replicas`
 - **Type**: Gauge
@@ -28,7 +28,16 @@ All custom metrics are prefixed with `inferno_` and include labels for `variant_
   - `variant_name`: Name of the variant
   - `namespace`: Kubernetes namespace
   - `accelerator_type`: Type of accelerator being used
-- **Use Case**: Compare desired vs current replicas to detect scaling issues
+- **Use Case**: Expose the desired optimized number of replicas per variant
+
+### `inferno_desired_ratio`
+- **Type**: Gauge
+- **Description**: Ratio of the desired number of replicas and the current number of replicas for each variant
+- **Labels**:
+  - `variant_name`: Name of the variant
+  - `namespace`: Kubernetes namespace
+  - `accelerator_type`: Type of accelerator being used
+- **Use Case**: Compare the desired and current number of replicas per variant, for scaling purposes
 
 ### `inferno_replica_scaling_total`
 - **Type**: Counter

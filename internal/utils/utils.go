@@ -267,12 +267,16 @@ func AddServerInfoToSystemData(
 	}
 
 	// all server data
+	minNumReplicas := 0 // default is to scale to zero
+	if os.Getenv("SCALE_TO_ZERO") == "false" {
+		minNumReplicas = 1
+	}
 	serverSpec := &infernoConfig.ServerSpec{
 		Name:            FullName(va.Name, va.Namespace),
 		Class:           className,
 		Model:           va.Spec.ModelID,
 		KeepAccelerator: true,
-		MinNumReplicas:  1,
+		MinNumReplicas:  minNumReplicas,
 		CurrentAlloc:    *AllocationData,
 		DesiredAlloc:    infernoConfig.AllocationData{},
 	}

@@ -639,6 +639,13 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		var desiredReplicasProm float64
+		// Check if SCALE TO ZERO is configured
+		var minNumReplicas int = 0
+		configMap, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, "inferno-autoscaler-variantautoscaling-config", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "ConfigMap should exist")
+		if configMap.Data["SCALE_TO_ZERO"] == "false" {
+			minNumReplicas = 1
+		}
 		By("waiting for scaling down decision to be made")
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
@@ -648,8 +655,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			}, va)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
-			// Verify that the number of replicas has scaled down to 1
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
+			// Verify that the number of replicas has scaled down to minimum number of replicas
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", minNumReplicas),
 				fmt.Sprintf("No load should trigger scale-down recommendation for: %s", va.Name))
 
 			// Verify Prometheus replica metrics

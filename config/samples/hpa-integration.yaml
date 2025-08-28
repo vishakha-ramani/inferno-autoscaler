@@ -8,17 +8,17 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: vllme-deployment
-  minReplicas: 0  # scale to zero - alpha feature
+  # minReplicas: 0  # scale to zero - alpha feature
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 45
+      stabilizationWindowSeconds: 0
       policies:
       - type: Pods
         value: 10
         periodSeconds: 15
     scaleDown:
-      stabilizationWindowSeconds: 45
+      stabilizationWindowSeconds: 0
       policies:
       - type: Pods
         value: 10
@@ -27,10 +27,10 @@ spec:
   - type: External
     external:
       metric:
-        name: inferno_desired_ratio
+        name: inferno_desired_replicas
         selector:
           matchLabels:
             variant_name: vllme-deployment
       target:
-        type: Value
-        value: "1"
+        type: AverageValue
+        averageValue: "1"

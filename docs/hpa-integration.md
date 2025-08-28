@@ -5,10 +5,14 @@ This guide shows how to integrate Kubernetes HorizontalPodAutoscaler (HPA) with 
 ## Overview
 
 After deploying the Inferno-autoscaler following the provided guides, this guide allows the integration of the following components:
-1. **Inferno Controller** processes VariantAutoscaling objects and emits the `inferno_current_replicas`, the `inferno_desired_replicas` and the `inferno_desired_ratio` metrics
-2. **Prometheus** scrapes these metrics from the Inferno-autoscaler `/metrics` endpoint using TLS
-3. **Prometheus Adapter** exposes the metrics to Kubernetes external metrics API
-4. **HPA** reads the value for the `inferno_desired_ratio` metrics and adjusts Deployment replicas accordingly
+
+1. **Inferno Controller**: processes VariantAutoscaling objects and emits the `inferno_current_replicas`, the `inferno_desired_replicas` and the `inferno_desired_ratio` metrics
+
+2. **Prometheus**: scrapes these metrics from the Inferno-autoscaler `/metrics` endpoint using TLS
+
+3. **Prometheus Adapter**: exposes the metrics to Kubernetes external metrics API
+
+4. **HPA** example configuration: reads the value for the `inferno_desired_replicas` metrics and adjusts Deployment replicas accordingly
 
 ## Prerequisites
 
@@ -22,7 +26,7 @@ After deploying the Inferno-autoscaler following the provided guides, this guide
 
 ### 1. Create Prometheus CA ConfigMap
 
-Prometheus is deployed with TLS (HTTPS) for security. The Prometheus Adapter needs to connect to Prometheus at https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local. 
+Prometheus is deployed with TLS (HTTPS) for security. The Prometheus Adapter needs to connect to Prometheus at https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local.
 But Prometheus uses self-signed certificates (not trusted by default). We will use a CA configmap for TLS Certificate Verification:
 
 ```sh
@@ -35,7 +39,7 @@ kubectl create configmap prometheus-ca --from-file=ca.crt=/tmp/prometheus-ca.crt
 
 ### 2. Deploy the Prometheus Adapter
 
-Note: a `yaml` example snippet for the Prometheus Adapter configuration with TLS can be found [here](#prometheus-adapter-values-configsamplesprometheus-adapter-valuesyaml). 
+Note: a `yaml` example snippet for the Prometheus Adapter configuration with TLS can be found [at the end of this doc](#prometheus-adapter-values-configsamplesprometheus-adapter-valuesyaml). 
 
 ```sh
 # Add Prometheus community helm repo - already there if you deployed Inferno-autoscaler using the scripts
@@ -50,7 +54,7 @@ helm install prometheus-adapter prometheus-community/prometheus-adapter \
 
 ### 3. Wait for Prometheus to discover and fetch metrics emitted by the Inferno-autoscaler (30-60 seconds)
 
-### 4. Create the VariantAutoscaling resource 
+### 4. Create the VariantAutoscaling resource
 
 ```sh
 # Apply the VariantAutoscaling resource if not already there
@@ -59,18 +63,19 @@ kubectl apply -f hack/vllme/deploy/vllme-setup/vllme-variantautoscaling.yaml
 
 ### 5. Deploy the HPA resource
 
-Note: a `yaml` example snippet for HPA can be found [here](#hpa-configuration-example-configsampleshpa-integrationyaml). 
+Note: a `yaml` example snippet for HPA can be found [at the end of this doc](#hpa-configuration-example-configsampleshpa-integrationyaml).
 
 ```sh
-# After creating the file `config/samples/hpa-integration.yaml`
 # Deploy HPA for your deployments
 kubectl apply -f config/samples/hpa-integration.yaml
 ```
 
 ### 6. Verify the integration
+
 - Wait for all components to be ready (1-2 minutes total)
 
 - Check the status of HPA (should show actual target values, not `<unknown>/1`):
+
 ```sh
 kubectl get hpa -n llm-d-sim
 NAME                   REFERENCE                     TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
@@ -78,6 +83,7 @@ vllme-deployment-hpa   Deployment/vllme-deployment   1/1 (avg)   1         10   
 ```
 
 - Check the VariantAutoscaling resource:
+
 ```sh
 kubectl get variantautoscaling -n llm-d-sim
 NAME               MODEL             ACCELERATOR   CURRENTREPLICAS   OPTIMIZED   AGE
@@ -85,6 +91,7 @@ vllme-deployment   default/default   A100          1                 1          
 ```
 
 - Check if the external metrics are available:
+
 ```sh
 kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq
 
@@ -94,7 +101,7 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq
   "groupVersion": "external.metrics.k8s.io/v1beta1",
   "resources": [
     {
-      "name": "inferno_desired_ratio",
+      "name": "inferno_desired_replicas",
       "singularName": "",
       "namespaced": true,
       "kind": "ExternalMetricValueList",
@@ -106,18 +113,19 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq
 }
 ```
 
-- Get the latest value for the `inferno_desired_ratio` metric:
+- Get the latest value for the `inferno_desired_replicas` metric:
+
 ```sh
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-sim/inferno_desired_ratio?labelSelector=variant_name%3Dvllme-deployment" | jq
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-sim/inferno_desired_replicas?labelSelector=variant_name%3Dvllme-deployment" | jq
 {
   "kind": "ExternalMetricValueList",
   "apiVersion": "external.metrics.k8s.io/v1beta1",
   "metadata": {},
   "items": [
     {
-      "metricName": "inferno_desired_ratio",
+      "metricName": "inferno_desired_replicas",
       "metricLabels": {
-        "__name__": "inferno_desired_ratio",
+        "__name__": "inferno_desired_replicas",
         "accelerator_type": "A100",
         "endpoint": "https",
         "exported_namespace": "llm-d-sim",
@@ -138,6 +146,7 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-sim/in
 ## Example: scale-up scenario
 
 1. Port-forward the Service/Gateway (depending on whether you deployed the Inferno-autoscaler with `llm-d` or not):
+
 ```sh
 # If you deployed Inferno-autoscaler with llm-d:
 kubectl port-forward -n llm-d-sim svc/infra-sim-inference-gateway 8000:80 
@@ -147,6 +156,7 @@ kubectl port-forward -n llm-d-sim svc/vllme-service 8000:80
 ```
 
 2. Launch the load generator via the following command:
+
 ```sh
 cd hack/vllme/vllm_emulator
 pip install -r requirements.txt
@@ -170,6 +180,7 @@ vllme-deployment   2/2     2            2           21m
 ```
 
 It can be verified that the Inferno-autoscaler is optimizing and emitting metrics:
+
 ```sh
 kubectl logs -n inferno-autoscaler-system deploy/inferno-autoscaler-controller-manager
 
@@ -193,11 +204,12 @@ kubectl logs -n inferno-autoscaler-system deploy/inferno-autoscaler-controller-m
 ```
 
 ## Feature: Scale to Zero
-The Inferno Autoscaler can leverage on HPA's alpha feature for scale to zero functionality, enabling complete resource optimization by scaling deployments down to zero replicas when no load is detected.
+The Inferno Autoscaler can leverage on HPA's *alpha* feature for scale to zero functionality, enabling complete resource optimization by scaling deployments down to zero replicas when no load is detected.
 
 To enable `HPAScaleToZero`, you need to enable the corresponding feature flags in the Kind cluster configuration:
 
 1. Find the control-plane node:
+
 ```sh
 docker ps --filter "name=kind"
 CONTAINER ID   IMAGE                  COMMAND                  CREATED             STATUS             PORTS                       NAMES
@@ -207,18 +219,22 @@ b10130b20176   kindest/node:v1.32.0   "/usr/local/bin/entr…"   About an hour a
 ```
 
 2. Open a shell into that container:
+
 ```sh
 docker exec -it kind-inferno-gpu-cluster-control-plane bash
 ```
 
 3. Apply the feature flag to the `api-server` manifest:
+
 **Note**: these changes may take some time to be applied.
+
 ```sh
 sed -i 's#- kube-apiserver#- kube-apiserver\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-apiserver.yaml
 ### Wait for some time
 ```
 
 4. Verify that the feature is enabled on the `api-server`:
+
 ```sh
 kubectl -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A2 feature-gates
 
@@ -228,14 +244,17 @@ kubectl -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A2 fe
 ```
 
 5. Apply the feature flag to the `controller-manager` manifest:
+
 **Note**: these changes may take some time to be applied.
-```sh 
+
+```sh
 sed -i 's#- kube-controller-manager#- kube-controller-manager\n    - --feature-gates=HPAScaleToZero=true#g' /etc/kubernetes/manifests/kube-controller-manager.yaml
 ### Wait for some time
 ```
 
 6. Verify that the feature is enabled on the `api-server`:
-```sh 
+
+```sh
 kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | grep -A2 feature-gates
 
       - --feature-gates=HPAScaleToZero=true
@@ -248,6 +267,7 @@ kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | gr
 ## Configuration Files
 
 ### Prometheus Adapter Values (`config/samples/prometheus-adapter-values.yaml`)
+
 ```yaml
 prometheus:
   url: https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local
@@ -255,15 +275,15 @@ prometheus:
 
 rules:
   external:
-  - seriesQuery: 'inferno_desired_ratio{variant_name!="",exported_namespace!=""}'
+  - seriesQuery: 'inferno_desired_replicas{variant_name!="",exported_namespace!=""}'
     resources:
       overrides:
         exported_namespace: {resource: "namespace"}
         variant_name: {resource: "deployment"}  
     name:
-      matches: "^inferno_desired_ratio"
-      as: "inferno_desired_ratio"
-    metricsQuery: 'inferno_desired_ratio{<<.LabelMatchers>>}'
+      matches: "^inferno_desired_replicas"
+      as: "inferno_desired_replicas"
+    metricsQuery: 'inferno_desired_replicas{<<.LabelMatchers>>}'
 
 replicas: 2
 logLevel: 4
@@ -286,6 +306,7 @@ extraArguments:
 ```
 
 ### HPA Configuration Example (`config/samples/hpa-integration.yaml`)
+
 ```yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -301,13 +322,13 @@ spec:
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 0
       policies:
       - type: Pods
         value: 10
         periodSeconds: 15
     scaleDown:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 0
       policies:
       - type: Pods
         value: 10
@@ -316,11 +337,11 @@ spec:
   - type: External
     external:
       metric:
-        name: inferno_desired_ratio
+        name: inferno_desired_replicas
         selector:
           matchLabels:
             variant_name: vllme-deployment
       target:
-        type: Value
-        value: "1"
+        type: AverageValue
+        averageValue: "1"
 ```

@@ -267,22 +267,7 @@ kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | gr
 
 ### Note on possible timing issues
 
-HPA runs as a control loop that operates intermittently; the interval is set by the `--horizontal-pod-autoscaler-sync-period` parameter to the `kube-controller-manager`, which defaults to 15 seconds (see more in the [Kubernetes HPA reference documentation](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#how-does-a-horizontalpodautoscaler-work)).
-The Inferno-Autoscaler computes and emits metrics in its reconciliation loop, which runs by default every 60 seconds.
-
-This implies that HPA would quickly perform scaling operations without utilizing the updated scaling metrics emitted by the Inferno-Autoscaler, resulting in unexpected scaling behavior in some cases; for instance, if we were to deploy another HPA sample using the `inferno_desired_ratio` with a target like:
-
-```yaml
-# config/samples/hpa-integration.yaml
-# ...
-      target:
-        type: Value
-        value: "1"
-```
-
-This issue could come up if HPA operates with default behavior.
-
-This can be strongly mitigated by adding an appropriate `StabilizationWindow` (e.g. `35s`) in both scaling up and down, to help avoid *flapping* due to timing issues between the Inferno-Autoscaler and the HPA loops.
+For this discussion, please refer to the [community doc](https://docs.google.com/document/d/15z1u2HIH7qoxT-nxj4BnZ_TyqHPqIn0FcCPTnIMn7bs/edit?tab=t.0).
 
 ## Configuration Files
 

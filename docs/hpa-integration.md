@@ -1,4 +1,4 @@
-# HPA Integration with Inferno Autoscaler
+# HPA Integration with the Inferno-Autoscaler
 
 This guide shows how to integrate Kubernetes HorizontalPodAutoscaler (HPA) with the Inferno Autoscaler using the existing deployment environment.
 
@@ -12,7 +12,7 @@ After deploying the Inferno-autoscaler following the provided guides, this guide
 
 3. **Prometheus Adapter**: exposes the metrics to Kubernetes external metrics API
 
-4. **HPA** example configuration: reads the value for the `inferno_desired_replicas` metrics and adjusts Deployment replicas accordingly
+4. **HPA** example configuration: reads the value for the `inferno_desired_replicas` metrics and adjusts Deployment replicas accordingly, using an `AverageValue` target
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ kubectl create configmap prometheus-ca --from-file=ca.crt=/tmp/prometheus-ca.crt
 
 ### 2. Deploy the Prometheus Adapter
 
-Note: a `yaml` example snippet for the Prometheus Adapter configuration with TLS can be found [at the end of this doc](#prometheus-adapter-values-configsamplesprometheus-adapter-valuesyaml). 
+Note: a `yaml` example snippet for the Prometheus Adapter configuration with TLS can be found [at the end of this doc](#prometheus-adapter-values-configsamplesprometheus-adapter-valuesyaml).
 
 ```sh
 # Add Prometheus community helm repo - already there if you deployed Inferno-autoscaler using the scripts
@@ -204,6 +204,7 @@ kubectl logs -n inferno-autoscaler-system deploy/inferno-autoscaler-controller-m
 ```
 
 ## Feature: Scale to Zero
+
 The Inferno Autoscaler can leverage on HPA's *alpha* feature for scale to zero functionality, enabling complete resource optimization by scaling deployments down to zero replicas when no load is detected.
 
 To enable `HPAScaleToZero`, you need to enable the corresponding feature flags in the Kind cluster configuration:
@@ -263,6 +264,25 @@ kubectl -n kube-system get pod -l component=kube-controller-manager -o yaml | gr
 ```
 
 7. Specify the `minReplicas: 0` field in the `yaml` snippet for HPA and apply it following the integration steps
+
+### Note on possible timing issues
+
+HPA runs as a control loop that operates intermittently; the interval is set by the `--horizontal-pod-autoscaler-sync-period` parameter to the `kube-controller-manager`, which defaults to 15 seconds (see more in the [Kubernetes HPA reference documentation](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#how-does-a-horizontalpodautoscaler-work)).
+The Inferno-Autoscaler computes and emits metrics in its reconciliation loop, which runs by default every 60 seconds.
+
+This implies that HPA would quickly perform scaling operations without utilizing the updated scaling metrics emitted by the Inferno-Autoscaler, resulting in unexpected scaling behavior in some cases; for instance, if we were to deploy another HPA sample using the `inferno_desired_ratio` with a target like:
+
+```yaml
+# config/samples/hpa-integration.yaml
+# ...
+      target:
+        type: Value
+        value: "1"
+```
+
+This issue could come up if HPA operates with default behavior.
+
+This can be strongly mitigated by adding an appropriate `StabilizationWindow` (e.g. `35s`) in both scaling up and down, to help avoid *flapping* due to timing issues between the Inferno-Autoscaler and the HPA loops.
 
 ## Configuration Files
 

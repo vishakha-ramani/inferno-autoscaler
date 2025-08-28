@@ -640,7 +640,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 
 		var desiredReplicasProm float64
 		// Check if SCALE TO ZERO is configured
-		var minNumReplicas int = 0
+		minNumReplicas := 0
 		configMap, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, "inferno-autoscaler-variantautoscaling-config", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), "ConfigMap should exist")
 		if configMap.Data["SCALE_TO_ZERO"] == "false" {

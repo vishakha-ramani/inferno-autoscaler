@@ -113,6 +113,13 @@ func (m *MetricsEmitter) EmitReplicaMetrics(ctx context.Context, va *llmdOptv1al
 
 	currentReplicas.With(baseLabels).Set(float64(current))
 	desiredReplicas.With(baseLabels).Set(float64(desired))
+
+	// Avoid division by 0 if current replicas is zero: set the ratio to the desired replicas
+	// Going 0 -> N is treated by using `desired_ratio = N`
+	if current == 0 {
+		desiredRatio.With(baseLabels).Set(float64(desired))
+		return nil
+	}
 	desiredRatio.With(baseLabels).Set(float64(desired) / float64(current))
 	return nil
 }

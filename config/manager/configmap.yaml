@@ -30,4 +30,4 @@ data:
   GLOBAL_OPT_INTERVAL: "60s"
 
   # Option to scale variants to zero replicas (default: true)
-  SCALE_TO_ZERO: "true"
+  WVA_SCALE_TO_ZERO: "true"

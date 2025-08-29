@@ -268,7 +268,7 @@ func AddServerInfoToSystemData(
 
 	// all server data
 	minNumReplicas := 0 // default is to scale to zero
-	if os.Getenv("SCALE_TO_ZERO") == "false" {
+	if os.Getenv("WVA_SCALE_TO_ZERO") == "false" {
 		minNumReplicas = 1
 	}
 	serverSpec := &infernoConfig.ServerSpec{

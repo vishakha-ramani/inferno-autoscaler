@@ -640,12 +640,6 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 
 		var desiredReplicasProm float64
 		By("waiting for scaling down decision to be made")
-		// Check if SCALE TO ZERO is configured
-		minNumReplicas := 0
-		configMap, _ := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, "inferno-autoscaler-variantautoscaling-config", metav1.GetOptions{})
-		if configMap.Data["SCALE_TO_ZERO"] == "false" {
-			minNumReplicas = 1
-		}
 		Eventually(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
 			err := crClient.Get(ctx, client.ObjectKey{
@@ -654,8 +648,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			}, va)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
-			// Verify that the number of replicas has scaled down to minimum number of replicas
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(Equal(minNumReplicas),
+			// Verify that the number of replicas has scaled down to 0
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
 				fmt.Sprintf("No load should trigger scale-down recommendation for: %s", va.Name))
 
 			// Verify Prometheus replica metrics
@@ -1346,8 +1340,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			}, va1)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
 
-			// Verify that the number of replicas has scaled down to 1
-			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
+			// Verify that the number of replicas has scaled down to 0
+			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
 				fmt.Sprintf("No load should trigger scale-down recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
@@ -1365,8 +1359,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			}, va2)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
 
-			// Verify that the number of replicas has scaled down to 1
-			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 1),
+			// Verify that the number of replicas has scaled down to 0
+			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
 				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics

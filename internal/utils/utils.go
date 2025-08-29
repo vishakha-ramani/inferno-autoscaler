@@ -169,18 +169,21 @@ func CreateSystemData(
 			logger.Log.Warn("failed to parse service class data, skipping service class", "key", key, "err", err)
 			continue
 		}
-		for _, entry := range sc.Data {
-			serviceClassSpec := infernoConfig.ServiceClassSpec{
-				Name:     sc.Name,
-				Priority: sc.Priority,
-				Model:    entry.Model,
+		serviceClassSpec := infernoConfig.ServiceClassSpec{
+			Name:         sc.Name,
+			Priority:     sc.Priority,
+			ModelTargets: make([]infernoConfig.ModelTarget, len(sc.Data)),
+		}
+		for i, entry := range sc.Data {
+			serviceClassSpec.ModelTargets[i] = infernoConfig.ModelTarget{
+				Model: entry.Model,
 				//TODO: change inferno config to use SLOTPOT and SLOTTFT
 				// SLO_ITL and SLO_TTW are deprecated
 				SLO_ITL: float32(entry.SLOTPOT),
 				SLO_TTW: float32(entry.SLOTTFT),
 			}
-			serviceClassData = append(serviceClassData, serviceClassSpec)
 		}
+		serviceClassData = append(serviceClassData, serviceClassSpec)
 	}
 	systemData.Spec.ServiceClasses.Spec = serviceClassData
 

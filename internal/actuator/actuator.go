@@ -34,7 +34,7 @@ func (a *Actuator) getCurrentDeploymentReplicas(ctx context.Context, va *llmdOpt
 	}
 
 	// Prefer status replicas (actual current state)
-	if deploy.Status.Replicas > 0 {
+	if deploy.Status.Replicas >= 0 {
 		return deploy.Status.Replicas, nil
 	}
 

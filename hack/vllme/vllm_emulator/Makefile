@@ -2,7 +2,7 @@
 # Configuration
 # --------------------------------------------------------------------
 IMAGE_NAME ?= quay.io/infernoautoscaler/vllme  # vllme registry/image
-TAG ?= slim-1.0
+TAG ?= 0.2.2-multi-arch
 DOCKERFILE ?= Dockerfile
 CONTEXT ?= .
 PORT ?= 80
@@ -31,3 +31,24 @@ run: build ## Run locally for testing
 
 clean: ## Remove local images
 	docker rmi $(IMAGE) $(IMAGE_NAME):latest || true
+
+
+# TODO: this target is temporary and will be removed
+# PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
+# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
+# - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
+# - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
+# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
+# To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
+PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+BUILDER_NAME ?= vllme-builder
+
+.PHONY: docker-buildx
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	- docker buildx create --name vllme-builder
+	docker buildx use vllme-builder
+	- docker buildx build --push --platform=$(PLATFORMS) --tag ${IMAGE} -f Dockerfile.cross .
+	- docker buildx rm vllme-builder
+	rm Dockerfile.cross

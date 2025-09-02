@@ -2,7 +2,7 @@
 # Configuration
 # --------------------------------------------------------------------
 IMAGE_NAME ?= quay.io/infernoautoscaler/vllme  # vllme registry/image
-TAG ?= 0.2.2-multi-arch
+TAG ?= 0.2.3-multi-arch
 DOCKERFILE ?= Dockerfile
 CONTEXT ?= .
 PORT ?= 80

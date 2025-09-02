@@ -277,7 +277,7 @@ var _ = Describe("Collector", func() {
 		It("should collect metrics successfully", func() {
 			// Setup mock responses
 			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
-			tokenQuery := `delta(vllm:tokens_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])/delta(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])`
+			tokenQuery := `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
 			waitQuery := `sum(rate(vllm:request_queue_time_seconds_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
 			itlQuery := `sum(rate(vllm:time_per_output_token_seconds_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
 
@@ -313,7 +313,7 @@ var _ = Describe("Collector", func() {
 
 			// Setup minimal mock responses
 			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
-			tokenQuery := `delta(vllm:tokens_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])/delta(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])`
+			tokenQuery := `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
 
 			mockProm.queryResults[arrivalQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(5.0)},

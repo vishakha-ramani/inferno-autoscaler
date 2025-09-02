@@ -387,6 +387,7 @@ class vLLM():
         await completionEvent.wait()
         # update metrics: total number of tokens generated
         self.metrics.counter_tokens_total.labels(model_name=self.Model.model_name).inc(request.token_len)
+        self.metrics.histogram_num_generation_tokens_request.labels(model_name=self.Model.model_name).observe(request.token_len)
         self.remove_finished_request(request)
 
     def add_new_request(self, request: RequestElement):    #TODO: We assume only 1 vLLM instance. Eventually the Request will be added as Request element at a global queue and then fed to vLLM queue

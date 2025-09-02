@@ -66,5 +66,15 @@ class Metrics:
             name="vllm:request_queue_time_seconds",
             documentation="Histogram of time spent in WAITING phase for request.",
             labelnames=labelnames,
-            # buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60) # customize if needed
             buckets=request_latency_buckets)  
+        
+        """
+        Histogram for number of generation tokens
+        """
+        self.histogram_num_generation_tokens_request = prometheus_client.Histogram(
+            name="vllm:request_generation_tokens",
+            documentation="Number of generation tokens processed.",
+            labelnames=labelnames,
+            buckets=[
+                1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
+            ])

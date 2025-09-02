@@ -12,6 +12,7 @@ var (
 	replicaScalingTotal *prometheus.CounterVec
 	desiredReplicas     *prometheus.GaugeVec
 	currentReplicas     *prometheus.GaugeVec
+	desiredRatio        *prometheus.GaugeVec
 )
 
 // InitMetrics registers all custom metrics with the provided registry
@@ -37,6 +38,13 @@ func InitMetrics(registry prometheus.Registerer) error {
 		},
 		[]string{"variant_name", "namespace", "accelerator_type"},
 	)
+	desiredRatio = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "inferno_desired_ratio",
+			Help: "Ratio of the desired number of replicas and the current number of replicas for each variant",
+		},
+		[]string{"variant_name", "namespace", "accelerator_type"},
+	)
 
 	// Register metrics with the registry
 	if err := registry.Register(replicaScalingTotal); err != nil {
@@ -47,6 +55,9 @@ func InitMetrics(registry prometheus.Registerer) error {
 	}
 	if err := registry.Register(currentReplicas); err != nil {
 		return fmt.Errorf("failed to register currentReplicas metric: %w", err)
+	}
+	if err := registry.Register(desiredRatio); err != nil {
+		return fmt.Errorf("failed to register desiredRatio metric: %w", err)
 	}
 
 	return nil
@@ -96,11 +107,19 @@ func (m *MetricsEmitter) EmitReplicaMetrics(ctx context.Context, va *llmdOptv1al
 	}
 
 	// These operations are local and should never fail, but we handle errors for debugging
-	if currentReplicas == nil || desiredReplicas == nil {
+	if currentReplicas == nil || desiredReplicas == nil || desiredRatio == nil {
 		return fmt.Errorf("replica metrics not initialized")
 	}
 
 	currentReplicas.With(baseLabels).Set(float64(current))
 	desiredReplicas.With(baseLabels).Set(float64(desired))
+
+	// Avoid division by 0 if current replicas is zero: set the ratio to the desired replicas
+	// Going 0 -> N is treated by using `desired_ratio = N`
+	if current == 0 {
+		desiredRatio.With(baseLabels).Set(float64(desired))
+		return nil
+	}
+	desiredRatio.With(baseLabels).Set(float64(desired) / float64(current))
 	return nil
 }

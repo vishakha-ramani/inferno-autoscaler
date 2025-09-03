@@ -315,12 +315,13 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 
 		if !metav1.IsControlledBy(&updateVa, &deploy) {
 			updateVa.OwnerReferences = append(updateVa.OwnerReferences, metav1.OwnerReference{
-				APIVersion:         deploy.APIVersion,
-				Kind:               deploy.Kind,
-				Name:               deploy.Name,
-				UID:                deploy.UID,
-				Controller:         utils.Ptr(true),
-				BlockOwnerDeletion: utils.Ptr(true),
+				APIVersion: deploy.APIVersion,
+				Kind:       deploy.Kind,
+				Name:       deploy.Name,
+				UID:        deploy.UID,
+				Controller: utils.Ptr(true),
+				//don’t need foreground blocking semantics
+				BlockOwnerDeletion: utils.Ptr(false),
 			})
 
 			// Patch metadata change (ownerReferences)

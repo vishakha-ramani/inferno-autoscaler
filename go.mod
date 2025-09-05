@@ -7,7 +7,7 @@ godebug default=go1.23
 toolchain go1.23.10
 
 require (
-	github.com/llm-inferno/optimizer-light v0.5.0
+	github.com/llm-inferno/optimizer-light v0.6.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
 	github.com/stretchr/testify v1.10.0

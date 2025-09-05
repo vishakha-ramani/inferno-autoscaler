@@ -176,11 +176,9 @@ func CreateSystemData(
 		}
 		for i, entry := range sc.Data {
 			serviceClassSpec.ModelTargets[i] = infernoConfig.ModelTarget{
-				Model: entry.Model,
-				//TODO: change inferno config to use SLOTPOT and SLOTTFT
-				// SLO_ITL and SLO_TTW are deprecated
-				SLO_ITL: float32(entry.SLOTPOT),
-				SLO_TTW: float32(entry.SLOTTFT),
+				Model:    entry.Model,
+				SLO_ITL:  float32(entry.SLOTPOT),
+				SLO_TTFT: float32(entry.SLOTTFT),
 			}
 		}
 		serviceClassData = append(serviceClassData, serviceClassSpec)
@@ -217,14 +215,23 @@ func AddModelAcceleratorProfileToSystemData(
 		return err
 	}
 
+	// TODO: add gamma and delta to AcceleratorProfile
+	var gamma, delta float64
+
 	sd.Spec.Models.PerfData = append(sd.Spec.Models.PerfData,
 		infernoConfig.ModelAcceleratorPerfData{
 			Name:         modelName,
 			Acc:          modelAcceleratorProfile.Acc,
 			AccCount:     modelAcceleratorProfile.AccCount,
-			Alpha:        float32(alpha),
-			Beta:         float32(beta),
 			MaxBatchSize: modelAcceleratorProfile.MaxBatchSize,
+			DecodeParms: infernoConfig.DecodeParms{
+				Alpha: float32(alpha),
+				Beta:  float32(beta),
+			},
+			PrefillParms: infernoConfig.PrefillParms{
+				Gamma: float32(gamma),
+				Delta: float32(delta),
+			},
 		})
 	return nil
 }
@@ -236,17 +243,21 @@ func AddServerInfoToSystemData(
 	className string) (err error) {
 
 	// server load statistics
-	var arrivalRate, avgLength, cost, itlAverage, waitAverage float64
+	var arrivalRate, outTokens, cost, itlAverage, waitAverage float64
 	if arrivalRate, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 32); err != nil || !CheckValue(arrivalRate) {
 		arrivalRate = 0
 	}
-	if avgLength, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil || !CheckValue(avgLength) {
-		avgLength = 0
+	if outTokens, err = strconv.ParseFloat(va.Status.CurrentAlloc.Load.AvgLength, 32); err != nil || !CheckValue(outTokens) {
+		outTokens = 0
 	}
 
+	// TODO: Add input tokens to LoadProfile
+	inTokens := 0.0
+
 	serverLoadSpec := &infernoConfig.ServerLoadSpec{
-		ArrivalRate: float32(arrivalRate),
-		AvgLength:   int(avgLength),
+		ArrivalRate:  float32(arrivalRate),
+		AvgInTokens:  int(inTokens),
+		AvgOutTokens: int(outTokens),
 	}
 
 	// server allocation
@@ -256,6 +267,8 @@ func AddServerInfoToSystemData(
 	if itlAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 32); err != nil || !CheckValue(itlAverage) {
 		itlAverage = 0
 	}
+
+	// TODO: change wait time to TTFT
 	if waitAverage, err = strconv.ParseFloat(va.Status.CurrentAlloc.WaitAverage, 32); err != nil || !CheckValue(waitAverage) {
 		waitAverage = 0
 	}
@@ -265,7 +278,7 @@ func AddServerInfoToSystemData(
 		MaxBatch:    va.Status.CurrentAlloc.MaxBatch,
 		Cost:        float32(cost),
 		ITLAverage:  float32(itlAverage),
-		WaitAverage: float32(waitAverage),
+		TTFTAverage: float32(waitAverage),
 		Load:        *serverLoadSpec,
 	}
 

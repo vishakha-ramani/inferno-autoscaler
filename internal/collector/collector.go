@@ -112,6 +112,8 @@ func AddMetricsToOptStatus(ctx context.Context,
 	}
 	FixValue(&avgLen)
 
+	// TODO: change waiting time to TTFT
+
 	// Query 3: Average waiting time
 	waitQuery := fmt.Sprintf(`sum(rate(vllm:request_queue_time_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
 		modelName, deployNamespace, modelName, deployNamespace)

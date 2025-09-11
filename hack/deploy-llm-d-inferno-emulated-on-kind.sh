@@ -41,7 +41,7 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -i|--inferno-image)     INFERNO_IMAGE="$2"; shift 2 ;;
+      -i|--inferno-image)     WVA_IMAGE="$2"; shift 2 ;;
       -n|--nodes)             CLUSTER_NODES="$2"; shift 2 ;;
       -g|--gpus)              CLUSTER_GPUS="$2"; shift 2 ;;
       -t|--type)              CLUSTER_TYPE="$2"; shift 2 ;;
@@ -171,8 +171,8 @@ EOF
 }
 
 function deploy_inferno() {
-    echo ">>> Deploying Inferno Autoscaler using image: $INFERNO_IMAGE"
-    make deploy-inferno-emulated-on-kind IMG="${INFERNO_IMAGE}" KIND_ARGS="-n ${CLUSTER_NODES} -g ${CLUSTER_GPUS} -t ${CLUSTER_TYPE}"
+    echo ">>> Deploying Inferno Autoscaler using image: $WVA_IMAGE"
+    make deploy-inferno-emulated-on-kind IMG="${WVA_IMAGE}" KIND_ARGS="-n ${CLUSTER_NODES} -g ${CLUSTER_GPUS} -t ${CLUSTER_TYPE}"
     echo "Inferno Autoscaler deployed successfully."
 }
 
@@ -211,7 +211,7 @@ main() {
 parse_args "$@"
 
 echo ">>> Using configuration:"
-echo "    WVA Image: $INFERNO_IMAGE"
+echo "    WVA Image: $WVA_IMAGE"
 echo "    Cluster Nodes: $CLUSTER_NODES"
 echo "    Cluster GPUs: $CLUSTER_GPUS"
 echo "    Cluster Type: $CLUSTER_TYPE"

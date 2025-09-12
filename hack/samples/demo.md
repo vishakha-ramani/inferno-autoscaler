@@ -159,7 +159,7 @@ In each job, fill in `image: <image-repo>:<tag>` with your `guidellm` image repo
 ## WVA Performance
 The following figure shows the behaviour observed from the controller logs.
 
-![Diagram](docs/diagrams/autoscaler-demo.png)
+![Autoscaler Diagram](../../docs/diagrams/autoscaler-demo.png)
 
 
 

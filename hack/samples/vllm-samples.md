@@ -3,7 +3,9 @@
 
 Notes: 
 1. The following describes setting up vllm deployment on OpenShift cluster.
-2. All vLLM components will run in the `vllm-test` namespace. If the namespace doesn't already exists, create one by running `oc create ns vllm-test`.
+2. These instructions are for standalone vllm deployments. To setup vllm with llm-d infra, refer to [Well-lit Path: Intelligent Inference Scheduling](https://github.com/llm-d/llm-d/blob/dev/guides/inference-scheduling/README.md).
+3. All vLLM components will run in the `vllm-test` namespace. If the namespace doesn't already exists, create one by running `oc create ns vllm-test`.
+
 
 ## Setting up a vllm deployment and service
 The following is largely based on existing reference material with a few tweaks. 

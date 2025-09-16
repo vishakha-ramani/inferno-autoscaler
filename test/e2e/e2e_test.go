@@ -427,25 +427,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
 
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA.Name,
-			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA.Name,
-			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
-
-		// Log Prometheus metrics for debugging
-		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
+		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
+			deployName,
 			int(desiredReplicasProm))
 	})
 
@@ -514,26 +499,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 2*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
+		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
 
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA.Name,
-			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA.Name,
-			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
-
-		fmt.Printf("Initial desired replicas for VA: %s: %d\n", finalVA.Name, initialDesiredReplicas)
-
-		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
+		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
+			deployName,
 			int(desiredReplicasProm))
 	})
 
@@ -575,24 +544,10 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
 
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA.Name,
-			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA.Name,
-			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA.Status.DesiredOptimizedAlloc.Accelerator)
-
-		fmt.Printf("Prometheus metrics - desired replicas: %d\n",
+		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
+			deployName,
 			int(desiredReplicasProm))
 	})
 
@@ -952,46 +907,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", firstDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
+		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA1.Name,
+			firstDeployName,
 			int(desiredReplicas1))
 
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", secondDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
+		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA2.Name,
+			secondDeployName,
 			int(desiredReplicas2))
 	})
 
@@ -1098,48 +1023,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("showing the status of VAs and deployments, including the number of pods in pending state")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\nInitial replicas: %d\n",
-			finalVA1.Name,
-			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA1.Status.DesiredOptimizedAlloc.Accelerator,
-			initialOptimizedReplicas1)
+		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA1.Name,
+			firstDeployName,
 			int(desiredReplicas1))
 
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n Initial replicas: %d\n",
-			finalVA2.Name,
-			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA2.Status.DesiredOptimizedAlloc.Accelerator,
-			initialOptimizedReplicas2)
+		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA2.Name,
+			secondDeployName,
 			int(desiredReplicas2))
 	})
 
@@ -1200,46 +1093,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA1.Name,
-			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA1.Status.DesiredOptimizedAlloc.Accelerator)
+		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA1.Name,
+			firstDeployName,
 			int(desiredReplicas1))
 
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
-
-		// Log the status for debugging
-		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
-		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
-			finalVA2.Name,
-			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
-			finalVA2.Status.DesiredOptimizedAlloc.Accelerator)
+		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
-			finalVA2.Name,
+			secondDeployName,
 			int(desiredReplicas2))
 	})
 

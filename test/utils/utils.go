@@ -704,6 +704,24 @@ func ValidateVariantAutoscalingUniqueness(namespace, modelId, acc string, crClie
 	}
 }
 
+func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, crClient client.Client) error {
+	variantAutoscaling := &v1alpha1.VariantAutoscaling{}
+	err := crClient.Get(ctx, client.ObjectKey{Name: vaName, Namespace: namespace}, variantAutoscaling)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
+		variantAutoscaling.Name,
+		variantAutoscaling.Status.CurrentAlloc.Load.ArrivalRate,
+		variantAutoscaling.Status.CurrentAlloc.Load.AvgLength)
+
+	fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
+		variantAutoscaling.Name,
+		variantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas,
+		variantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator)
+	return nil
+}
+
 // creates a vllme deployment with the specified configuration
 func CreateVllmeDeployment(namespace, deployName, modelName, appLabel string) *appsv1.Deployment {
 	return &appsv1.Deployment{

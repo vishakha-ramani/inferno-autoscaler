@@ -427,7 +427,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -499,7 +500,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 2*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -544,7 +546,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -907,13 +910,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,
@@ -1023,13 +1028,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("showing the status of VAs and deployments, including the number of pods in pending state")
-		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,
@@ -1093,13 +1100,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,

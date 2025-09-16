@@ -814,24 +814,30 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 			ModelProfile: v1alpha1.ModelProfile{
 				Accelerators: []v1alpha1.AcceleratorProfile{
 					{
-						Acc:          "A100",
-						AccCount:     1,
-						Alpha:        "20.58",
-						Beta:         "0.41",
+						Acc:      "A100",
+						AccCount: 1,
+						PerfParms: v1alpha1.PerfParms{
+							DecodeParms:  map[string]string{"alpha": "0.58", "beta": "0.41"},
+							PrefillParms: map[string]string{"gamma": "0.58", "delta": "0.41"},
+						},
 						MaxBatchSize: 4,
 					},
 					{
-						Acc:          "MI300X",
-						AccCount:     1,
-						Alpha:        "7.77",
-						Beta:         "0.15",
+						Acc:      "MI300X",
+						AccCount: 1,
+						PerfParms: v1alpha1.PerfParms{
+							DecodeParms:  map[string]string{"alpha": "0.77", "beta": "0.15"},
+							PrefillParms: map[string]string{"gamma": "0.77", "delta": "0.15"},
+						},
 						MaxBatchSize: 4,
 					},
 					{
-						Acc:          "G2",
-						AccCount:     1,
-						Alpha:        "17.15",
-						Beta:         "0.34",
+						Acc:      "G2",
+						AccCount: 1,
+						PerfParms: v1alpha1.PerfParms{
+							DecodeParms:  map[string]string{"alpha": "17.15", "beta": "0.34"},
+							PrefillParms: map[string]string{"gamma": "17.15", "delta": "0.34"},
+						},
 						MaxBatchSize: 4,
 					},
 				},

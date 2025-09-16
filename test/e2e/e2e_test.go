@@ -474,7 +474,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA.Name,
 			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
+			finalVA.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA.Name,
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -595,7 +595,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA.Name,
 			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
+			finalVA.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA.Name,
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -674,7 +674,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA.Name,
 			finalVA.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA.Status.CurrentAlloc.Load.AvgLength)
+			finalVA.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA.Name,
 			finalVA.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1086,7 +1086,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA1.Name,
 			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
+			finalVA1.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA1.Name,
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1107,7 +1107,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA2.Name,
 			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
+			finalVA2.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA2.Name,
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1265,7 +1265,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA1.Name,
 			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
+			finalVA1.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\nInitial replicas: %d\n",
 			finalVA1.Name,
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1287,7 +1287,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA2.Name,
 			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
+			finalVA2.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n Initial replicas: %d\n",
 			finalVA2.Name,
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1385,7 +1385,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA1.Name,
 			finalVA1.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA1.Status.CurrentAlloc.Load.AvgLength)
+			finalVA1.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA1.Name,
 			finalVA1.Status.DesiredOptimizedAlloc.NumReplicas,
@@ -1406,7 +1406,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
 			finalVA2.Name,
 			finalVA2.Status.CurrentAlloc.Load.ArrivalRate,
-			finalVA2.Status.CurrentAlloc.Load.AvgLength)
+			finalVA2.Status.CurrentAlloc.Load.AvgOutputTokens)
 		fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 			finalVA2.Name,
 			finalVA2.Status.DesiredOptimizedAlloc.NumReplicas,

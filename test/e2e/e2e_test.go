@@ -18,9 +18,7 @@ package e2e
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"time"
@@ -37,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -355,32 +352,14 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 	It("should scale out when load increases", func() {
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
-			err = utils.StopCmd(prometheusPortForwardCmd)
+			err := utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("verifying initial state of VariantAutoscaling")
@@ -392,31 +371,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
 		By("getting the service endpoint for load generation")
-		gatewayService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, gatewayName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Service: %s", gatewayName))
-
 		// Port-forward the vllme service to send requests to it
 		By("setting up port-forward to the vllme service")
-		portForwardCmd = utils.StartPortForwarding(gatewayService, namespace, port)
+		portForwardCmd = utils.SetUpPortForward(k8sClient, ctx, gatewayName, namespace, port, 80)
 		defer func() {
 			err = utils.StopCmd(portForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", gatewayName))
 		}()
 
 		By("waiting for port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to the forwarded port
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, port, fmt.Sprintf("http://localhost:%d/v1", port))
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic")
@@ -463,12 +427,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -476,60 +436,26 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 	})
 
 	It("should keep the same replicas if the load stays constant", func() {
-
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
-			err = utils.StopCmd(prometheusPortForwardCmd)
+			err := utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("setting up port-forward to the vllme service")
-		gatewayService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, gatewayName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch Service: %s", gatewayName))
-
-		portForwardCmd = utils.StartPortForwarding(gatewayService, namespace, port)
+		portForwardCmd := utils.SetUpPortForward(k8sClient, ctx, gatewayName, namespace, port, 80)
 		defer func() {
 			err = utils.StopCmd(portForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", gatewayName))
 		}()
 		By("waiting for port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to the forwarded port
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, port, fmt.Sprintf("http://localhost:%d/v1", port))
 		Expect(err).NotTo(HaveOccurred(), "Port-forward should be ready within timeout")
 
 		By("restarting load generation at the same rate")
@@ -574,12 +500,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 2*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", deployName))
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -589,32 +511,14 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 	It("should scale in with no load", func() {
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
-			err = utils.StopCmd(prometheusPortForwardCmd)
+			err := utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		var desiredReplicasProm float64
@@ -642,12 +546,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, finalVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
@@ -930,61 +830,26 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
 			err = utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
-		By("getting the first service endpoint for load generation")
-		gatewayService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, gatewayName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Port-forward the vllme service to send requests to it
-		By("setting up port-forward to the gateway service")
+		By("getting the gateway service endpoint for load generation")
 		port := 8000
-		portForwardCmd := utils.StartPortForwarding(gatewayService, namespace, port)
+		portForwardCmd := utils.SetUpPortForward(k8sClient, ctx, gatewayName, namespace, port, 80)
 		defer func() {
 			err = utils.StopCmd(portForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for Service: %s", gatewayName))
 		}()
 
 		By("waiting for port-forwards to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to the forwarded port
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, port, fmt.Sprintf("http://localhost:%d/v1", port))
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for Service: %s", gatewayName))
 
 		By("starting load generation to create traffic for both deployments")
@@ -1045,24 +910,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", firstDeployName))
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
-
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get VariantAutoscaling for: %s", secondDeployName))
-
+    
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
+    
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,
 			int(desiredReplicas2))
@@ -1089,61 +946,28 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
 			err = utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
-		By("getting the first service endpoint for load generation")
-		gatewayService, err := k8sClient.CoreV1().Services(namespace).Get(ctx, gatewayName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get Service: %s", gatewayName))
-
+		By("getting the gateway service endpoint for load generation")
 		// Port-forward the gateway service to send requests to it
 		By("setting up port-forward to the gateway service")
 		port := 8000
-		portForwardCmd := utils.StartPortForwarding(gatewayService, namespace, port)
+		portForwardCmd := utils.SetUpPortForward(k8sClient, ctx, gatewayName, namespace, port, 80)
 		defer func() {
 			err = utils.StopCmd(portForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop port-forwarding for: %s", gatewayName))
 		}()
 
 		By("waiting for port-forwards to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to the forwarded port
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/v1", port))
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err = utils.VerifyPortForwardReadiness(ctx, port, fmt.Sprintf("http://localhost:%d/v1", port))
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for: %s", firstServiceName))
 
 		By("starting load generation to create traffic for both deployments")
@@ -1204,23 +1028,15 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("showing the status of VAs and deployments, including the number of pods in pending state")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
-
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
+    
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,
@@ -1230,32 +1046,14 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 	It("should scale in with no load", func() {
 		// Set up port-forwarding for Prometheus to enable metrics queries
 		By("setting up port-forward to Prometheus service")
-		prometheusService, err := k8sClient.CoreV1().Services(controllerMonitoringNamespace).Get(ctx, "kube-prometheus-stack-prometheus", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "Should be able to fetch Prometheus service")
-
-		prometheusPortForwardCmd := utils.StartPrometheusPortForwarding(prometheusService, controllerMonitoringNamespace, 9090)
+		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
 		defer func() {
-			err = utils.StopCmd(prometheusPortForwardCmd)
+			err := utils.StopCmd(prometheusPortForwardCmd)
 			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
 		}()
 
 		By("waiting for Prometheus port-forward to be ready")
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			// Try to connect to Prometheus with HTTPS and TLS skip verify
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			}
-			client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-			resp, err := client.Get("https://localhost:9090/api/v1/query?query=up")
-			if err != nil {
-				return false, nil // Retrying
-			}
-			defer func() {
-				err := resp.Body.Close()
-				Expect(err).NotTo(HaveOccurred(), "Should be able to close Prometheus response body")
-			}()
-			return resp.StatusCode < 500, nil // Accept any non-server error status
-		})
+		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		var desiredReplicas1, desiredReplicas2 float64
@@ -1302,23 +1100,16 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		finalVA1 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      firstDeployName,
-		}, finalVA1)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
+    
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
+    
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
-
-		finalVA2 := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      secondDeployName,
-		}, finalVA2)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
+    
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			secondDeployName,

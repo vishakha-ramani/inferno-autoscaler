@@ -132,7 +132,7 @@ type OptimizedAlloc struct {
 	LastRunTime metav1.Time `json:"lastRunTime,omitempty"`
 
 	// Accelerator is the type of accelerator for the optimized allocation.
-	// +kubebuilder:validation:MinLength=2
+	// +kubebuilder:validation:MinLength=0
 	Accelerator string `json:"accelerator"`
 
 	// NumReplicas is the number of replicas for the optimized allocation.

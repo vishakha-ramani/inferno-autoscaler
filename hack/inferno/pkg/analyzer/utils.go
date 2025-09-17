@@ -31,7 +31,7 @@ func BinarySearch(xMin float32, xMax float32, yTarget float32,
 	}
 
 	// evaluate the function at the boundaries
-	var yBounds []float32 = make([]float32, 2)
+	yBounds := make([]float32, 2)
 	var err error
 	for i, x := range []float32{xMin, xMax} {
 		if yBounds[i], err = eval(x); err != nil {

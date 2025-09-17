@@ -341,6 +341,7 @@ func CreateOptimizedAlloc(name string,
 	if allocationData, exists = allocationSolution.Spec[serverName]; !exists {
 		return nil, fmt.Errorf("server %s not found", serverName)
 	}
+	logger.Log.Debug("Setting accelerator name ", "Name ", allocationData.Accelerator, "allocationData ", allocationData)
 	optimizedAlloc := &llmdVariantAutoscalingV1alpha1.OptimizedAlloc{
 		LastRunTime: metav1.NewTime(time.Now()),
 		Accelerator: allocationData.Accelerator,

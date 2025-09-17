@@ -168,7 +168,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 		serviceMonName = "vllme-servicemonitor"
 		appLabel = "vllme"
 		port = 8000
-		loadRate = 25
+		loadRate = 30
 		modelName = defaultModelId
 
 		By("ensuring unique app label for deployment and service")
@@ -532,8 +532,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - single VA - cr
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
 			// Verify that the number of replicas has scaled down to 0
-			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
-				fmt.Sprintf("No load should trigger scale-down recommendation for: %s", va.Name))
+			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", MinimumReplicas),
+				fmt.Sprintf("No load should trigger scale-down to %d recommendation for: %s", MinimumReplicas, va.Name))
 
 			// Verify Prometheus replica metrics
 			_, desiredReplicasProm, _, err = utils.GetInfernoReplicaMetrics(va.Name, namespace, va.Status.CurrentAlloc.Accelerator)
@@ -853,13 +853,13 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for Service: %s", gatewayName))
 
 		By("starting load generation to create traffic for both deployments")
-		loadRate1 := 25
+		loadRate1 := 30
 		loadGenCmd1 := utils.StartLoadGenerator(loadRate1, 100, port, firstModelName)
 		defer func() {
 			err = utils.StopCmd(loadGenCmd1)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstServiceName))
 		}()
-		loadRate2 := 25
+		loadRate2 := 30
 		loadGenCmd2 := utils.StartLoadGenerator(loadRate2, 100, port, secondModelName)
 		defer func() {
 			err = utils.StopCmd(loadGenCmd2)
@@ -971,13 +971,13 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Port-forward should be ready within timeout for: %s", firstServiceName))
 
 		By("starting load generation to create traffic for both deployments")
-		loadRate1 := 45
+		loadRate1 := 60
 		loadGenCmd1 := utils.StartLoadGenerator(loadRate1, 100, port, firstModelName)
 		defer func() {
 			err = utils.StopCmd(loadGenCmd1)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstDeployName))
 		}()
-		loadRate2 := 45
+		loadRate2 := 60
 		loadGenCmd2 := utils.StartLoadGenerator(loadRate2, 100, port, secondModelName)
 		defer func() {
 			err = utils.StopCmd(loadGenCmd2)
@@ -1067,8 +1067,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
 
 			// Verify that the number of replicas has scaled down to 0
-			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
-				fmt.Sprintf("No load should trigger scale-down recommendation for VA: %s - actual replicas: %d", firstDeployName, va1.Status.CurrentAlloc.NumReplicas))
+			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", MinimumReplicas),
+				fmt.Sprintf("No load should trigger scale-down recommendation to %d for VA: %s - actual replicas: %d", MinimumReplicas, firstDeployName, va1.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
 			_, desiredReplicas1, _, err = utils.GetInfernoReplicaMetrics(va1.Name, namespace, va1.Status.CurrentAlloc.Accelerator)
@@ -1086,8 +1086,8 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
 
 			// Verify that the number of replicas has scaled down to 0
-			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", 0),
-				fmt.Sprintf("High load should trigger scale-up recommendation for VA: %s - actual replicas: %d", secondDeployName, va2.Status.CurrentAlloc.NumReplicas))
+			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", MinimumReplicas),
+				fmt.Sprintf("High load should trigger scale-up recommendation to %d for VA: %s - actual replicas: %d", MinimumReplicas, secondDeployName, va2.Status.CurrentAlloc.NumReplicas))
 
 			// Verify Prometheus replica metrics
 			_, desiredReplicas2, _, err = utils.GetInfernoReplicaMetrics(va2.Name, namespace, va2.Status.CurrentAlloc.Accelerator)
@@ -1100,6 +1100,7 @@ var _ = Describe("Test Inferno-autoscaler with vllme deployment - multiple VAs -
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
+
 		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 

@@ -710,10 +710,10 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Length: %s\n",
+	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Input Tokens: %s, Avg Output Tokens: %s\n",
 		variantAutoscaling.Name,
 		variantAutoscaling.Status.CurrentAlloc.Load.ArrivalRate,
-		variantAutoscaling.Status.CurrentAlloc.Load.AvgLength)
+		variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens, variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens)
 
 	fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 		variantAutoscaling.Name,

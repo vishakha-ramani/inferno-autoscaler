@@ -713,7 +713,7 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Input Tokens: %s, Avg Output Tokens: %s\n",
 		variantAutoscaling.Name,
 		variantAutoscaling.Status.CurrentAlloc.Load.ArrivalRate,
-		variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens, variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens)
+		variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens, variantAutoscaling.Status.CurrentAlloc.Load.AvgOutputTokens)
 
 	fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 		variantAutoscaling.Name,
@@ -842,8 +842,8 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 						Acc:      "A100",
 						AccCount: 1,
 						PerfParms: v1alpha1.PerfParms{
-							DecodeParms:  map[string]string{"alpha": "0.58", "beta": "0.41"},
-							PrefillParms: map[string]string{"gamma": "0.58", "delta": "0.41"},
+							DecodeParms:  map[string]string{"alpha": "20.58", "beta": "0.41"},
+							PrefillParms: map[string]string{"gamma": "20.58", "delta": "0.041"},
 						},
 						MaxBatchSize: 4,
 					},

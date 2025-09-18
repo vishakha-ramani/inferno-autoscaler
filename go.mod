@@ -7,7 +7,6 @@ godebug default=go1.23
 toolchain go1.23.10
 
 require (
-	github.com/llm-d-incubation/inferno-autoscaler/hack/inferno v0.0.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
 	github.com/stretchr/testify v1.10.0
@@ -104,5 +103,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/llm-d-incubation/inferno-autoscaler/hack/inferno => ./hack/inferno

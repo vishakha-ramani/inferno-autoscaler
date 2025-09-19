@@ -260,9 +260,8 @@ var _ = Describe("Actuator", func() {
 		})
 
 		AfterEach(func() {
-			// Cleanup resources with proper error handling
-			_ = k8sClient.Delete(ctx, va)
-			_ = k8sClient.Delete(ctx, deployment)
+			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
 		})
 
 		It("should emit metrics successfully when desired replicas > 0", func() {
@@ -412,8 +411,8 @@ var _ = Describe("Actuator", func() {
 
 		AfterEach(func() {
 			// Cleanup resources with proper error handling
-			_ = k8sClient.Delete(ctx, va)
-			_ = k8sClient.Delete(ctx, deployment)
+			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
 		})
 
 		It("should verify that metrics emitter can emit scaling metrics", func() {
@@ -485,7 +484,7 @@ var _ = Describe("Actuator", func() {
 
 			Expect(k8sClient.Create(ctx, va)).To(Succeed())
 			defer func() {
-				_ = k8sClient.Delete(ctx, va)
+				Expect(k8sClient.Delete(ctx, va)).To(Succeed())
 			}()
 			fmt.Printf("Emitting metrics for variantAutoscaling - name: %s\n numReplicas: %d\n", va.Name, va.Status.DesiredOptimizedAlloc.NumReplicas)
 			err := actuator.EmitMetrics(ctx, va)
@@ -591,8 +590,8 @@ var _ = Describe("Actuator", func() {
 
 		AfterEach(func() {
 			// Cleanup resources with proper error handling
-			_ = k8sClient.Delete(ctx, va)
-			_ = k8sClient.Delete(ctx, deployment)
+			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
 		})
 
 		It("should test ratio calculation scenarios", func() {

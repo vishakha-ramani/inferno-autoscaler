@@ -19,9 +19,10 @@ package actuator
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"time"
 
+	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
+	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
+	ctrlutils "github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,22 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
-	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
-	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
-	ctrlutils "github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// RandomString generates a random string of given length for unique resource names
-func RandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-	return string(b)
-}
 
 var _ = Describe("Actuator", func() {
 	var (
@@ -59,7 +46,7 @@ var _ = Describe("Actuator", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		resourceName = "test-variant-autoscaling-" + RandomString(8)
+		resourceName = "test-variant-autoscaling"
 		namespace = "default"
 
 		scheme = runtime.NewScheme()
@@ -135,7 +122,8 @@ var _ = Describe("Actuator", func() {
 		})
 
 		AfterEach(func() {
-			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, va))).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, deployment))).To(Succeed())
 		})
 
 		It("should return status replicas when available", func() {
@@ -260,8 +248,8 @@ var _ = Describe("Actuator", func() {
 		})
 
 		AfterEach(func() {
-			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, va))).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, deployment))).To(Succeed())
 		})
 
 		It("should emit metrics successfully when desired replicas > 0", func() {
@@ -411,8 +399,8 @@ var _ = Describe("Actuator", func() {
 
 		AfterEach(func() {
 			// Cleanup resources with proper error handling
-			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, va))).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, deployment))).To(Succeed())
 		})
 
 		It("should verify that metrics emitter can emit scaling metrics", func() {
@@ -444,7 +432,7 @@ var _ = Describe("Actuator", func() {
 			// Create a minimal valid VariantAutoscaling but with zero desired replicas
 			va := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "incomplete-va-" + RandomString(6),
+					Name:      "incomplete-va",
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
@@ -484,7 +472,7 @@ var _ = Describe("Actuator", func() {
 
 			Expect(k8sClient.Create(ctx, va)).To(Succeed())
 			defer func() {
-				Expect(k8sClient.Delete(ctx, va)).To(Succeed())
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, va))).To(Succeed())
 			}()
 			fmt.Printf("Emitting metrics for variantAutoscaling - name: %s\n numReplicas: %d\n", va.Name, va.Status.DesiredOptimizedAlloc.NumReplicas)
 			err := actuator.EmitMetrics(ctx, va)
@@ -590,8 +578,8 @@ var _ = Describe("Actuator", func() {
 
 		AfterEach(func() {
 			// Cleanup resources with proper error handling
-			Expect(k8sClient.Delete(ctx, va)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, va))).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, deployment))).To(Succeed())
 		})
 
 		It("should test ratio calculation scenarios", func() {

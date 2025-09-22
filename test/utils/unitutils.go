@@ -10,6 +10,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// The following utility functions are used to create Prometheus queries for testing
+func CreateArrivalQuery(modelID, namespace string) string {
+	return `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + namespace + `"}[1m])) * 60`
+}
+
+func CreateTokenQuery(modelID, namespace string) string {
+	return `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))`
+}
+
+func CreateWaitQuery(modelID, namespace string) string {
+	return `sum(rate(vllm:request_queue_time_seconds_sum{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))`
+}
+
+func CreateITLQuery(modelID, namespace string) string {
+	return `sum(rate(vllm:time_per_output_token_seconds_sum{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))`
+}
+
 // createAcceleratorUnitCostConfigMap creates the accelerator unitcost ConfigMap
 func CreateAcceleratorUnitCostConfigMap(controllerNamespace string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{

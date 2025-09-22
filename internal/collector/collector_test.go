@@ -277,10 +277,10 @@ var _ = Describe("Collector", func() {
 
 		It("should collect metrics successfully", func() {
 			// Setup mock responses
-			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
-			tokenQuery := `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
-			waitQuery := `sum(rate(vllm:request_queue_time_seconds_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
-			itlQuery := `sum(rate(vllm:time_per_output_token_seconds_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
+			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
+			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
+			waitQuery := utils.CreateWaitQuery(modelID, testNamespace)
+			itlQuery := utils.CreateITLQuery(modelID, testNamespace)
 
 			mockProm.QueryResults[arrivalQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(10.5)}, // 10.5 requests/min
@@ -313,8 +313,8 @@ var _ = Describe("Collector", func() {
 			delete(va.Labels, "inference.optimization/acceleratorName")
 
 			// Setup minimal mock responses
-			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
-			tokenQuery := `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m]))`
+			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
+			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
 
 			mockProm.QueryResults[arrivalQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(5.0)},
@@ -331,7 +331,7 @@ var _ = Describe("Collector", func() {
 
 		It("should handle Prometheus Query errors", func() {
 			// Setup error for arrival Query
-			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
+			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
 			mockProm.QueryErrors[arrivalQuery] = fmt.Errorf("prometheus connection failed")
 
 			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
@@ -343,8 +343,8 @@ var _ = Describe("Collector", func() {
 
 		It("should handle empty metric results gracefully", func() {
 			// Setup empty responses (no data points)
-			arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])) * 60`
-			tokenQuery := `delta(vllm:tokens_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])/delta(vllm:request_success_total{model_name="` + modelID + `",namespace="` + testNamespace + `"}[1m])`
+			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
+			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
 
 			// Empty vectors (no data)
 			mockProm.QueryResults[arrivalQuery] = model.Vector{}

@@ -404,10 +404,10 @@ var _ = Describe("Optimizer", Ordered, func() {
 
 				// Setup high load metrics for simulation
 				testNamespace := va.Namespace
-				arrivalQuery := `sum(rate(vllm:request_success_total{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m])) * 60`
-				avgDecToksQuery := `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))`
-				ttftQuery := `sum(rate(vllm:request_queue_time_seconds_sum{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:request_queue_time_seconds_count{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))`
-				itlQuery := `sum(rate(vllm:time_per_output_token_seconds_sum{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="` + modelName + `",namespace="` + testNamespace + `"}[1m]))`
+				arrivalQuery := testutils.CreateArrivalQuery(modelName, testNamespace)
+				avgDecToksQuery := testutils.CreateTokenQuery(modelName, testNamespace)
+				ttftQuery := testutils.CreateWaitQuery(modelName, testNamespace)
+				itlQuery := testutils.CreateITLQuery(modelName, testNamespace)
 
 				// High load metrics that should trigger scaling up
 				mockProm.QueryResults[arrivalQuery] = model.Vector{

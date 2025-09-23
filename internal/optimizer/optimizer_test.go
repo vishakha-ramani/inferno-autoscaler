@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	configMapName      = "inferno-autoscaler-variantautoscaling-config"
-	configMapNamespace = "inferno-autoscaler-system"
+	configMapName      = "workload-variant-autoscaler-variantautoscaling-config"
+	configMapNamespace = "workload-variant-autoscaler-system"
 )
 
 var _ = Describe("Optimizer", Ordered, func() {

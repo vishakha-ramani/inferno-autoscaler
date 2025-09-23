@@ -5,7 +5,7 @@
 domain: ai
 layout:
 - go.kubebuilder.io/v4
-projectName: inferno-autoscaler
+projectName: workload-variant-autoscaler
 repo: github.com/llm-d-incubation/workload-variant-autoscaler
 resources:
 - api:

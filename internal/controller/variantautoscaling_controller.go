@@ -71,8 +71,8 @@ type VariantAutoscalingReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;list;watch
 
 const (
-	configMapName      = "inferno-autoscaler-variantautoscaling-config"
-	configMapNamespace = "inferno-autoscaler-system"
+	configMapName      = "workload-variant-autoscaler-variantautoscaling-config"
+	configMapNamespace = "workload-variant-autoscaler-system"
 )
 
 func initMetricsEmitter() {

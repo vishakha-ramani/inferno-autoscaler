@@ -23,8 +23,8 @@ import (
 	"os/exec"
 	"time"
 
-	v1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
-	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
+	v1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"

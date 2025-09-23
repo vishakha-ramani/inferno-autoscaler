@@ -29,7 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/llm-d-incubation/inferno-autoscaler/test/utils"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
 
 var (

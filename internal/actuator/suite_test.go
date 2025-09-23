@@ -33,9 +33,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	llmdv1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
-	"github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
-	"github.com/llm-d-incubation/inferno-autoscaler/internal/metrics"
+	llmdv1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
 	// +kubebuilder:scaffold:imports
 )
 

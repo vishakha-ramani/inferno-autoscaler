@@ -33,11 +33,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
-	collector "github.com/llm-d-incubation/inferno-autoscaler/internal/collector"
-	logger "github.com/llm-d-incubation/inferno-autoscaler/internal/logger"
-	utils "github.com/llm-d-incubation/inferno-autoscaler/internal/utils"
-	testutils "github.com/llm-d-incubation/inferno-autoscaler/test/utils"
+	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	collector "github.com/llm-d-incubation/workload-variant-autoscaler/internal/collector"
+	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
 
 var _ = Describe("VariantAutoscalings Controller", func() {

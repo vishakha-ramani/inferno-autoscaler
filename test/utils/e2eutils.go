@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/llm-d-incubation/inferno-autoscaler/api/v1alpha1"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	gink "github.com/onsi/ginkgo/v2"
 	gom "github.com/onsi/gomega"
 	promAPI "github.com/prometheus/client_golang/api"

@@ -85,14 +85,14 @@ func CreateVariantAutoscalingConfigMap(controllerNamespace string) *corev1.Confi
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "inferno-autoscaler-variantautoscaling-config",
+			Name:      "workload-variant-autoscaler-variantautoscaling-config",
 			Namespace: controllerNamespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name": "inferno-autoscaler",
+				"app.kubernetes.io/name": "workload-variant-autoscaler",
 			},
 		},
 		Data: map[string]string{
-			"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+			"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.workload-variant-autoscaler-monitoring.svc.cluster.local:9090",
 			"GLOBAL_OPT_INTERVAL": "60s",
 			"GLOBAL_OPT_TRIGGER":  "false",
 			"WVA_SCALE_TO_ZERO":   "false",

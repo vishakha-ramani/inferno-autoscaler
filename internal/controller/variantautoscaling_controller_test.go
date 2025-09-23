@@ -56,7 +56,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			logger.Log = zap.NewNop().Sugar()
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "inferno-autoscaler-system",
+					Name: "workload-variant-autoscaler-system",
 				},
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
@@ -119,7 +119,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "service-classes-config",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
@@ -128,7 +128,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "accelerator-unit-costs",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
@@ -204,7 +204,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			logger.Log = zap.NewNop().Sugar()
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "inferno-autoscaler-system",
+					Name: "workload-variant-autoscaler-system",
 				},
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
@@ -225,7 +225,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "service-classes-config",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err := k8sClient.Delete(ctx, configMap)
@@ -234,7 +234,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "accelerator-unit-costs",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)
@@ -271,11 +271,11 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name:      configMapName,
 					Namespace: configMapNamespace,
 					Labels: map[string]string{
-						"app.kubernetes.io/name": "inferno-autoscaler",
+						"app.kubernetes.io/name": "workload-variant-autoscaler",
 					},
 				},
 				Data: map[string]string{
-					"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+					"PROMETHEUS_BASE_URL": "https://kube-prometheus-stack-prometheus.workload-variant-autoscaler-monitoring.svc.cluster.local:9090",
 					"GLOBAL_OPT_INTERVAL": "",
 					"GLOBAL_OPT_TRIGGER":  "false",
 				},
@@ -308,7 +308,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name:      configMapName,
 					Namespace: configMapNamespace,
 					Labels: map[string]string{
-						"app.kubernetes.io/name": "inferno-autoscaler",
+						"app.kubernetes.io/name": "workload-variant-autoscaler",
 					},
 				},
 				Data: map[string]string{
@@ -345,7 +345,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name:      configMapName,
 					Namespace: configMapNamespace,
 					Labels: map[string]string{
-						"app.kubernetes.io/name": "inferno-autoscaler",
+						"app.kubernetes.io/name": "workload-variant-autoscaler",
 					},
 				},
 				Data: map[string]string{
@@ -381,11 +381,11 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Name:      configMapName,
 					Namespace: configMapNamespace,
 					Labels: map[string]string{
-						"app.kubernetes.io/name": "inferno-autoscaler",
+						"app.kubernetes.io/name": "workload-variant-autoscaler",
 					},
 				},
 				Data: map[string]string{
-					"PROMETHEUS_BASE_URL":                 "https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090",
+					"PROMETHEUS_BASE_URL":                 "https://kube-prometheus-stack-prometheus.workload-variant-autoscaler-monitoring.svc.cluster.local:9090",
 					"GLOBAL_OPT_INTERVAL":                 "60s",
 					"GLOBAL_OPT_TRIGGER":                  "false",
 					"PROMETHEUS_TLS_INSECURE_SKIP_VERIFY": "true",
@@ -397,7 +397,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			prometheusConfig, err := controllerReconciler.getPrometheusConfigFromConfigMap(ctx)
 			Expect(err).NotTo(HaveOccurred(), "It should not fail when neither env variable nor Prometheus URL are found")
 
-			Expect(prometheusConfig.BaseURL).To(Equal("https://kube-prometheus-stack-prometheus.inferno-autoscaler-monitoring.svc.cluster.local:9090"), "Expected Base URL to be set")
+			Expect(prometheusConfig.BaseURL).To(Equal("https://kube-prometheus-stack-prometheus.workload-variant-autoscaler-monitoring.svc.cluster.local:9090"), "Expected Base URL to be set")
 			Expect(prometheusConfig.InsecureSkipVerify).To(BeTrue(), "Expected Insecure Skip Verify to be true")
 
 			Expect(prometheusConfig.CACertPath).To(Equal(""), "Expected CA Cert Path to be empty")
@@ -571,7 +571,7 @@ data:
 			logger.Log = zap.NewNop().Sugar()
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "inferno-autoscaler-system",
+					Name: "workload-variant-autoscaler-system",
 				},
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
@@ -688,7 +688,7 @@ data:
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "service-classes-config",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err := k8sClient.Delete(ctx, configMap)
@@ -697,7 +697,7 @@ data:
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "accelerator-unit-costs",
-					Namespace: "inferno-autoscaler-system",
+					Namespace: "workload-variant-autoscaler-system",
 				},
 			}
 			err = k8sClient.Delete(ctx, configMap)

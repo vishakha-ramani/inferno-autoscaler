@@ -67,7 +67,7 @@ Use this target to spin up a local test environment integrated with llm-d core c
 make deploy-llm-d-inferno-emulated-on-kind
 
 # prebuilt image
-# IMG=quay.io/infernoautoscaler/inferno-controller:latest
+# IMG=ghcr.io/llm-d/workload-variant-autoscaler:latest
 ```
 
 This target deploys an environment ready for testing, integrating the llm-d infrastructure and the workload-variant-autoscaler.
@@ -92,7 +92,7 @@ for documentation on building mutli-platform images with Docker. You can change 
 PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
 
 # prebuilt image
-# IMG=quay.io/infernoautoscaler/inferno-controller:0.0.1-multi-arch
+# IMG=ghcr.io/llm-d/workload-variant-autoscaler:latest
 # Built for: linux/arm64, linux/amd64, linux/s390x, linux/ppc64le
 ```
 

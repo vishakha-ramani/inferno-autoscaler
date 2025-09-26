@@ -100,6 +100,22 @@ func CreateVariantAutoscalingConfigMap(controllerNamespace string) *corev1.Confi
 	}
 }
 
+func CreateWVAConfigMap(cmName, controllerNamespace string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmName,
+			Namespace: controllerNamespace,
+		},
+		Data: map[string]string{
+			"WVA_SCALE_TO_ZERO":                   "false",
+			"GLOBAL_OPT_INTERVAL":                 "60s",
+			"GLOBAL_OPT_TRIGGER":                  "false",
+			"PROMETHEUS_BASE_URL":                 "https://kube-prometheus-stack-prometheus.workload-variant-autoscaler-monitoring.svc.cluster.local:9090",
+			"PROMETHEUS_TLS_INSECURE_SKIP_VERIFY": "true",
+		},
+	}
+}
+
 // MockPromAPI is a mock implementation of promv1.API for testing
 type MockPromAPI struct {
 	QueryResults map[string]model.Value

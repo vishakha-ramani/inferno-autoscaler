@@ -126,7 +126,7 @@ var _ = Describe("Optimizer", Ordered, func() {
 			configMap = testutils.CreateAcceleratorUnitCostConfigMap(ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
 
-			configMap = testutils.CreateWVAConfigMap(configMapName, ns.Name)
+			configMap = testutils.CreateVariantAutoscalingConfigMap(configMapName, ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
 
 			var err error

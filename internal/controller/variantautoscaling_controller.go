@@ -99,7 +99,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 	}
 
-	if os.Getenv("WVA_SCALE_TO_ZERO") != "false" {
+	if os.Getenv("WVA_SCALE_TO_ZERO") != "false" && os.Getenv("WVA_SCALE_TO_ZERO") != "" {
 		logger.Log.Info("Scaling to zero is enabled!")
 	}
 

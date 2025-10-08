@@ -46,7 +46,7 @@ export HF_TOKEN="your-hf-token-here"
 # Optional: Customize deployment
 export BASE_NAME="inference-scheduling"              # Default
 export MODEL_ID="unsloth/Meta-Llama-3.1-8B"         # Default
-export WVA_IMAGE="ghcr.io/llm-d/workload-variant-autoscaler:latest"  # Default
+export WVA_IMAGE="ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"  # Default
 ```
 
 ### 2. Run the Deployment Script
@@ -74,7 +74,7 @@ That's it! The script will:
 | `MONITORING_NAMESPACE` | Prometheus monitoring namespace | `openshift-user-workload-monitoring` |
 | `MODEL_ID` | Model to deploy | `unsloth/Meta-Llama-3.1-8B` |
 | `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
-| `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:latest` |
+| `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1` |
 | `LLM_D_RELEASE` | llm-d-infra release version | `v1.3.1` |
 
 ### Deployment Flags

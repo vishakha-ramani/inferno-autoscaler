@@ -27,42 +27,42 @@ func TestAllocation_Getters(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		getter   func() interface{}
-		expected interface{}
+		getter   func() any
+		expected any
 	}{
 		{
 			name:     "Accelerator",
-			getter:   func() interface{} { return alloc.Accelerator() },
+			getter:   func() any { return alloc.Accelerator() },
 			expected: "test-gpu",
 		},
 		{
 			name:     "NumReplicas",
-			getter:   func() interface{} { return alloc.NumReplicas() },
+			getter:   func() any { return alloc.NumReplicas() },
 			expected: 2,
 		},
 		{
 			name:     "MaxBatchSize",
-			getter:   func() interface{} { return alloc.MaxBatchSize() },
+			getter:   func() any { return alloc.MaxBatchSize() },
 			expected: 8,
 		},
 		{
 			name:     "Cost",
-			getter:   func() interface{} { return alloc.Cost() },
+			getter:   func() any { return alloc.Cost() },
 			expected: float32(100.0),
 		},
 		{
 			name:     "Value",
-			getter:   func() interface{} { return alloc.Value() },
+			getter:   func() any { return alloc.Value() },
 			expected: float32(100.0),
 		},
 		{
 			name:     "MaxArrvRatePerReplica",
-			getter:   func() interface{} { return alloc.MaxArrvRatePerReplica() },
+			getter:   func() any { return alloc.MaxArrvRatePerReplica() },
 			expected: float32(0.05),
 		},
 		{
 			name:     "MaxRPM",
-			getter:   func() interface{} { return alloc.MaxRPM() },
+			getter:   func() any { return alloc.MaxRPM() },
 			expected: float32(3000.0), // 0.05 * 1000 * 60
 		},
 	}
@@ -83,31 +83,31 @@ func TestAllocation_Setters(t *testing.T) {
 	tests := []struct {
 		name     string
 		setter   func()
-		getter   func() interface{}
-		expected interface{}
+		getter   func() any
+		expected any
 	}{
 		{
 			name:     "SetNumReplicas",
 			setter:   func() { alloc.SetNumReplicas(5) },
-			getter:   func() interface{} { return alloc.NumReplicas() },
+			getter:   func() any { return alloc.NumReplicas() },
 			expected: 5,
 		},
 		{
 			name:     "SetMaxBatchSize",
 			setter:   func() { alloc.SetMaxBatchSize(16) },
-			getter:   func() interface{} { return alloc.MaxBatchSize() },
+			getter:   func() any { return alloc.MaxBatchSize() },
 			expected: 16,
 		},
 		{
 			name:     "SetCost",
 			setter:   func() { alloc.SetCost(250.0) },
-			getter:   func() interface{} { return alloc.Cost() },
+			getter:   func() any { return alloc.Cost() },
 			expected: float32(250.0),
 		},
 		{
 			name:     "SetValue",
 			setter:   func() { alloc.SetValue(300.0) },
-			getter:   func() interface{} { return alloc.Value() },
+			getter:   func() any { return alloc.Value() },
 			expected: float32(300.0),
 		},
 	}

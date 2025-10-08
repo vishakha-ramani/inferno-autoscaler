@@ -41,7 +41,7 @@ metadata:
   name: $LLMD_NS
 EOF
 
-cd $WVA_PROJECT/hack
+cd $WVA_PROJECT/charts
 helm install workload-variant-autoscaler ./wva-llmd-infra \
   -n $WVA_NS \
   --set-file prometheus.caCert=/tmp/prometheus-ca.crt \

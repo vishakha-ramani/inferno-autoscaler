@@ -2,8 +2,8 @@ wva:
   baseName: inference-scheduling
   namespace: llm-d-inference-scheduling
   image:
-    repository: quay.io/infernoautoscaler/inferno-controller
-    tag: 0.0.1-multi-arch
+    repository: ghcr.io/llm-d/workload-variant-autoscaler
+    tag: v0.0.1
 
   replicaCount: 1
 

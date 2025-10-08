@@ -42,7 +42,7 @@ func TestNewModel(t *testing.T) {
 	}
 }
 
-func TestModel_AddPerfDataFromSpec(t *testing.T) {
+func TestModel_AddAndRemovePerfDataFromSpec(t *testing.T) {
 	tests := []struct {
 		name      string
 		modelName string
@@ -93,6 +93,14 @@ func TestModel_AddPerfDataFromSpec(t *testing.T) {
 			if got := model.PerfData(tt.spec.Acc); got != tt.spec {
 				t.Errorf("Model.PerfData() = %v, want %v", got, tt.spec)
 			}
+
+			if model.Spec() == nil {
+				t.Errorf("Model.Spec() is nil")
+			}
+
+			if model.RemovePerfData(tt.spec.Acc); model.PerfData(tt.spec.Acc) != nil {
+				t.Errorf("Model.RemovePerfData() failed, PerfData still exists")
+			}
 		})
 	}
 }
@@ -114,5 +122,9 @@ func TestModel_AddPerfDataFromSpec_WrongModel(t *testing.T) {
 
 	if got := model.PerfData("H100"); got != nil {
 		t.Errorf("Model.PerfData() = %v, want nil for wrong model", got)
+	}
+
+	if len(model.Spec().PerfData) != 0 {
+		t.Errorf("Model.Spec() has perf data, want empty for wrong model")
 	}
 }

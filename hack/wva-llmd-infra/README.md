@@ -1,4 +1,7 @@
 ### INSTALL (on OpenShift)
+1. Before running, be sure to delete all previous helm installations for workload-variant-scheduler and prometheus-adapter.
+2. llm-d must be installed for WVA to do it's magic. If you plan on installing llm-d with these instructions, please be sure to remove any other helm installation of llm-d before proceeding.
+
 ```
 export OWNER="llm-d-incubation"
 export WVA_PROJECT="workload-variant-autoscaler"

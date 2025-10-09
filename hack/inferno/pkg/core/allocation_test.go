@@ -659,7 +659,82 @@ func TestCreateAllocation(t *testing.T) {
 					}
 				}
 			},
-			wantNil: true, // Likely to fail due to impossible performance constraints
+			wantNil: true,
+		},
+		{
+			name:       "server with non-zero TPS target (covers TPS branch)",
+			serverName: "test-server",
+			gName:      "test-gpu",
+			setupFunc: func() {
+				setupCompleteTestSystem()
+				// Set reasonable arrival rate for non-zero load
+				if server, exists := TheSystem.servers["test-server"]; exists {
+					server.load = &config.ServerLoadSpec{
+						ArrivalRate:  60, // 1 req/second
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					}
+				}
+				// Set non-zero TPS to test that branch
+				if svc, exists := TheSystem.serviceClasses["default"]; exists {
+					if target, exists := svc.targets["test-model"]; exists {
+						target.TTFT = 2000.0 // More lenient target (2 seconds)
+						target.ITL = 500.0   // More lenient target (500ms)
+						target.TPS = 2.0     // Non-zero TPS (covers TPS != 0 branch)
+					}
+				}
+			},
+			wantNil: false, // Should succeed
+		},
+		{
+			name:       "server with arrival rate only (covers arrival rate branch)",
+			serverName: "test-server",
+			gName:      "test-gpu",
+			setupFunc: func() {
+				setupCompleteTestSystem()
+				// Set non-zero arrival rate
+				if server, exists := TheSystem.servers["test-server"]; exists {
+					server.load = &config.ServerLoadSpec{
+						ArrivalRate:  120, // 2 req/second
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					}
+				}
+				// Keep TPS = 0 to test arrival rate branch
+				if svc, exists := TheSystem.serviceClasses["default"]; exists {
+					if target, exists := svc.targets["test-model"]; exists {
+						target.TTFT = 2000.0 // More lenient target (2 seconds)
+						target.ITL = 500.0   // More lenient target (500ms)
+						target.TPS = 0.0     // Zero TPS (covers TPS == 0 branch)
+					}
+				}
+			},
+			wantNil: false, // Should succeed
+		},
+		{
+			name:       "server with custom max batch size override",
+			serverName: "test-server",
+			gName:      "test-gpu",
+			setupFunc: func() {
+				setupCompleteTestSystem()
+				// Set non-zero arrival rate
+				if server, exists := TheSystem.servers["test-server"]; exists {
+					server.load = &config.ServerLoadSpec{
+						ArrivalRate:  60,
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					}
+					server.maxBatchSize = 12 // Override max batch size
+				}
+				if svc, exists := TheSystem.serviceClasses["default"]; exists {
+					if target, exists := svc.targets["test-model"]; exists {
+						target.TTFT = 2000.0
+						target.ITL = 500.0
+						target.TPS = 0.0
+					}
+				}
+			},
+			wantNil: false, // Should succeed and use custom batch size
 		},
 	}
 
@@ -712,6 +787,7 @@ func TestAllocation_Scale(t *testing.T) {
 	tests := []struct {
 		name       string
 		serverName string
+		setupFunc  func() // Custom setup for scaling scenarios
 		wantAlloc  bool
 		wantInc    int
 	}{
@@ -722,10 +798,35 @@ func TestAllocation_Scale(t *testing.T) {
 			wantInc:    0,
 		},
 		{
-			name:       "valid server scale",
+			name:       "valid server scale with no change needed",
 			serverName: "test-server",
 			wantAlloc:  true, // Scale should succeed with test system
 			wantInc:    0,    // Scale returned increment of 0 (no scaling needed)
+		},
+		{
+			name:       "valid server requiring scale up (inc > 0)",
+			serverName: "test-server",
+			setupFunc: func() {
+				setupCompleteTestSystem()
+				// First, set up a low load so the original allocation has minimal replicas
+				if server, exists := TheSystem.servers["test-server"]; exists {
+					server.load = &config.ServerLoadSpec{
+						ArrivalRate:  30, // Low initial load (0.5 req/sec)
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					}
+				}
+				// Set lenient performance targets
+				if svc, exists := TheSystem.serviceClasses["default"]; exists {
+					if target, exists := svc.targets["test-model"]; exists {
+						target.TTFT = 2000.0 // Lenient target (2 seconds)
+						target.ITL = 500.0   // Lenient target (500ms)
+						target.TPS = 0.0
+					}
+				}
+			},
+			wantAlloc: true, // Should succeed with scaling up
+			wantInc:   1,    // Expecting positive increment (scale up)
 		},
 	}
 
@@ -733,16 +834,47 @@ func TestAllocation_Scale(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			TheSystem = nil
 
-			// Setup system with complete test data
-			setupCompleteTestSystem()
+			// Setup for each test
+			if tt.setupFunc != nil {
+				tt.setupFunc()
+			} else {
+				setupCompleteTestSystem()
+			}
+
+			// Create initial allocation with the current setup
+			origAlloc := CreateAllocation(tt.serverName, "test-gpu")
+			if origAlloc == nil && tt.name == "valid server requiring scale up (inc > 0)" {
+				t.Fatal("Failed to create initial allocation for scale up test")
+			}
+
+			// For scale up test, now increase the load after creating initial allocation
+			if tt.name == "valid server requiring scale up (inc > 0)" {
+				if server, exists := TheSystem.servers["test-server"]; exists {
+					server.load = &config.ServerLoadSpec{
+						ArrivalRate:  360, // Much higher load (6 req/sec)
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					}
+				}
+				// Use the initial allocation for scaling
+				alloc = origAlloc
+			}
 
 			newAlloc, inc := alloc.Scale(tt.serverName)
 
 			if (newAlloc != nil) != tt.wantAlloc {
 				t.Errorf("Scale() alloc = %v, wantAlloc %v", newAlloc, tt.wantAlloc)
 			}
-			if inc != tt.wantInc {
-				t.Errorf("Scale() inc = %v, want %v", inc, tt.wantInc)
+
+			// Check increment value - for scale up test, we expect positive increment
+			if tt.name == "valid server requiring scale up (inc > 0)" {
+				if inc <= 0 {
+					t.Errorf("Scale() inc = %v, want positive value (> 0)", inc)
+				}
+			} else {
+				if inc != tt.wantInc {
+					t.Errorf("Scale() inc = %v, want %v", inc, tt.wantInc)
+				}
 			}
 
 			if newAlloc != nil {

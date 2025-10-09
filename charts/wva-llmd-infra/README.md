@@ -47,7 +47,7 @@ metadata:
 EOF
 
 cd $WVA_PROJECT/charts
-helm upgrade --install workload-variant-autoscaler ./wva-llmd-infra \
+helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
   -n $WVA_NS \
   --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
   --set hfToken=$HF_TOKEN \

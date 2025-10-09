@@ -755,7 +755,7 @@ func TestCreateAllocation(t *testing.T) {
 				t.Errorf("CreateAllocation() = %v, wantNil %v", alloc, tt.wantNil)
 			}
 
-			// If allocation was successful, verify basic properties
+			// Verify fields
 			if alloc != nil {
 				if alloc.accelerator == "" && alloc.numReplicas == 0 {
 					// Zero load allocation case
@@ -801,7 +801,7 @@ func TestAllocation_Scale(t *testing.T) {
 			name:       "valid server scale with no change needed",
 			serverName: "test-server",
 			wantAlloc:  true, // Scale should succeed with test system
-			wantInc:    0,    // Scale returned increment of 0 (no scaling needed)
+			wantInc:    0,    // no scaling needed
 		},
 		{
 			name:       "valid server requiring scale up (inc > 0)",
@@ -811,7 +811,7 @@ func TestAllocation_Scale(t *testing.T) {
 				// First, set up a low load so the original allocation has minimal replicas
 				if server, exists := TheSystem.servers["test-server"]; exists {
 					server.load = &config.ServerLoadSpec{
-						ArrivalRate:  30, // Low initial load (0.5 req/sec)
+						ArrivalRate:  30, // Low initial load (req/min)
 						AvgInTokens:  100,
 						AvgOutTokens: 200,
 					}
@@ -819,14 +819,14 @@ func TestAllocation_Scale(t *testing.T) {
 				// Set lenient performance targets
 				if svc, exists := TheSystem.serviceClasses["default"]; exists {
 					if target, exists := svc.targets["test-model"]; exists {
-						target.TTFT = 2000.0 // Lenient target (2 seconds)
-						target.ITL = 500.0   // Lenient target (500ms)
+						target.TTFT = 2000.0
+						target.ITL = 500.0
 						target.TPS = 0.0
 					}
 				}
 			},
 			wantAlloc: true, // Should succeed with scaling up
-			wantInc:   1,    // Expecting positive increment (scale up)
+			wantInc:   1,    // Expecting scale up
 		},
 	}
 
@@ -851,7 +851,7 @@ func TestAllocation_Scale(t *testing.T) {
 			if tt.name == "valid server requiring scale up (inc > 0)" {
 				if server, exists := TheSystem.servers["test-server"]; exists {
 					server.load = &config.ServerLoadSpec{
-						ArrivalRate:  360, // Much higher load (6 req/sec)
+						ArrivalRate:  360, // higher load
 						AvgInTokens:  100,
 						AvgOutTokens: 200,
 					}

@@ -41,9 +41,6 @@ vllmService:
   enabled: true
   nodePort: 30000
 
-probes:
-  enabled: true
-
 prometheus:
   baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
   caCert: |

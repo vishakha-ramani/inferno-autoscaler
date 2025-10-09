@@ -2,6 +2,11 @@
 1. Before running, be sure to delete all previous helm installations for workload-variant-scheduler and prometheus-adapter.
 2. llm-d must be installed for WVA to do it's magic. If you plan on installing llm-d with these instructions, please be sure to remove any other helm installation of llm-d before proceeding.
 
+#### NOTE: to view which helm charts you already have installed in your cluster, use:
+```
+helm ls -A
+```
+
 ```
 export OWNER="llm-d-incubation"
 export WVA_PROJECT="workload-variant-autoscaler"
@@ -42,7 +47,7 @@ metadata:
 EOF
 
 cd $WVA_PROJECT/charts
-helm install workload-variant-autoscaler ./wva-llmd-infra \
+helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
   -n $WVA_NS \
   --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
   --set hfToken=$HF_TOKEN \
@@ -50,12 +55,6 @@ helm install workload-variant-autoscaler ./wva-llmd-infra \
   --set variantAutoscaling.modelID=unsloth/Meta-Llama-3.1-8B \
   --set vllmService.enabled=true \
   --set vllmService.nodePort=30000 \
-  --set probes.enabled=true
-
-oc adm policy add-cluster-role-to-user cluster-monitoring-view -z prometheus-adapter -n $MON_NS
-
-kubectl rollout restart deploy/prometheus-adapter -n $MON_NS
-
 ```
 
 ### INSTALL LLM-D

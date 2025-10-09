@@ -55,7 +55,6 @@ helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
   --set variantAutoscaling.modelID=unsloth/Meta-Llama-3.1-8B \
   --set vllmService.enabled=true \
   --set vllmService.nodePort=30000 \
-  --set probes.enabled=true
 ```
 
 ### INSTALL LLM-D

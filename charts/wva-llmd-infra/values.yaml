@@ -1,6 +1,5 @@
 wva:
   baseName: inference-scheduling
-  namespace: llm-d-inference-scheduling
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
     tag: v0.0.1
@@ -21,8 +20,6 @@ prometheusAdapter:
 
 llmd:
   namespace: llm-d-inference-scheduling
-
-hfToken: "" # required
 
 variantAutoscaling:
   enabled: true

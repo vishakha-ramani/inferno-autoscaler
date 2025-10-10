@@ -4,11 +4,11 @@ metadata:
   name: vllm-servicemonitor
   namespace: {{ .Values.wva.monitoringNamespace }}
   labels:
-    llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
+    llm-d.ai/model: {{ .Values.wva.modelName }}
 spec:
   selector:
     matchLabels:
-      llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
+      llm-d.ai/model: {{ .Values.wva.modelName }}
   endpoints:
   - port: vllm
     path: /metrics

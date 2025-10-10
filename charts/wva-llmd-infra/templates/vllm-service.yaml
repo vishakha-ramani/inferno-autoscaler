@@ -4,10 +4,10 @@ metadata:
   name: vllm-service
   namespace: {{ .Values.llmd.namespace }}
   labels:
-    llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
+    llm-d.ai/model: {{ .Values.wva.modelName }}
 spec:
   selector:
-    llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
+    llm-d.ai/model: {{ .Values.wva.modelName }}
   ports:
     - name: vllm
       port: 8200

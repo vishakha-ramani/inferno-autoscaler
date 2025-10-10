@@ -6,6 +6,7 @@ wva:
     tag: v0.0.1
 
   replicaCount: 1
+  modelName: ms-inference-scheduling-llm-d-modelservice
 
   monitoringNamespace: openshift-user-workload-monitoring
 

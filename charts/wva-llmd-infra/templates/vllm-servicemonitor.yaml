@@ -1,3 +1,4 @@
+{{- if .Values.wva.va.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -15,3 +16,4 @@ spec:
     interval: 15s
   namespaceSelector:
     any: true
+{{- end }}

@@ -1,3 +1,4 @@
+{{- if .Values.wva.va.enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -34,3 +35,4 @@ spec:
       target:
         type: AverageValue
         averageValue: {{ .Values.hpa.targetAverageValue | quote }}
+{{- end }}

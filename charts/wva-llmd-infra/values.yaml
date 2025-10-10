@@ -14,6 +14,11 @@ wva:
     port: 8443
     secure: true
 
+  va:
+    enabled: true
+  hpa:
+    enabled: true
+
 prometheusAdapter:
   enabled: true
   namespaceOverride: openshift-user-workload-monitoring

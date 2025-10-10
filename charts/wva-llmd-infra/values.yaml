@@ -24,8 +24,11 @@ llmd:
 hfToken: "" # required
 
 variantAutoscaling:
+  enabled: true
   accelerator: L40S
   modelID: "unsloth/Meta-Llama-3.1-8B"
+  sloTpot: 9
+  sloTtft: 1000
 
 hpa:
   maxReplicas: 10

@@ -4,10 +4,10 @@ metadata:
   name: vllm-service
   namespace: {{ .Values.llmd.namespace }}
   labels:
-    llm-d.ai/model: ms-inference-scheduling-llm-d-modelservice
+    llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
 spec:
   selector:
-    llm-d.ai/model: ms-inference-scheduling-llm-d-modelservice
+    llm-d.ai/model: {{ printf "ms-%s-llm-d-modelservice" .Values.wva.baseName }}
   ports:
     - name: vllm
       port: 8200

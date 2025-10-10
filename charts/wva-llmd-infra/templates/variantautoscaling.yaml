@@ -4,7 +4,7 @@ apiVersion: llmd.ai/v1alpha1
 kind: VariantAutoscaling
 metadata:
   # Unique name of the variant
-  name: ms-inference-scheduling-llm-d-modelservice-decode 
+  name: {{ printf "ms-%s-llm-d-modelservice-decode" .Values.wva.baseName }}
   namespace: {{ .Values.llmd.namespace }}
   labels:
     inference.optimization/acceleratorName: {{ .Values.variantAutoscaling.accelerator }}

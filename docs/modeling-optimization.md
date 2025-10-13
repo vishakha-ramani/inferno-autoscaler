@@ -97,8 +97,8 @@ The optimizer specifications are configured as:
 
 ```bash
 infernoConfig.OptimizerSpec{
-  Unlimited:        true,
-  SaturationPolicy: "None",
+  Unlimited: true,
+  // SaturationPolicy defaults to "None" (not relevant in unlimited mode)
 }
 ```
 

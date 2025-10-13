@@ -1,4 +1,4 @@
-{{- if .Values.wva.va.enabled }}
+{{- if .Values.vllmService.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -13,7 +13,7 @@ spec:
   endpoints:
   - port: vllm
     path: /metrics
-    interval: 15s
+    interval: {{ .Values.vllmService.interval }}
   namespaceSelector:
     any: true
 {{- end }}

@@ -1,4 +1,4 @@
-{{- if .Values.wva.va.enabled }}
+{{- if .Values.vllmService.enabled }}
 apiVersion: v1
 kind: Service
 metadata:

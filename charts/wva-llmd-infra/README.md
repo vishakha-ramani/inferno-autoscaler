@@ -70,8 +70,6 @@ cd $WVA_PROJECT/$LLMD_PROJECT/quickstart
 bash dependencies/install-deps.sh
 bash gateway-control-plane-providers/install-gateway-provider-dependencies.sh
 
-kubectl delete cm gaie-inference-scheduling-epp -n $LLMD_NS
-
 yq eval '.releases[].version = "v2.0.3"' -i "gateway-control-plane-providers/kgateway.helmfile.yaml"
 helmfile apply -f "gateway-control-plane-providers/kgateway.helmfile.yaml"
 

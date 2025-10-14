@@ -30,6 +30,11 @@ The `deploy-llmd+wva-openshift.sh` script automates the complete deployment proc
 - OpenShift cluster with **admin** privileges
 - Logged in via `oc login`
 - GPUs available in the cluster (H100, A100, L40S...)
+*Note* to check the available GPU types on your OCP cluster, you can run:
+
+```bash
+kubectl get nodes -o jsonpath='{range .items[?(@.status.allocatable.nvidia\.com/gpu)]}{.metadata.name}{"\t"}{.metadata.labels.nvidia\.com/gpu\.product}{"\n"}{end}'
+```
 
 ### Required Tokens
 
@@ -79,8 +84,13 @@ That's it! The script will:
 | `MONITORING_NAMESPACE` | Prometheus monitoring namespace | `openshift-user-workload-monitoring` |
 | `MODEL_ID` | Model to deploy | `unsloth/Meta-Llama-3.1-8B` |
 | `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
+| `SLO_TPOT` | Time per Output Token SLO target for the deployed model and GPU type | `9` |
+| `SLO_TTFT` | Time to First Token SLO target for the deployed model and GPU type | `1000` |
+| `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
 | `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1` |
-| `LLM_D_RELEASE` | llm-d-infra release version | `v1.3.1` |
+| `LLM_D_RELEASE` | llm-d release version | `v0.3.0` |
+| `GATEWAY_PROVIDER` | Deployed Gateway API implementation | `istio` |
+| `INSTALL_GATEWAY_CTRLPLANE` | Need to install Gateway Control Plane | `false` |
 
 ### Deployment Flags
 
@@ -291,7 +301,7 @@ kubectl logs -n llm-d-inference-scheduling deployment/ms-inference-scheduling-ll
 
 - Model download timeout
 
-- Inappropriate SLOs for the deployed model and GPU types: update the `service-classes-config` ConfigMap with appropriate SLOs given the model and employed GPU type.
+- Inappropriate SLOs for the deployed model and GPU types: update the `SLO_TPOT` and `SLO_TTFT` variables with appropriate SLOs given the model and employed GPU type
 
 ## Post-Deployment
 

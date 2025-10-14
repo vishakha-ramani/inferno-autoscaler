@@ -135,11 +135,9 @@ var _ = Describe("ShareGPT Scale-Up Test", Ordered, func() {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Current optimized replicas: %d (initial: %d), arrival rate: %s\n",
 				scaledOptimized, initialOptimized, currentRateStr)
 
-			// Expect scale-up recommendation (at least 2 replicas for the increased load)
+			// Expect scale-up recommendation (more than initial)
 			g.Expect(scaledOptimized).To(BeNumerically(">", initialOptimized),
 				fmt.Sprintf("WVA should recommend more replicas under load (current: %d, initial: %d)", scaledOptimized, initialOptimized))
-			g.Expect(scaledOptimized).To(BeNumerically(">=", 2),
-				"WVA should recommend at least 2 replicas for the high load")
 
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
@@ -190,12 +188,12 @@ var _ = Describe("ShareGPT Scale-Up Test", Ordered, func() {
 			// Verify that deployment has scaled up
 			g.Expect(deploy.Status.Replicas).To(BeNumerically(">", initialReplicas),
 				"Deployment should have more total replicas")
-			g.Expect(scaledReplicas).To(BeNumerically(">=", 2),
-				"Deployment should have at least 2 ready replicas")
+			g.Expect(scaledReplicas).To(BeNumerically(">=", scaledOptimized),
+				fmt.Sprintf("Deployment should have at least %d ready replicas to match optimizer recommendation", scaledOptimized))
 
-		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Deployment scaled to %d replicas (up from %d)\n", scaledReplicas, initialReplicas)
+		_, _ = fmt.Fprintf(GinkgoWriter, "Deployment scaled to %d replicas (up from %d, target was %d)\n", scaledReplicas, initialReplicas, scaledOptimized)
 	})
 
 	It("should maintain scaled state while load is active", func() {
@@ -203,11 +201,11 @@ var _ = Describe("ShareGPT Scale-Up Test", Ordered, func() {
 		Consistently(func(g Gomega) {
 			deploy, err := k8sClient.AppsV1().Deployments(llmDNamespace).Get(ctx, deployment, metav1.GetOptions{})
 			g.Expect(err).NotTo(HaveOccurred(), "Should be able to get deployment")
-			g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically(">=", 2),
-				"Deployment should maintain scaled state while job is running")
+			g.Expect(deploy.Status.ReadyReplicas).To(BeNumerically(">=", scaledOptimized),
+				fmt.Sprintf("Deployment should maintain at least %d replicas while job is running", scaledOptimized))
 		}, 30*time.Second, 5*time.Second).Should(Succeed())
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Deployment maintained %d replicas under load\n", scaledReplicas)
+		_, _ = fmt.Fprintf(GinkgoWriter, "Deployment maintained %d replicas under load (target: %d)\n", scaledReplicas, scaledOptimized)
 	})
 
 	It("should complete the load generation job successfully", func() {

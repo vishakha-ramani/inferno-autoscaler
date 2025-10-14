@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
@@ -144,43 +145,43 @@ func TestServer_Getters(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		getter   func() interface{}
-		expected interface{}
+		getter   func() any
+		expected any
 	}{
 		{
 			name:     "Name",
-			getter:   func() interface{} { return server.Name() },
+			getter:   func() any { return server.Name() },
 			expected: "test-server",
 		},
 		{
 			name:     "ServiceClassName",
-			getter:   func() interface{} { return server.ServiceClassName() },
+			getter:   func() any { return server.ServiceClassName() },
 			expected: "high-priority",
 		},
 		{
 			name:     "ModelName",
-			getter:   func() interface{} { return server.ModelName() },
+			getter:   func() any { return server.ModelName() },
 			expected: "test-model",
 		},
 		{
 			name:     "KeepAccelerator",
-			getter:   func() interface{} { return server.KeepAccelerator() },
+			getter:   func() any { return server.KeepAccelerator() },
 			expected: true,
 		},
 		{
 			name:     "Load",
-			getter:   func() interface{} { return server.Load() },
+			getter:   func() any { return server.Load() },
 			expected: &config.ServerLoadSpec{ArrivalRate: 60, AvgInTokens: 100, AvgOutTokens: 200},
 		},
 		{
 			name:     "Spec",
-			getter:   func() interface{} { return server.Spec() },
+			getter:   func() any { return server.Spec() },
 			expected: spec,
 		},
 		{
 			name:     "AllAllocations",
-			getter:   func() interface{} { return server.AllAllocations() },
-			expected: "map", // Special case - we'll handle this differently
+			getter:   func() any { return server.AllAllocations() },
+			expected: "map",
 		},
 	}
 
@@ -188,7 +189,6 @@ func TestServer_Getters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.getter()
 			if tt.name == "Load" {
-				// Special handling for load comparison
 				resultLoad := result.(*config.ServerLoadSpec)
 				expectedLoad := tt.expected.(*config.ServerLoadSpec)
 				if resultLoad.ArrivalRate != expectedLoad.ArrivalRate ||
@@ -197,7 +197,6 @@ func TestServer_Getters(t *testing.T) {
 					t.Errorf("%s() = %v, want %v", tt.name, result, tt.expected)
 				}
 			} else if tt.name == "AllAllocations" {
-				// Special handling for map comparison
 				resultMap := result.(map[string]*Allocation)
 				if resultMap == nil {
 					t.Errorf("%s() should not be nil", tt.name)
@@ -595,9 +594,19 @@ func TestServer_Calculate(t *testing.T) {
 				}
 				// If we have a current allocation, verify transition penalty was calculated
 				if tt.withCurrentAlloc && len(server.AllAllocations()) > 0 {
-					// The transition penalty code should have been executed
-					// We can't easily verify the exact penalty value, but we know the code ran
-					t.Log("Transition penalty code path executed successfully")
+					foundPenaltyApplied := false
+					for _, alloc := range server.AllAllocations() {
+						if alloc != nil {
+							expectedPenalty := server.CurAllocation().TransitionPenalty(alloc)
+							if alloc.Value() == expectedPenalty {
+								foundPenaltyApplied = true
+								break
+							}
+						}
+					}
+					if !foundPenaltyApplied {
+						t.Error("Transition penalty was not applied to allocation values")
+					}
 				}
 			}
 		})
@@ -784,18 +793,13 @@ func TestServer_String(t *testing.T) {
 	result := server.String()
 
 	// Check that string contains key information
-	if !contains(result, "test-server") {
+	if !strings.Contains(result, "test-server") {
 		t.Error("String() should contain server name")
 	}
-	if !contains(result, "test-model") {
+	if !strings.Contains(result, "test-model") {
 		t.Error("String() should contain model name")
 	}
-	if !contains(result, "default") {
+	if !strings.Contains(result, "default") {
 		t.Error("String() should contain service class name")
 	}
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || contains(s[1:], substr) || (len(s) > 0 && s[:len(substr)] == substr))
 }

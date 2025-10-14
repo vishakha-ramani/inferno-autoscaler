@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
@@ -438,10 +439,10 @@ func TestServiceClass_String(t *testing.T) {
 	result := svc.String()
 
 	// Check that string contains key information
-	if !contains(result, "test-class") {
+	if !strings.Contains(result, "test-class") {
 		t.Error("String() should contain service class name")
 	}
-	if !contains(result, "5") {
+	if !strings.Contains(result, "5") {
 		t.Error("String() should contain priority")
 	}
 }
@@ -456,13 +457,13 @@ func TestTarget_String(t *testing.T) {
 	result := target.String()
 
 	// Check that string contains the values
-	if !contains(result, "50") {
+	if !strings.Contains(result, "50") {
 		t.Error("Target String() should contain ITL value")
 	}
-	if !contains(result, "100") {
+	if !strings.Contains(result, "100") {
 		t.Error("Target String() should contain TTFT value")
 	}
-	if !contains(result, "10") {
+	if !strings.Contains(result, "10") {
 		t.Error("Target String() should contain TPS value")
 	}
 }

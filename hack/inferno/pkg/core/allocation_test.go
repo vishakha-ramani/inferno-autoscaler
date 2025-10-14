@@ -197,7 +197,6 @@ func TestAllocation_Saturated(t *testing.T) {
 	if alloc == nil {
 		t.Fatal("CreateAllocation returned nil, setup may be incorrect")
 	}
-	// MaxRPM = 19793.814 (as seen from actual CreateAllocation)
 
 	tests := []struct {
 		name      string
@@ -678,9 +677,9 @@ func TestCreateAllocation(t *testing.T) {
 				// Set non-zero TPS to test that branch
 				if svc, exists := TheSystem.serviceClasses["default"]; exists {
 					if target, exists := svc.targets["test-model"]; exists {
-						target.TTFT = 2000.0 // More lenient target (2 seconds)
-						target.ITL = 500.0   // More lenient target (500ms)
-						target.TPS = 2.0     // Non-zero TPS (covers TPS != 0 branch)
+						target.TTFT = 2000.0
+						target.ITL = 500.0
+						target.TPS = 2.0
 					}
 				}
 			},
@@ -703,9 +702,9 @@ func TestCreateAllocation(t *testing.T) {
 				// Keep TPS = 0 to test arrival rate branch
 				if svc, exists := TheSystem.serviceClasses["default"]; exists {
 					if target, exists := svc.targets["test-model"]; exists {
-						target.TTFT = 2000.0 // More lenient target (2 seconds)
-						target.ITL = 500.0   // More lenient target (500ms)
-						target.TPS = 0.0     // Zero TPS (covers TPS == 0 branch)
+						target.TTFT = 2000.0
+						target.ITL = 500.0
+						target.TPS = 0.0 // Zero TPS
 					}
 				}
 			},
@@ -1176,7 +1175,6 @@ func TestZeroLoadAllocation_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Should not panic
 			alloc := zeroLoadAllocation(tt.server, tt.model, tt.acc, tt.perf)
 			if alloc == nil {
 				t.Error("zeroLoadAllocation() returned nil unexpectedly")

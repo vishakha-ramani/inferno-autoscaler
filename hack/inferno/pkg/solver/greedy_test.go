@@ -246,8 +246,6 @@ func TestSolver_SolveGreedy_NoServers(t *testing.T) {
 	}
 
 	solver := NewSolver(optimizerSpec)
-
-	// Should not panic with empty system
 	solver.SolveGreedy()
 }
 
@@ -325,7 +323,6 @@ func TestAllocateEqually_EmptyEntries(t *testing.T) {
 
 	allocateEqually(entries, available)
 
-	// Should not panic with empty entries
 	if available["GPU_A100"] != 4 {
 		t.Error("Available resources should remain unchanged with empty entries")
 	}
@@ -466,12 +463,22 @@ func TestSolver_SolveGreedy_PriorityExhaustive(t *testing.T) {
 		t.Fatal("Both servers should exist")
 	}
 
-	// Test should not fail - PriorityExhaustive may or may not allocate depending on saturation
-	// This is just to ensure the algorithm runs without errors
-	if server1.Allocation() != nil || server2.Allocation() != nil {
-		t.Log("PriorityExhaustive allocation worked correctly")
-	} else {
-		t.Log("PriorityExhaustive did not allocate - this is acceptable behavior")
+	// Verify that PriorityExhaustive allocated to at least one server
+	allocatedCount := 0
+	if server1.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Server1 allocation: %d replicas of %s",
+			server1.Allocation().NumReplicas(), server1.Allocation().Accelerator())
+	}
+	if server2.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Server2 allocation: %d replicas of %s",
+			server2.Allocation().NumReplicas(), server2.Allocation().Accelerator())
+	}
+
+	// With PriorityExhaustive and available resources, at least one server should be allocated
+	if allocatedCount == 0 {
+		t.Error("Expected at least one server to receive allocation with PriorityExhaustive policy and available resources")
 	}
 }
 
@@ -692,11 +699,34 @@ func TestSolver_SolveGreedy_ResourceExhaustion(t *testing.T) {
 	solver := NewSolver(optimizerSpec)
 	solver.SolveGreedy()
 
-	// Should not panic with resource exhaustion
-	server1 := core.GetServer("server1")
-	if server1 == nil {
-		t.Fatal("Server should exist")
+	// With extremely limited resources (1 A100, 1 H100) and 5 competing servers,
+	// verify that solver makes allocation decisions
+	allocatedCount := 0
+
+	for i := 1; i <= 5; i++ {
+		serverName := fmt.Sprintf("server%d", i)
+		server := core.GetServer(serverName)
+		if server == nil {
+			t.Fatalf("Server %s should exist", serverName)
+		}
+		if server.Allocation() != nil {
+			allocatedCount++
+			t.Logf("%s received allocation: %d replicas of %s",
+				serverName, server.Allocation().NumReplicas(), server.Allocation().Accelerator())
+		}
 	}
+
+	// With 5 servers and very limited resources, some servers should be unallocated
+	if allocatedCount >= 5 {
+		t.Error("Expected resource exhaustion to leave some servers unallocated")
+	}
+
+	// But at least one server should get an allocation
+	if allocatedCount == 0 {
+		t.Error("Expected at least one server to receive allocation despite resource constraints")
+	}
+
+	t.Logf("Resource exhaustion test: %d/%d servers allocated with limited resources", allocatedCount, 5)
 }
 
 func TestSolver_SolveGreedy_HighLoadScenario(t *testing.T) {
@@ -762,7 +792,7 @@ func TestSolver_SolveGreedy_HighLoadScenario(t *testing.T) {
 	solver := NewSolver(optimizerSpec)
 	solver.SolveGreedy()
 
-	// Check that the algorithm handled high load scenario without panicking
+	// Verify the algorithm handled high load scenario correctly
 	server1 := core.GetServer("server1")
 	server2 := core.GetServer("server2")
 	server3 := core.GetServer("server3")
@@ -771,10 +801,28 @@ func TestSolver_SolveGreedy_HighLoadScenario(t *testing.T) {
 		t.Fatal("All servers should exist")
 	}
 
-	// At least high priority server should have a chance at allocation
-	t.Logf("Server1 allocation: %v", server1.Allocation() != nil)
-	t.Logf("Server2 allocation: %v", server2.Allocation() != nil)
-	t.Logf("Server3 allocation: %v", server3.Allocation() != nil)
+	// With high load and PriorityExhaustive, at least high priority servers should get allocations
+	allocatedCount := 0
+	if server1.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Server1 (high-priority) allocation: %d replicas of %s",
+			server1.Allocation().NumReplicas(), server1.Allocation().Accelerator())
+	}
+	if server2.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Server2 (medium-priority) allocation: %d replicas of %s",
+			server2.Allocation().NumReplicas(), server2.Allocation().Accelerator())
+	}
+	if server3.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Server3 (low-priority, llama-13b) allocation: %d replicas of %s",
+			server3.Allocation().NumReplicas(), server3.Allocation().Accelerator())
+	}
+
+	// With high load and available resources, at least some servers should be allocated
+	if allocatedCount == 0 {
+		t.Error("Expected at least some servers to receive allocations with high load scenario")
+	}
 }
 
 func TestSolver_SolveGreedy_MixedModelTypes(t *testing.T) {
@@ -825,12 +873,30 @@ func TestSolver_SolveGreedy_MixedModelTypes(t *testing.T) {
 	solver := NewSolver(optimizerSpec)
 	solver.SolveGreedy()
 
-	// Verify both servers exist and algorithm completed successfully
+	// Verify both servers exist and received allocations
 	llama7bServer := core.GetServer("llama7b-server")
 	llama13bServer := core.GetServer("llama13b-server")
 
 	if llama7bServer == nil || llama13bServer == nil {
 		t.Fatal("Both servers should exist")
+	}
+
+	// Verify that different model types can be allocated by the solver
+	allocatedCount := 0
+	if llama7bServer.Allocation() != nil {
+		allocatedCount++
+		t.Logf("llama-7b server allocated: %d replicas of %s",
+			llama7bServer.Allocation().NumReplicas(), llama7bServer.Allocation().Accelerator())
+	}
+	if llama13bServer.Allocation() != nil {
+		allocatedCount++
+		t.Logf("llama-13b server allocated: %d replicas of %s",
+			llama13bServer.Allocation().NumReplicas(), llama13bServer.Allocation().Accelerator())
+	}
+
+	// With RoundRobin and different model types, at least one should get allocation
+	if allocatedCount == 0 {
+		t.Error("Expected at least one server to receive allocation with mixed model types")
 	}
 }
 
@@ -883,12 +949,30 @@ func TestSolver_SolveGreedy_EdgeCases(t *testing.T) {
 	solver := NewSolver(optimizerSpec)
 	solver.SolveGreedy()
 
-	// Verify algorithm handles edge cases without panic
+	// Verify algorithm handles edge cases (zero load vs very high load)
 	zeroLoadServer := core.GetServer("zero-load-server")
 	highLoadServer := core.GetServer("high-load-server")
 
 	if zeroLoadServer == nil || highLoadServer == nil {
 		t.Fatal("Both servers should exist")
+	}
+
+	// Verify that solver completes and makes allocation decisions for edge cases
+	allocatedCount := 0
+	if zeroLoadServer.Allocation() != nil {
+		allocatedCount++
+		t.Logf("Zero load server allocated: %d replicas of %s",
+			zeroLoadServer.Allocation().NumReplicas(), zeroLoadServer.Allocation().Accelerator())
+	}
+	if highLoadServer.Allocation() != nil {
+		allocatedCount++
+		t.Logf("High load server allocated: %d replicas of %s",
+			highLoadServer.Allocation().NumReplicas(), highLoadServer.Allocation().Accelerator())
+	}
+
+	// At least one server should receive an allocation
+	if allocatedCount == 0 {
+		t.Error("Expected at least one server to receive allocation")
 	}
 }
 
@@ -904,7 +988,7 @@ func TestAllocateMaximally_EdgeCases(t *testing.T) {
 
 		allocateMaximally([]*serverEntry{}, available)
 
-		// Should not panic and available resources should remain unchanged
+		// Available resources should remain unchanged
 		if available["GPU_A100"] != 4 || available["GPU_H100"] != 2 {
 			t.Errorf("Available resources should not change with empty server entries")
 		}
@@ -928,7 +1012,7 @@ func TestAllocateMaximally_EdgeCases(t *testing.T) {
 
 		allocateMaximally(entries, available)
 
-		// Should not panic and available resources should remain unchanged
+		// available resources should remain unchanged
 		if available["GPU_A100"] != 4 || available["GPU_H100"] != 2 {
 			t.Errorf("Available resources should not change with invalid server entries")
 		}
@@ -950,7 +1034,7 @@ func TestAllocateMaximally_EdgeCases(t *testing.T) {
 		var serverAllocs []*core.Allocation
 		for _, alloc := range allocations {
 			serverAllocs = append(serverAllocs, alloc)
-			break // Just take one allocation
+			break
 		}
 
 		entries := []*serverEntry{
@@ -1040,7 +1124,7 @@ func TestAllocateEqually_EdgeCases(t *testing.T) {
 
 		allocateEqually([]*serverEntry{}, available)
 
-		// Should not panic and available resources should remain unchanged
+		// Available resources should remain unchanged
 		if available["GPU_A100"] != 4 || available["GPU_H100"] != 2 {
 			t.Errorf("Available resources should not change with empty server entries")
 		}
@@ -1064,7 +1148,7 @@ func TestAllocateEqually_EdgeCases(t *testing.T) {
 
 		allocateEqually(entries, available)
 
-		// Should not panic and available resources should remain unchanged since no allocations
+		// Available resources should remain unchanged since no allocations
 		if available["GPU_A100"] != 4 || available["GPU_H100"] != 2 {
 			t.Errorf("Available resources should not change with empty allocations")
 		}
@@ -1114,10 +1198,46 @@ func TestAllocateEqually_EdgeCases(t *testing.T) {
 			},
 		}
 
+		// Store initial resource counts to verify consumption
+		initialA100 := available["GPU_A100"]
+		initialH100 := available["GPU_H100"]
+
 		allocateEqually(entries, available)
 
-		// The function should complete without panic - allocation success depends on
-		// resource availability and allocation compatibility. Just verify no panic occurred.
+		// Verify that allocations were made
+		alloc1 := server1.Allocation()
+		alloc2 := server2.Allocation()
+
+		allocatedCount := 0
+		if alloc1 != nil {
+			allocatedCount++
+			if alloc1.NumReplicas() <= 0 {
+				t.Errorf("Server1 allocation should have positive replicas, got %d", alloc1.NumReplicas())
+			}
+			t.Logf("Server1 allocated: %d replicas of %s", alloc1.NumReplicas(), alloc1.Accelerator())
+		}
+		if alloc2 != nil {
+			allocatedCount++
+			if alloc2.NumReplicas() <= 0 {
+				t.Errorf("Server2 allocation should have positive replicas, got %d", alloc2.NumReplicas())
+			}
+			t.Logf("Server2 allocated: %d replicas of %s", alloc2.NumReplicas(), alloc2.Accelerator())
+		}
+
+		// At least one server should get allocation with available resources
+		if allocatedCount == 0 {
+			t.Error("Expected at least one server to receive allocation with limited resources")
+		}
+
+		// Verify resources were consumed
+		resourcesConsumed := (available["GPU_A100"] < initialA100) || (available["GPU_H100"] < initialH100)
+		if allocatedCount > 0 && !resourcesConsumed {
+			t.Error("Resources should be consumed when allocations are made")
+		}
+
+		// Log final resource state
+		t.Logf("Resources after allocation: GPU_A100=%d (from %d), GPU_H100=%d (from %d)",
+			available["GPU_A100"], initialA100, available["GPU_H100"], initialH100)
 	})
 
 	// Test allocation with multiple rounds of round-robin
@@ -1219,11 +1339,30 @@ func TestAllocateEqually_TicketManagement(t *testing.T) {
 			},
 		}
 
+		// Store initial resource counts
+		initialA100 := available["GPU_A100"]
+		initialH100 := available["GPU_H100"]
+
 		// This tests the ticket creation, activation, and allocation process
 		allocateEqually(entries, available)
 
-		// Server should have received an allocation if resources were sufficient
-		// The main test here is that the function completes without panic
+		// Verify server received an allocation
+		allocation := server1.Allocation()
+		if allocation == nil {
+			t.Error("Server should have received an allocation with sufficient resources")
+		} else {
+			// Verify allocation has positive replicas
+			if allocation.NumReplicas() <= 0 {
+				t.Errorf("Allocation should have positive replicas, got %d", allocation.NumReplicas())
+			}
+			// Verify resources were consumed
+			resourcesConsumed := (available["GPU_A100"] < initialA100) || (available["GPU_H100"] < initialH100)
+			if !resourcesConsumed {
+				t.Error("Resources should be consumed when allocation is made")
+			}
+			t.Logf("Server allocated: %d replicas of %s, resources consumed",
+				allocation.NumReplicas(), allocation.Accelerator())
+		}
 	})
 
 	// Test ticket removal when no resources available

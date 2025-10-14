@@ -193,7 +193,6 @@ func TestAccelerator_Power_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Should not panic, just return a value
 			power := acc.Power(tt.util)
 			if power < 0 {
 				t.Errorf("Accelerator.Power(%v) = %v, expected non-negative", tt.util, power)

@@ -936,7 +936,6 @@ func TestSystem_Calculate(t *testing.T) {
 		MaxBatchSize:   16,
 	})
 
-	// Should not panic
 	system.Calculate()
 }
 

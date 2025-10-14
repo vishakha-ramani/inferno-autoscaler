@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -107,13 +108,13 @@ func TestQueueModel_String(t *testing.T) {
 	result := model.String()
 
 	// Check that string contains key information
-	if !contains(result, "lambda=1") {
+	if !strings.Contains(result, "lambda=1") {
 		t.Error("String() should contain lambda value")
 	}
-	if !contains(result, "mu=2") {
+	if !strings.Contains(result, "mu=2") {
 		t.Error("String() should contain mu value")
 	}
-	if !contains(result, "isValid=true") {
+	if !strings.Contains(result, "isValid=true") {
 		t.Error("String() should contain validity status")
 	}
 }
@@ -430,10 +431,6 @@ func TestMM1ModelStateDependent_ServiceRateExtension(t *testing.T) {
 	if !model.IsValid() {
 		t.Skip("Model invalid, skipping service rate extension test")
 	}
-
-	// The model should handle this by using the last service rate for higher states
-	// We can't directly test this without accessing internal state, but we can
-	// verify the model produces reasonable results
 	if model.GetAvgNumInSystem() < 0 {
 		t.Error("Model with extended service rates should produce valid results")
 	}
@@ -451,12 +448,12 @@ func TestMM1ModelStateDependent_String(t *testing.T) {
 	result := model.String()
 
 	// Check that string contains key identifiers
-	if !contains(result, "MM1ModelStateDependent") {
+	if !strings.Contains(result, "MM1ModelStateDependent") {
 		t.Error("String() should identify the model type")
 	}
 
 	// Should contain base model information
-	if !contains(result, "MM1KModel") {
+	if !strings.Contains(result, "MM1KModel") {
 		t.Error("String() should contain base model information")
 	}
 }
@@ -533,20 +530,4 @@ func TestQueueModel_LittlesLaw(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

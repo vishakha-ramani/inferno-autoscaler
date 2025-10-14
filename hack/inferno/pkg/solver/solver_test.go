@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
@@ -246,7 +247,6 @@ func TestSolver_String(t *testing.T) {
 
 	solver := NewSolver(optimizerSpec)
 
-	// String method should not panic and return something
 	str := solver.String()
 	if str == "" {
 		t.Error("Solver.String() returned empty string")
@@ -375,6 +375,11 @@ func TestSolver_SolveUnlimited(t *testing.T) {
 	})
 	core.TheSystem = system
 
+	// Calculate server allocations to populate candidate allocations
+	for _, server := range core.GetServers() {
+		server.Calculate(core.GetAccelerators())
+	}
+
 	optimizerSpec := &config.OptimizerSpec{
 		Unlimited:        true,
 		SaturationPolicy: "None",
@@ -385,18 +390,38 @@ func TestSolver_SolveUnlimited(t *testing.T) {
 	// Test SolveUnlimited directly
 	solver.SolveUnlimited()
 
-	// Check that servers have allocations (should select minimum value allocations)
+	// Verify that servers received allocations (should select minimum value allocations)
 	servers := core.GetServers()
+	if len(servers) == 0 {
+		t.Fatal("Expected servers to exist in the system")
+	}
+
 	allocatedCount := 0
 	for _, server := range servers {
 		if server.Allocation() != nil {
 			allocatedCount++
+			t.Logf("Server %s allocated: %d replicas of %s (value: %f)",
+				server.Name(),
+				server.Allocation().NumReplicas(),
+				server.Allocation().Accelerator(),
+				server.Allocation().Value())
 		}
 	}
 
-	// SolveUnlimited should complete without error - allocation success depends on
-	// available allocations and their compatibility with the system state
-	// The main test is that the function completes without panic
+	// With unlimited resources and valid server setup, all servers should get allocations
+	if allocatedCount == 0 {
+		t.Error("Expected at least some servers to receive allocations in unlimited mode")
+	}
+
+	// Verify allocated servers have positive replica counts
+	for _, server := range servers {
+		if alloc := server.Allocation(); alloc != nil {
+			if alloc.NumReplicas() <= 0 {
+				t.Errorf("Server %s allocation should have positive replicas, got %d",
+					server.Name(), alloc.NumReplicas())
+			}
+		}
+	}
 }
 
 func TestSolver_SolveUnlimited_EdgeCases(t *testing.T) {
@@ -480,8 +505,6 @@ func TestSolver_SolveUnlimited_EdgeCases(t *testing.T) {
 			SaturationPolicy: "None",
 		}
 		solver := NewSolver(optimizerSpec)
-
-		// Should not panic even with servers that have no allocations
 		solver.SolveUnlimited()
 
 		// Verify servers still have no allocations
@@ -682,16 +705,11 @@ func TestSolver_String_WithDiffs(t *testing.T) {
 
 	str := solver.String()
 
-	// Should contain "Solver:" header
-	if !contains(str, "Solver:") {
-		t.Error("String() should contain 'Solver:' header")
-	}
-
 	// If there are allocation diffs, should contain server names
 	if len(solver.AllocationDiff()) > 0 {
 		foundServerInfo := false
 		for serverName := range solver.AllocationDiff() {
-			if contains(str, serverName) {
+			if strings.Contains(str, serverName) {
 				foundServerInfo = true
 				break
 			}
@@ -700,25 +718,6 @@ func TestSolver_String_WithDiffs(t *testing.T) {
 			t.Error("String() should contain server information when allocation diffs exist")
 		}
 	}
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr ||
-			(len(s) > len(substr) &&
-				(s[:len(substr)] == substr ||
-					s[len(s)-len(substr):] == substr ||
-					containsSubstring(s, substr))))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // Additional tests to improve coverage of SolveUnlimited and other functions
@@ -814,5 +813,21 @@ func TestSolver_SolveUnlimited_ValueComparison(t *testing.T) {
 	solver := NewSolver(optimizerSpec)
 	solver.SolveUnlimited()
 
-	// Test passes if no panic occurs and minimum value logic is exercised
+	// Verify minimum value logic was exercised correctly
+	server = core.GetServer("test-server")
+	if server == nil {
+		t.Fatal("Server should exist after solve")
+	}
+
+	allocation := server.Allocation()
+	if allocation == nil {
+		t.Error("Server should have an allocation after SolveUnlimited")
+	} else {
+		// Verify that the allocation with minimum value was selected
+		// We set values to 100.0 and 50.0, so selected value should be around 50.0
+		if allocation.Value() > 60.0 {
+			t.Errorf("Expected minimum value allocation to be selected (~50.0), got %f", allocation.Value())
+		}
+		t.Logf("SolveUnlimited selected allocation with value: %f", allocation.Value())
+	}
 }

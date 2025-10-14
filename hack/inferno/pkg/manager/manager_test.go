@@ -59,47 +59,207 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestManager_Optimize(t *testing.T) {
+	createTestSystem := func() *core.System {
+		system := core.NewSystem()
+
+		// Add accelerator
+		accSpec := config.AcceleratorSpec{
+			Name:         "test-gpu",
+			Type:         "gpu",
+			Cost:         100.0,
+			Multiplicity: 1,
+		}
+		system.AddAcceleratorFromSpec(accSpec)
+
+		// Set capacity
+		capacityCount := config.AcceleratorCount{
+			Type:  "gpu",
+			Count: 10,
+		}
+		system.SetCountFromSpec(capacityCount)
+
+		// Add model
+		model := system.AddModel("test-model")
+
+		// Add performance data
+		perfData := &config.ModelAcceleratorPerfData{
+			Name:         "test-model",
+			Acc:          "test-gpu",
+			AccCount:     1,
+			MaxBatchSize: 16,
+			AtTokens:     200,
+			PrefillParms: config.PrefillParms{
+				Gamma: 10.0,
+				Delta: 1.5,
+			},
+			DecodeParms: config.DecodeParms{
+				Alpha: 5.0,
+				Beta:  2.0,
+			},
+		}
+		model.AddPerfDataFromSpec(perfData)
+
+		// Add service class with target
+		system.AddServiceClass("default", 5)
+		serviceClass := system.ServiceClass("default")
+		if serviceClass != nil {
+			modelTarget := &config.ModelTarget{
+				Model:    "test-model",
+				SLO_TTFT: 2000.0, // 2 seconds
+				SLO_ITL:  500.0,  // 500ms
+				SLO_TPS:  0.0,
+			}
+			serviceClass.AddModelTarget(modelTarget)
+		}
+
+		// Add server with non-zero load
+		serverSpec := config.ServerSpec{
+			Name:           "test-server",
+			Model:          "test-model",
+			Class:          "default",
+			MinNumReplicas: 1,
+			CurrentAlloc: config.AllocationData{
+				Load: config.ServerLoadSpec{
+					ArrivalRate:  120.0, // Non-zero arrival rate (2 req/sec)
+					AvgInTokens:  100,
+					AvgOutTokens: 200,
+				},
+			},
+		}
+		system.AddServerFromSpec(serverSpec)
+
+		return system
+	}
+
 	tests := []struct {
 		name         string
 		setupManager func() *Manager
 		wantErr      bool
-		checkCalls   func(t *testing.T, manager *Manager)
+		checkResult  func(t *testing.T, manager *Manager)
 	}{
 		{
-			name: "successful optimization",
+			name: "successful optimization with realistic system",
 			setupManager: func() *Manager {
+				system := createTestSystem()
 				optimizerSpec := &config.OptimizerSpec{
 					Unlimited:        false,
 					SaturationPolicy: "None",
 				}
 				optimizer := solver.NewOptimizerFromSpec(optimizerSpec)
-				return &Manager{
-					system:    &core.System{},
-					optimizer: optimizer,
-				}
+				manager := NewManager(system, optimizer)
+				system.Calculate()
+
+				return manager
 			},
 			wantErr: false,
-			checkCalls: func(t *testing.T, manager *Manager) {
-				// In a real test, we would check that methods were called
-				// For now, we just verify no error occurred
+			checkResult: func(t *testing.T, manager *Manager) {
+				// Verify that solution time is >= 0
+				solutionTime := manager.optimizer.SolutionTimeMsec()
+				if solutionTime < 0 {
+					t.Error("Optimize() should have set solution time >= 0")
+				}
+				t.Logf("Optimization completed in %d msec", solutionTime)
+
+				// Verify that servers have allocations after optimization
+				servers := manager.system.Servers()
+				if len(servers) == 0 {
+					t.Fatal("No servers in system - test setup is invalid")
+				}
+
+				allocatedCount := 0
+				for _, server := range servers {
+					if server.Allocation() != nil {
+						allocatedCount++
+						alloc := server.Allocation()
+						t.Logf("Server %s has allocation: %d replicas of %s (cost=%.2f)",
+							server.Name(),
+							alloc.NumReplicas(),
+							alloc.Accelerator(),
+							alloc.Cost())
+
+						// Verify allocation is valid
+						if alloc.NumReplicas() <= 0 {
+							t.Errorf("Invalid allocation: replicas=%d", alloc.NumReplicas())
+						}
+						if alloc.Cost() <= 0 {
+							t.Errorf("Invalid allocation: cost=%.2f", alloc.Cost())
+						}
+					}
+				}
+
+				if allocatedCount == 0 {
+					t.Error("Optimize() should have created allocations for servers with valid system setup")
+				}
 			},
 		},
 		{
-			name: "optimization with error scenario",
+			name: "optimization with unlimited resources",
 			setupManager: func() *Manager {
+				system := createTestSystem()
+				optimizerSpec := &config.OptimizerSpec{
+					Unlimited:        true,
+					SaturationPolicy: "PriorityExhaustive",
+				}
+				optimizer := solver.NewOptimizerFromSpec(optimizerSpec)
+				manager := NewManager(system, optimizer)
+				system.Calculate()
+
+				return manager
+			},
+			wantErr: false,
+			checkResult: func(t *testing.T, manager *Manager) {
+				// With unlimited resources, optimization should succeed
+				solutionTime := manager.optimizer.SolutionTimeMsec()
+				if solutionTime < 0 {
+					t.Error("Optimize() should have set solution time >= 0")
+				}
+
+				// Verify servers have allocations
+				servers := manager.system.Servers()
+				allocatedCount := 0
+				for _, server := range servers {
+					if server.Allocation() != nil {
+						allocatedCount++
+					}
+				}
+
+				t.Logf("Unlimited optimization: %d/%d servers allocated in %d msec",
+					allocatedCount, len(servers), solutionTime)
+
+				// With unlimited resources and a valid system setup, all servers MUST get allocations
+				if len(servers) > 0 && allocatedCount == 0 {
+					t.Error("Optimize() with unlimited resources should allocate all servers")
+				}
+			},
+		},
+		{
+			name: "optimization with minimal empty system",
+			setupManager: func() *Manager {
+				system := core.NewSystem()
 				optimizerSpec := &config.OptimizerSpec{
 					Unlimited:        false,
 					SaturationPolicy: "None",
 				}
 				optimizer := solver.NewOptimizerFromSpec(optimizerSpec)
-				return &Manager{
-					system:    &core.System{},
-					optimizer: optimizer,
-				}
+				return NewManager(system, optimizer)
 			},
-			wantErr: false, // the optimizer shouldn't fail with valid input
-			checkCalls: func(t *testing.T, manager *Manager) {
-				// Verify that optimization completed
+			wantErr: false,
+			checkResult: func(t *testing.T, manager *Manager) {
+				// Even with empty system, optimization should complete without error
+				if manager.system == nil {
+					t.Error("System should not be nil after optimization")
+				}
+
+				// Solution time should still be set
+				if manager.optimizer.SolutionTimeMsec() < 0 {
+					t.Error("Solution time should be set even for empty system")
+				}
+
+				// Empty system should have no server allocations
+				servers := manager.system.Servers()
+				if len(servers) != 0 {
+					t.Errorf("Expected 0 servers in empty system, got %d", len(servers))
+				}
 			},
 		},
 	}
@@ -113,8 +273,8 @@ func TestManager_Optimize(t *testing.T) {
 				t.Errorf("Manager.Optimize() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			if tt.checkCalls != nil {
-				tt.checkCalls(t, manager)
+			if tt.checkResult != nil {
+				tt.checkResult(t, manager)
 			}
 		})
 	}

@@ -71,13 +71,13 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 .PHONY: create-kind-cluster
 create-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		hack/create-kind-gpu-cluster.sh $(KIND_ARGS)
+		deploy/kind-emulator/setup.sh $(KIND_ARGS)
 
 # Destroys the Kind cluster created by `create-kind-cluster`
 .PHONY: destroy-kind-cluster
 destroy-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-        hack/destroy-kind-cluster.sh
+        deploy/kind-emulator/teardown.sh
 
 # Create Kind cluster (if needed)
 # Deploys the Inferno Autoscaler on a Kind cluster with emulated GPU support.
@@ -86,7 +86,7 @@ destroy-kind-cluster:
 deploy-inferno-emulated-on-kind:
 	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
-		hack/deploy-inferno-emulated-on-kind.sh $(KIND_ARGS)
+		deploy/kind-emulator/deploy-inferno.sh $(KIND_ARGS)
 
 # Deploy controller in emulator mode
 .PHONY: deploy-emulated
@@ -105,7 +105,7 @@ undeploy-inferno-on-kind:
 deploy-llm-d-inferno-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS) -i $(IMG)
+		deploy/kind-emulator/deploy-llm-d.sh $(KIND_ARGS) -i $(IMG)
 
 ## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
 .PHONY: deploy-inferno-on-openshift
@@ -117,7 +117,7 @@ deploy-inferno-on-openshift: manifests kustomize ## Deploy Inferno Autoscaler to
 .PHONY: undeploy-llm-d-inferno-emulated-on-kind
 undeploy-llm-d-inferno-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler"
-	hack/undeploy-llm-d-inferno-emulated-on-kind.sh
+	deploy/kind-emulator/undeploy-llm-d.sh
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -264,7 +264,7 @@ CRD_REF_DOCS_BIN := $(shell go env GOPATH)/bin/crd-ref-docs
 CRD_SOURCE_PATH := ./api/v1alpha1
 CRD_CONFIG := ./hack/crd-doc-gen/config.yaml
 CRD_RENDERER := markdown
-CRD_OUTPUT := ./docs/crd-docs.md
+CRD_OUTPUT := ./docs/user-guide/crd-reference.md
 
 .PHONY: crd-docs install-crd-ref-docs
 

@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	llmdOptv1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/core"
-	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/manager"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
+	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/manager"
 )
 
 // Engine holding all necessary data to perform global optimization across all variants

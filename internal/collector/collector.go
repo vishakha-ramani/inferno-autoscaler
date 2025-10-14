@@ -92,11 +92,11 @@ func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelN
 				Message:   fmt.Sprintf("Failed to query Prometheus: %v", err),
 			}
 		}
-		
+
 		if val.Type() == model.ValVector {
 			vec = val.(model.Vector)
 		}
-		
+
 		// If still no results, metrics are truly missing
 		if len(vec) == 0 {
 			return MetricsValidationResult{

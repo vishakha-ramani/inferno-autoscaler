@@ -4,7 +4,7 @@ Automated deployment script for WVA and llm-d infrastructure on OpenShift cluste
 
 ## Overview
 
-The `deploy-llmd+wva-openshift.sh` script automates the complete deployment process on openshift cluster including:
+The `deploy-llmd+wva-openshift.sh` script automates the complete deployment process on OpenShift cluster including:
 
 - Workload-Variant-Autoscaler controller
 - llm-d infrastructure (Gateway, Scheduler, vLLM)
@@ -49,17 +49,22 @@ export MODEL_ID="unsloth/Meta-Llama-3.1-8B"         # Default
 export WVA_IMAGE="ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"  # Default
 ```
 
-### 2. Run the Deployment Script
+### 2. Deploy the Workload Variant Autoscaler and llm-d using Make
 
 ```bash
-./deploy-llmd+wva-openshift.sh
+make deploy-llm-d-wva-on-openshift
 ```
 
 That's it! The script will:
+
 1. Check prerequisites
-2. Detect GPU types
-3. Deploy all components
+
+2. Detect GPU types on your OpenShift cluster
+
+3. Deploy all components, including WVA, llm-d, and the Prometheus-Adapter for HPA
+
 4. Verify the deployment
+
 5. Print a summary with next steps
 
 ## Configuration Options
@@ -86,7 +91,6 @@ Control which components to deploy:
 export DEPLOY_WVA=true                    # Deploy WVA controller
 export DEPLOY_LLM_D=true                  # Deploy llm-d infrastructure
 export DEPLOY_PROMETHEUS_ADAPTER=true     # Deploy Prometheus Adapter
-export DEPLOY_HPA=true                    # Deploy HPA
 export SKIP_CHECKS=false                  # Skip prerequisite checks
 ```
 
@@ -96,7 +100,7 @@ export SKIP_CHECKS=false                  # Skip prerequisite checks
 
 ```bash
 export HF_TOKEN="hf_xxxxx"
-./deploy-llmd+wva-openshift.sh
+make deploy-llm-d-wva-on-openshift
 ```
 
 ### Example 2: Custom Model and Namespace
@@ -105,7 +109,7 @@ export HF_TOKEN="hf_xxxxx"
 export HF_TOKEN="hf_xxxxx"
 export BASE_NAME="my-inference"
 export MODEL_ID="meta-llama/Llama-2-7b-hf"
-./deploy-llmd+wva-openshift.sh
+make deploy-llm-d-wva-on-openshift
 ```
 
 ### Example 3: Deploy Only WVA (llm-d Already Deployed)
@@ -114,8 +118,7 @@ export MODEL_ID="meta-llama/Llama-2-7b-hf"
 export DEPLOY_WVA=true
 export DEPLOY_LLM_D=false
 export DEPLOY_PROMETHEUS_ADAPTER=false
-export DEPLOY_HPA=false
-./deploy-llmd+wva-openshift.sh
+make deploy-llm-d-wva-on-openshift
 ```
 
 ### Example 4: Re-run with Different GPU Type
@@ -123,7 +126,7 @@ export DEPLOY_HPA=false
 ```bash
 export HF_TOKEN="hf_xxxxx"
 export ACCELERATOR_TYPE="A100"
-./deploy-llmd+wva-openshift.sh
+make deploy-llm-d-wva-on-openshift
 ```
 
 ## Script Features
@@ -150,19 +153,29 @@ export ACCELERATOR_TYPE="A100"
 ### Deployment Verification
 
 After deployment, the script verifies:
+
 - WVA controller is running
+
 - llm-d infrastructure is deployed
+
 - Prometheus Adapter is running
+
 - VariantAutoscaling resource exists
+
 - HPA is configured
+
 - External metrics API is accessible
 
 ### Summary Report
 
 Displays:
+
 - All deployed components
+
 - Resource names and namespaces
+
 - Next steps and useful commands
+
 - How to verify and test
 
 ## What Gets Deployed
@@ -212,6 +225,7 @@ Displays:
 ```
 
 **Solution**: Install missing tools:
+
 ```bash
 # macOS
 brew install yq helm
@@ -227,6 +241,7 @@ brew install yq helm
 ```
 
 **Solution**: Log in first:
+
 ```bash
 oc login --token=<your-token> --server=<your-server>
 ```
@@ -238,6 +253,7 @@ oc login --token=<your-token> --server=<your-server>
 ```
 
 **Solution**: Set your HuggingFace token:
+
 ```bash
 export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxx"
 ```
@@ -245,11 +261,15 @@ export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxx"
 ### Deployment Succeeds But Metrics Not Available
 
 **Wait 1-2 minutes** for:
+
 - Prometheus to scrape metrics
+
 - Prometheus Adapter to process them
+
 - External metrics API to update
 
 **Check status**:
+
 ```bash
 kubectl get pods -n openshift-user-workload-monitoring | grep prometheus-adapter
 kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-inference-scheduling/inferno_desired_replicas" | jq
@@ -258,14 +278,20 @@ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/llm-d-infere
 ### vLLM Pods Not Starting
 
 **Check logs**:
+
 ```bash
 kubectl logs -n llm-d-inference-scheduling deployment/ms-inference-scheduling-llm-d-modelservice-decode
 ```
 
 **Common issues**:
+
 - Insufficient GPU resources
+
 - HuggingFace token invalid/expired
+
 - Model download timeout
+
+- Inappropriate SLOs for the deployed model and GPU types: update the `service-classes-config` ConfigMap with appropriate SLOs given the model and employed GPU type.
 
 ## Post-Deployment
 
@@ -347,7 +373,7 @@ kubectl delete namespace llm-d-inference-scheduling
 
 ## Script Structure
 
-```
+```bash
 deploy-llmd+wva-openshift.sh
 ├── Prerequisites Check
 │   ├── Tool availability (oc, kubectl, helm, yq)
@@ -407,4 +433,3 @@ For issues or questions:
 
 - `test/e2e-openshift/README.md`: E2E testing documentation
 - `README.md`: Main project documentation
-

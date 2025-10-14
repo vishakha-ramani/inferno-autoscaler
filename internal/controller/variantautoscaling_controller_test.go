@@ -812,7 +812,7 @@ data:
 			Expect(len(activeVAs)).To(BeNumerically(">", 0))
 
 			By("Preparing system data and calling prepareVariantAutoscalings")
-			systemData := utils.CreateSystemData(accMap, serviceClassMap, dummyInventory)
+			systemData := utils.CreateSystemData(accMap, serviceClassMap)
 
 			_, _, _, err = controllerReconciler.prepareVariantAutoscalings(ctx, activeVAs, accMap, serviceClassMap, systemData)
 			Expect(err).NotTo(HaveOccurred())

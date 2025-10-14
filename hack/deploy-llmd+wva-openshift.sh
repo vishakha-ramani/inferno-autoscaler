@@ -176,6 +176,8 @@ deploy_wva_controller() {
     --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
     --set variantAutoscaling.accelerator=L40S \
     --set variantAutoscaling.modelID=unsloth/Meta-Llama-3.1-8B \
+    --set variantAutoscaling.sloTpot=30 \
+    --set variantAutoscaling.sloTtft=1000 \
     --set vllmService.enabled=true \
     --set vllmService.nodePort=30000
 
@@ -214,8 +216,8 @@ deploy_llm_d_infrastructure() {
     cd $WVA_PROJECT/$LLM_D_PROJECT/quickstart
     bash dependencies/install-deps.sh
     bash gateway-control-plane-providers/install-gateway-provider-dependencies.sh
-    
-    if [ "$GATEWAY_PROVIDER" != "kgateway" && "$GATEWAY_PROVIDER" != "istio" ]; then
+
+    if [[ "$GATEWAY_PROVIDER" != "kgateway" && "$GATEWAY_PROVIDER" != "istio" ]]; then
         log_error "Unsupported gateway provider: $GATEWAY_PROVIDER"
         exit 1
     fi
@@ -231,16 +233,113 @@ deploy_llm_d_infrastructure() {
 
     # Configure llm-d for NodePort and correct model
     log_info "Configuring llm-d infrastructure"
-    yq eval '.gateway.service.type = "NodePort"' -i $WVA_PROJECT/$LLM_D_PROJECT/charts/llm-d-infra/values.yaml
+    # yq eval '.gateway.service.type = "NodePort"' -i $WVA_PROJECT/$LLM_D_PROJECT/charts/llm-d-infra/values.yaml
     
     export EXAMPLES_DIR="$WVA_PROJECT/$LLM_D_PROJECT/quickstart/examples/$BASE_NAME"
     cd $EXAMPLES_DIR
     sed -i.bak "s/llm-d-inference-scheduler/$LLMD_NS/g" helmfile.yaml.gotmpl
     yq eval "(.. | select(. == \"Qwen/Qwen3-0.6B\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://Qwen/Qwen3-0.6B\")) = \"hf://$MODEL_ID\"" -i ms-$BASE_NAME/values.yaml
     
+    # TODO: remove this once the issue with the prefix-cache-scorer is resolved
+    log_info "Removing prefix-cache-scorer from Inference Scheduler configuration"
+    kubectl delete cm gaie-$BASE_NAME-epp -n $LLMD_NS
+
     # Deploy llm-d core components
     log_info "Deploying llm-d core components"
     helmfile apply -e $GATEWAY_PROVIDER
+
+    log_info "Removing prefix-cache-scorer from Inference Scheduler configuration"
+    kubectl apply -f - <<EOF
+apiVersion: v1
+data:
+  default-plugins.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: low-queue-filter
+      parameters:
+        threshold: 128
+    - type: lora-affinity-filter
+      parameters:
+        threshold: 0.999
+    - type: least-queue-filter
+    - type: least-kv-cache-filter
+    - type: decision-tree-filter
+      name: low-latency-filter
+      parameters:
+        current:
+          pluginRef: low-queue-filter
+        nextOnSuccess:
+          decisionTree:
+            current:
+              pluginRef: lora-affinity-filter
+            nextOnSuccessOrFailure:
+              decisionTree:
+                current:
+                  pluginRef: least-queue-filter
+                nextOnSuccessOrFailure:
+                  decisionTree:
+                    current:
+                      pluginRef: least-kv-cache-filter
+        nextOnFailure:
+          decisionTree:
+            current:
+              pluginRef: least-queue-filter
+            nextOnSuccessOrFailure:
+              decisionTree:
+                current:
+                  pluginRef: lora-affinity-filter
+                nextOnSuccessOrFailure:
+                  decisionTree:
+                    current:
+                      pluginRef: least-kv-cache-filter
+    - type: random-picker
+      parameters:
+        maxNumOfEndpoints: 1
+    - type: single-profile-handler
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: low-latency-filter
+      - pluginRef: random-picker
+  plugins-v2.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: queue-scorer
+    - type: kv-cache-scorer
+    # - type: prefix-cache-scorer
+    #  parameters:
+    #    hashBlockSize: 64
+    #    maxPrefixBlocksToMatch: 256
+    #    lruCapacityPerServer: 31250
+    - type: max-score-picker
+      parameters:
+        maxNumOfEndpoints: 1
+    - type: single-profile-handler
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: queue-scorer
+        weight: 1
+      - pluginRef: kv-cache-scorer
+        weight: 1
+      # - pluginRef: prefix-cache-scorer
+      #   weight: 1
+      - pluginRef: max-score-picker
+kind: ConfigMap
+metadata:
+  annotations:
+    meta.helm.sh/release-name: gaie-$BASE_NAME
+    meta.helm.sh/release-namespace: $LLMD_NS
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: gaie-$BASE_NAME-epp
+  namespace: $LLMD_NS
+EOF
+
+    # Restart EPP deployment
+    kubectl rollout restart deployment gaie-$BASE_NAME-epp -n $LLMD_NS
 
     export GATEWAY_NAME="infra-inference-scheduling-inference-gateway"
     kubectl patch gatewayparameters.gateway.kgateway.dev $GATEWAY_NAME \
@@ -467,6 +566,10 @@ print_summary() {
     echo "4. Run e2e tests:"
     echo "   make test-e2e-openshift"
     echo ""
+    echo "5. For troubleshooting on scaling decisions, check the logs of the WVA controller leader:"
+    echo "   kubectl logs -n $WVA_NS deployment/workload-variant-autoscaler-controller-manager -f"
+    echo "   Look for logs indicating scaling decisions and potential allocation errors."
+    echo ""
     echo "=========================================="
 }
 
@@ -510,16 +613,6 @@ main() {
     else
         log_info "Skipping Prometheus Adapter deployment (DEPLOY_PROMETHEUS_ADAPTER=false)"
     fi
-    
-    # Create VariantAutoscaling
-    # create_variant_autoscaling
-    
-    # # Deploy HPA
-    # if [ "$DEPLOY_HPA" = "true" ]; then
-    #     deploy_hpa
-    # else
-    #     log_info "Skipping HPA deployment (DEPLOY_HPA=false)"
-    # fi
     
     # Apply vLLM probes
     apply_vllm_probes

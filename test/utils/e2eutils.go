@@ -119,7 +119,7 @@ func InstallPrometheusOperator() error {
 	// Install Prometheus with TLS configuration
 	cmd = exec.Command("helm", "upgrade", "-i", "kube-prometheus-stack", "prometheus-community/kube-prometheus-stack",
 		"-n", monitoringNamespace,
-		"-f", "hack/vllme/deploy/prometheus-operator/prometheus-tls-values.yaml")
+		"-f", "deploy/examples/vllm-emulator/prometheus-operator/prometheus-tls-values.yaml")
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ func CheckIfClusterExistsOrCreate(maxGPUs int) (string, error) {
 	// Create the kind cluster if it doesn't exist
 	expectedVersion := os.Getenv("K8S_EXPECTED_VERSION")
 	if !clusterExists {
-		scriptCmd := exec.Command("bash", "hack/create-kind-gpu-cluster.sh", "-g", fmt.Sprintf("%d", maxGPUs), "K8S_VERSION="+expectedVersion)
+		scriptCmd := exec.Command("bash", "deploy/kind-emulator/setup.sh", "-g", fmt.Sprintf("%d", maxGPUs), "K8S_VERSION="+expectedVersion)
 		if _, err := Run(scriptCmd); err != nil {
 			return "", fmt.Errorf("failed to create kind cluster: %v", err)
 		}
@@ -486,11 +486,11 @@ func startPortForwarding(service *corev1.Service, namespace string, localPort, s
 // StartLoadGenerator sets up and launches a load generator with rate and content specified, targeting the specified model, to the specified port
 func StartLoadGenerator(rate, contentLength int, port int, modelName string) *exec.Cmd {
 	// Install the load generator requirements
-	requirementsCmd := exec.Command("pip", "install", "-r", "hack/vllme/vllm_emulator/requirements.txt")
+	requirementsCmd := exec.Command("pip", "install", "-r", "tools/vllm-emulator/requirements.txt")
 	_, err := Run(requirementsCmd)
 	gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to install loadgen requirements")
 	loadGenCmd := exec.Command("python",
-		"hack/vllme/vllm_emulator/loadgen.py",
+		"tools/vllm-emulator/loadgen.py",
 		"--url", fmt.Sprintf("http://localhost:%d/v1", port),
 		"--rate", fmt.Sprintf("%d", rate),
 		"--content", fmt.Sprintf("%d", contentLength),

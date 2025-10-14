@@ -163,7 +163,7 @@ var _ = AfterSuite(func() {
 	}
 
 	// Destroy the Kind cluster
-	cmd := exec.Command("bash", "hack/destroy-kind-cluster.sh")
+	cmd := exec.Command("bash", "deploy/kind-emulator/teardown.sh")
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to destroy Kind cluster")
 })

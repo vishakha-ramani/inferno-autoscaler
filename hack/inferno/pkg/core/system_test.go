@@ -132,7 +132,7 @@ func TestSystem_SetFromSpec(t *testing.T) {
 
 	optimizerSpec := system.SetFromSpec(spec)
 
-	// Check that components were created
+	// Check that components were created with correct counts
 	if len(system.accelerators) != 1 {
 		t.Errorf("Expected 1 accelerator, got %d", len(system.accelerators))
 	}
@@ -154,7 +154,65 @@ func TestSystem_SetFromSpec(t *testing.T) {
 	}
 
 	if optimizerSpec == nil {
-		t.Error("Optimizer spec should be returned")
+		t.Fatal("Optimizer spec should be returned")
+	}
+
+	// Validate accelerator properties
+	acc := system.accelerators["A100"]
+	if acc == nil {
+		t.Fatal("A100 accelerator should exist")
+	}
+	if acc.Type() != "GPU_A100" {
+		t.Errorf("Expected accelerator type GPU_A100, got %s", acc.Type())
+	}
+
+	// Validate model properties
+	model := system.models["llama-7b"]
+	if model == nil {
+		t.Fatal("llama-7b model should exist")
+	}
+	if model.Name() != "llama-7b" {
+		t.Errorf("Expected model name llama-7b, got %s", model.Name())
+	}
+
+	// Validate server properties
+	server := system.servers["server1"]
+	if server == nil {
+		t.Fatal("server1 should exist")
+	}
+	if server.Name() != "server1" {
+		t.Errorf("Expected server name server1, got %s", server.Name())
+	}
+	if server.ModelName() != "llama-7b" {
+		t.Errorf("Expected server model llama-7b, got %s", server.ModelName())
+	}
+
+	// Validate service class properties
+	svcClass := system.serviceClasses["default"]
+	if svcClass == nil {
+		t.Fatal("default service class should exist")
+	}
+	if svcClass.Name() != "default" {
+		t.Errorf("Expected service class name default, got %s", svcClass.Name())
+	}
+	if svcClass.Priority() != 1 {
+		t.Errorf("Expected service class priority 1, got %d", svcClass.Priority())
+	}
+
+	// Validate capacity
+	if system.capacity["GPU_A100"] != 4 {
+		t.Errorf("Expected GPU_A100 capacity 4, got %d", system.capacity["GPU_A100"])
+	}
+
+	// Validate optimizer spec
+	if optimizerSpec.Unlimited {
+		t.Error("Expected Unlimited to be false")
+	}
+	if optimizerSpec.SaturationPolicy != "None" {
+		t.Errorf("Expected SaturationPolicy None, got %s", optimizerSpec.SaturationPolicy)
+	}
+	if optimizerSpec.DelayedBestEffort {
+		t.Error("Expected DelayedBestEffort to be false")
 	}
 }
 
@@ -198,12 +256,34 @@ func TestSystem_SetAcceleratorsFromSpec(t *testing.T) {
 		t.Errorf("Expected 2 accelerators, got %d", len(system.accelerators))
 	}
 
-	if system.accelerators["A100"] == nil {
-		t.Error("A100 accelerator should exist")
+	// Validate A100 accelerator
+	a100 := system.accelerators["A100"]
+	if a100 == nil {
+		t.Fatal("A100 accelerator should exist")
+	}
+	if a100.Type() != "GPU_A100" {
+		t.Errorf("Expected A100 type GPU_A100, got %s", a100.Type())
+	}
+	if a100.Spec().Cost != 1.0 {
+		t.Errorf("Expected A100 cost 1.0, got %f", a100.Spec().Cost)
+	}
+	if a100.Spec().MemSize != 40 {
+		t.Errorf("Expected A100 memsize 40, got %d", a100.Spec().MemSize)
 	}
 
-	if system.accelerators["H100"] == nil {
-		t.Error("H100 accelerator should exist")
+	// Validate H100 accelerator
+	h100 := system.accelerators["H100"]
+	if h100 == nil {
+		t.Fatal("H100 accelerator should exist")
+	}
+	if h100.Type() != "GPU_H100" {
+		t.Errorf("Expected H100 type GPU_H100, got %s", h100.Type())
+	}
+	if h100.Spec().Cost != 2.0 {
+		t.Errorf("Expected H100 cost 2.0, got %f", h100.Spec().Cost)
+	}
+	if h100.Spec().MemSize != 80 {
+		t.Errorf("Expected H100 memsize 80, got %d", h100.Spec().MemSize)
 	}
 }
 
@@ -235,8 +315,39 @@ func TestSystem_AddAcceleratorFromSpec(t *testing.T) {
 		t.Fatal("A100 accelerator should exist")
 	}
 
+	// Validate accelerator properties were correctly set
 	if acc.Name() != "A100" {
 		t.Errorf("Expected accelerator name A100, got %s", acc.Name())
+	}
+
+	if acc.Type() != "GPU_A100" {
+		t.Errorf("Expected accelerator type GPU_A100, got %s", acc.Type())
+	}
+
+	// Validate power spec
+	powerSpec := acc.Spec().Power
+	if powerSpec.Idle != 50 {
+		t.Errorf("Expected Idle power 50, got %d", powerSpec.Idle)
+	}
+	if powerSpec.MidPower != 150 {
+		t.Errorf("Expected MidPower 150, got %d", powerSpec.MidPower)
+	}
+	if powerSpec.Full != 350 {
+		t.Errorf("Expected Full power 350, got %d", powerSpec.Full)
+	}
+	if powerSpec.MidUtil != 0.4 {
+		t.Errorf("Expected MidUtil 0.4, got %f", powerSpec.MidUtil)
+	}
+
+	// Validate cost, multiplicity, memsize
+	if acc.Spec().Cost != 1.0 {
+		t.Errorf("Expected Cost 1.0, got %f", acc.Spec().Cost)
+	}
+	if acc.Spec().Multiplicity != 1 {
+		t.Errorf("Expected Multiplicity 1, got %d", acc.Spec().Multiplicity)
+	}
+	if acc.Spec().MemSize != 40 {
+		t.Errorf("Expected MemSize 40, got %d", acc.Spec().MemSize)
 	}
 }
 
@@ -258,6 +369,10 @@ func TestSystem_RemoveAccelerator(t *testing.T) {
 	}
 
 	system.AddAcceleratorFromSpec(spec)
+
+	if len(system.accelerators) == 0 {
+		t.Errorf("Expected 1 accelerators after add, got %d", len(system.accelerators))
+	}
 
 	// Test successful removal
 	err := system.RemoveAccelerator("A100")
@@ -361,12 +476,72 @@ func TestSystem_SetModelsFromSpec(t *testing.T) {
 		t.Errorf("Expected 2 models, got %d", len(system.models))
 	}
 
-	if system.models["llama-7b"] == nil {
-		t.Error("llama-7b model should exist")
+	// Validate llama-7b model
+	model7b := system.models["llama-7b"]
+	if model7b == nil {
+		t.Fatal("llama-7b model should exist")
+	}
+	if model7b.Name() != "llama-7b" {
+		t.Errorf("Expected model name llama-7b, got %s", model7b.Name())
+	}
+	perfData7b := model7b.PerfData("A100")
+	if perfData7b == nil {
+		t.Fatal("llama-7b should have A100 perf data")
+	}
+	if perfData7b.AccCount != 1 {
+		t.Errorf("Expected AccCount 1 for llama-7b, got %d", perfData7b.AccCount)
+	}
+	if perfData7b.MaxBatchSize != 16 {
+		t.Errorf("Expected MaxBatchSize 16 for llama-7b, got %d", perfData7b.MaxBatchSize)
+	}
+	if perfData7b.AtTokens != 100 {
+		t.Errorf("Expected AtTokens 100 for llama-7b, got %d", perfData7b.AtTokens)
+	}
+	if perfData7b.DecodeParms.Alpha != 10.0 {
+		t.Errorf("Expected DecodeParms.Alpha 10.0 for llama-7b, got %f", perfData7b.DecodeParms.Alpha)
+	}
+	if perfData7b.DecodeParms.Beta != 2.0 {
+		t.Errorf("Expected DecodeParms.Beta 2.0 for llama-7b, got %f", perfData7b.DecodeParms.Beta)
+	}
+	if perfData7b.PrefillParms.Gamma != 5.0 {
+		t.Errorf("Expected PrefillParms.Gamma 5.0 for llama-7b, got %f", perfData7b.PrefillParms.Gamma)
+	}
+	if perfData7b.PrefillParms.Delta != 0.1 {
+		t.Errorf("Expected PrefillParms.Delta 0.1 for llama-7b, got %f", perfData7b.PrefillParms.Delta)
 	}
 
-	if system.models["llama-13b"] == nil {
-		t.Error("llama-13b model should exist")
+	// Validate llama-13b model
+	model13b := system.models["llama-13b"]
+	if model13b == nil {
+		t.Fatal("llama-13b model should exist")
+	}
+	if model13b.Name() != "llama-13b" {
+		t.Errorf("Expected model name llama-13b, got %s", model13b.Name())
+	}
+	perfData13b := model13b.PerfData("A100")
+	if perfData13b == nil {
+		t.Fatal("llama-13b should have A100 perf data")
+	}
+	if perfData13b.AccCount != 2 {
+		t.Errorf("Expected AccCount 2 for llama-13b, got %d", perfData13b.AccCount)
+	}
+	if perfData13b.MaxBatchSize != 8 {
+		t.Errorf("Expected MaxBatchSize 8 for llama-13b, got %d", perfData13b.MaxBatchSize)
+	}
+	if perfData13b.AtTokens != 150 {
+		t.Errorf("Expected AtTokens 150 for llama-13b, got %d", perfData13b.AtTokens)
+	}
+	if perfData13b.DecodeParms.Alpha != 15.0 {
+		t.Errorf("Expected DecodeParms.Alpha 15.0 for llama-13b, got %f", perfData13b.DecodeParms.Alpha)
+	}
+	if perfData13b.DecodeParms.Beta != 3.0 {
+		t.Errorf("Expected DecodeParms.Beta 3.0 for llama-13b, got %f", perfData13b.DecodeParms.Beta)
+	}
+	if perfData13b.PrefillParms.Gamma != 8.0 {
+		t.Errorf("Expected PrefillParms.Gamma 8.0 for llama-13b, got %f", perfData13b.PrefillParms.Gamma)
+	}
+	if perfData13b.PrefillParms.Delta != 0.15 {
+		t.Errorf("Expected PrefillParms.Delta 0.15 for llama-13b, got %f", perfData13b.PrefillParms.Delta)
 	}
 }
 
@@ -456,12 +631,80 @@ func TestSystem_SetServersFromSpec(t *testing.T) {
 		t.Errorf("Expected 2 servers, got %d", len(system.servers))
 	}
 
-	if system.servers["server1"] == nil {
-		t.Error("server1 should exist")
+	// Validate server1
+	server1 := system.servers["server1"]
+	if server1 == nil {
+		t.Fatal("server1 should exist")
+	}
+	if server1.Name() != "server1" {
+		t.Errorf("Expected server name server1, got %s", server1.Name())
+	}
+	if server1.ModelName() != "llama-7b" {
+		t.Errorf("Expected model name llama-7b for server1, got %s", server1.ModelName())
+	}
+	if server1.ServiceClassName() != "default" {
+		t.Errorf("Expected service class default for server1, got %s", server1.ServiceClassName())
+	}
+	load1 := server1.Load()
+	if load1 == nil {
+		t.Fatal("server1 should have load")
+	}
+	if load1.ArrivalRate != 30 {
+		t.Errorf("Expected ArrivalRate 30 for server1, got %f", load1.ArrivalRate)
+	}
+	if load1.AvgInTokens != 100 {
+		t.Errorf("Expected AvgInTokens 100 for server1, got %d", load1.AvgInTokens)
+	}
+	if load1.AvgOutTokens != 200 {
+		t.Errorf("Expected AvgOutTokens 200 for server1, got %d", load1.AvgOutTokens)
+	}
+	spec1 := server1.Spec()
+	if spec1 == nil {
+		t.Fatal("server1 should have spec")
+	}
+	if spec1.MinNumReplicas != 1 {
+		t.Errorf("Expected MinNumReplicas 1 for server1, got %d", spec1.MinNumReplicas)
+	}
+	if spec1.MaxBatchSize != 16 {
+		t.Errorf("Expected MaxBatchSize 16 for server1, got %d", spec1.MaxBatchSize)
 	}
 
-	if system.servers["server2"] == nil {
-		t.Error("server2 should exist")
+	// Validate server2
+	server2 := system.servers["server2"]
+	if server2 == nil {
+		t.Fatal("server2 should exist")
+	}
+	if server2.Name() != "server2" {
+		t.Errorf("Expected server name server2, got %s", server2.Name())
+	}
+	if server2.ModelName() != "llama-13b" {
+		t.Errorf("Expected model name llama-13b for server2, got %s", server2.ModelName())
+	}
+	if server2.ServiceClassName() != "high-priority" {
+		t.Errorf("Expected service class high-priority for server2, got %s", server2.ServiceClassName())
+	}
+	load2 := server2.Load()
+	if load2 == nil {
+		t.Fatal("server2 should have load")
+	}
+	if load2.ArrivalRate != 20 {
+		t.Errorf("Expected ArrivalRate 20 for server2, got %f", load2.ArrivalRate)
+	}
+	if load2.AvgInTokens != 150 {
+		t.Errorf("Expected AvgInTokens 150 for server2, got %d", load2.AvgInTokens)
+	}
+	if load2.AvgOutTokens != 300 {
+		t.Errorf("Expected AvgOutTokens 300 for server2, got %d", load2.AvgOutTokens)
+	}
+	spec2 := server2.Spec()
+	if spec2 == nil {
+		t.Fatal("server2 should have spec")
+	}
+	if spec2.MinNumReplicas != 2 {
+		t.Errorf("Expected MinNumReplicas 2 for server2, got %d", spec2.MinNumReplicas)
+	}
+	if spec2.MaxBatchSize != 8 {
+		t.Errorf("Expected MaxBatchSize 8 for server2, got %d", spec2.MaxBatchSize)
 	}
 }
 
@@ -496,6 +739,35 @@ func TestSystem_AddServerFromSpec(t *testing.T) {
 
 	if server.Name() != "test-server" {
 		t.Errorf("Expected server name test-server, got %s", server.Name())
+	}
+	if server.ModelName() != "test-model" {
+		t.Errorf("Expected model name test-model, got %s", server.ModelName())
+	}
+	if server.ServiceClassName() != "default" {
+		t.Errorf("Expected service class default, got %s", server.ServiceClassName())
+	}
+	load := server.Load()
+	if load == nil {
+		t.Fatal("server should have load")
+	}
+	if load.ArrivalRate != 30 {
+		t.Errorf("Expected ArrivalRate 30, got %f", load.ArrivalRate)
+	}
+	if load.AvgInTokens != 100 {
+		t.Errorf("Expected AvgInTokens 100, got %d", load.AvgInTokens)
+	}
+	if load.AvgOutTokens != 200 {
+		t.Errorf("Expected AvgOutTokens 200, got %d", load.AvgOutTokens)
+	}
+	serverSpec := server.Spec()
+	if serverSpec == nil {
+		t.Fatal("server should have spec")
+	}
+	if serverSpec.MinNumReplicas != 1 {
+		t.Errorf("Expected MinNumReplicas 1, got %d", serverSpec.MinNumReplicas)
+	}
+	if serverSpec.MaxBatchSize != 16 {
+		t.Errorf("Expected MaxBatchSize 16, got %d", serverSpec.MaxBatchSize)
 	}
 }
 
@@ -574,12 +846,54 @@ func TestSystem_SetServiceClassesFromSpec(t *testing.T) {
 		t.Errorf("Expected 2 service classes, got %d", len(system.serviceClasses))
 	}
 
-	if system.serviceClasses["high-priority"] == nil {
-		t.Error("high-priority service class should exist")
+	// Validate high-priority service class
+	highPriority := system.serviceClasses["high-priority"]
+	if highPriority == nil {
+		t.Fatal("high-priority service class should exist")
+	}
+	if highPriority.Name() != "high-priority" {
+		t.Errorf("Expected service class name high-priority, got %s", highPriority.Name())
+	}
+	if highPriority.Priority() != 1 {
+		t.Errorf("Expected priority 1 for high-priority, got %d", highPriority.Priority())
+	}
+	target1 := highPriority.ModelTarget("llama-7b")
+	if target1 == nil {
+		t.Fatal("high-priority should have llama-7b target")
+	}
+	if target1.ITL != 100 {
+		t.Errorf("Expected ITL 100 for high-priority llama-7b, got %f", target1.ITL)
+	}
+	if target1.TTFT != 1000 {
+		t.Errorf("Expected TTFT 1000 for high-priority llama-7b, got %f", target1.TTFT)
+	}
+	if target1.TPS != 50 {
+		t.Errorf("Expected TPS 50 for high-priority llama-7b, got %f", target1.TPS)
 	}
 
-	if system.serviceClasses["low-priority"] == nil {
-		t.Error("low-priority service class should exist")
+	// Validate low-priority service class
+	lowPriority := system.serviceClasses["low-priority"]
+	if lowPriority == nil {
+		t.Fatal("low-priority service class should exist")
+	}
+	if lowPriority.Name() != "low-priority" {
+		t.Errorf("Expected service class name low-priority, got %s", lowPriority.Name())
+	}
+	if lowPriority.Priority() != 3 {
+		t.Errorf("Expected priority 3 for low-priority, got %d", lowPriority.Priority())
+	}
+	target2 := lowPriority.ModelTarget("llama-13b")
+	if target2 == nil {
+		t.Fatal("low-priority should have llama-13b target")
+	}
+	if target2.ITL != 200 {
+		t.Errorf("Expected ITL 200 for low-priority llama-13b, got %f", target2.ITL)
+	}
+	if target2.TTFT != 2000 {
+		t.Errorf("Expected TTFT 2000 for low-priority llama-13b, got %f", target2.TTFT)
+	}
+	if target2.TPS != 25 {
+		t.Errorf("Expected TPS 25 for low-priority llama-13b, got %f", target2.TPS)
 	}
 }
 
@@ -886,6 +1200,7 @@ func TestSystem_RemoveCapacity(t *testing.T) {
 
 func TestSystem_Calculate(t *testing.T) {
 	system := NewSystem()
+	TheSystem = system
 
 	// Add accelerator
 	system.AddAcceleratorFromSpec(config.AcceleratorSpec{
@@ -920,6 +1235,18 @@ func TestSystem_Calculate(t *testing.T) {
 		},
 	})
 
+	// Add service class with target
+	system.AddServiceClass("default", 1)
+	serviceClass := system.ServiceClass("default")
+	if serviceClass != nil {
+		serviceClass.AddModelTarget(&config.ModelTarget{
+			Model:    "test-model",
+			SLO_ITL:  100,
+			SLO_TTFT: 1000,
+			SLO_TPS:  50,
+		})
+	}
+
 	// Add server
 	system.AddServerFromSpec(config.ServerSpec{
 		Name:  "test-server",
@@ -936,7 +1263,40 @@ func TestSystem_Calculate(t *testing.T) {
 		MaxBatchSize:   16,
 	})
 
+	// Before Calculate, server should have no allocations
+	server := system.Server("test-server")
+	if server == nil {
+		t.Fatal("test-server should exist")
+	}
+	allAllocationsBefore := server.AllAllocations()
+	if len(allAllocationsBefore) != 0 {
+		t.Errorf("Expected 0 allocations before Calculate, got %d", len(allAllocationsBefore))
+	}
+
 	system.Calculate()
+
+	// After Calculate, server should have calculated allocations for compatible accelerators
+	allAllocationsAfterCalculate := server.AllAllocations()
+	if len(allAllocationsAfterCalculate) == 0 {
+		t.Error("Expected allocations after Calculate, got 0")
+	}
+
+	// Verify that the A100 allocation was created
+	a100Alloc := allAllocationsAfterCalculate["A100"]
+	if a100Alloc == nil {
+		t.Error("Expected A100 allocation after Calculate")
+	} else {
+		// Verify allocation properties were calculated
+		if a100Alloc.NumReplicas() <= 0 {
+			t.Errorf("Expected positive NumReplicas for A100 allocation, got %d", a100Alloc.NumReplicas())
+		}
+		if a100Alloc.MaxBatchSize() <= 0 {
+			t.Errorf("Expected positive MaxBatchSize for A100 allocation, got %d", a100Alloc.MaxBatchSize())
+		}
+		if a100Alloc.Cost() < 0 {
+			t.Errorf("Expected non-negative Cost for A100 allocation, got %f", a100Alloc.Cost())
+		}
+	}
 }
 
 func TestSystem_AllocateByType(t *testing.T) {
@@ -1021,8 +1381,33 @@ func TestSystem_AllocateByType(t *testing.T) {
 		}
 	}
 
-	// Should not panic - function creates allocation data internally
+	// Before AllocateByType, allocationByType should be empty
+	if len(system.allocationByType) != 0 {
+		t.Errorf("Expected 0 allocationByType entries before AllocateByType, got %d", len(system.allocationByType))
+	}
+
 	system.AllocateByType()
+
+	// After AllocateByType, should have allocation data for GPU_A100
+	if len(system.allocationByType) == 0 {
+		t.Error("Expected allocationByType entries after AllocateByType, got 0")
+	}
+
+	// Verify GPU_A100 allocation by type exists and has valid data
+	a100AllocByType := system.allocationByType["GPU_A100"]
+	if a100AllocByType == nil {
+		t.Error("Expected GPU_A100 allocationByType entry")
+	} else {
+		if a100AllocByType.count < 0 {
+			t.Errorf("Expected non-negative count for GPU_A100, got %d", a100AllocByType.count)
+		}
+		if a100AllocByType.limit != 4 {
+			t.Errorf("Expected limit 4 for GPU_A100 (from capacity), got %d", a100AllocByType.limit)
+		}
+		if a100AllocByType.cost < 0 {
+			t.Errorf("Expected non-negative cost for GPU_A100, got %f", a100AllocByType.cost)
+		}
+	}
 }
 
 func TestSystem_GenerateSolution(t *testing.T) {
@@ -1112,6 +1497,24 @@ func TestSystem_GenerateSolution(t *testing.T) {
 
 	if system.allocationSolution != solution {
 		t.Error("System should store the generated solution")
+	}
+
+	// Validate solution content
+	if len(solution.Spec) == 0 {
+		t.Error("Expected solution to contain server allocations")
+	}
+
+	// Check that the test-server is in the solution
+	serverAlloc, exists := solution.Spec["test-server"]
+	if !exists {
+		t.Error("Expected test-server to be in solution")
+	} else {
+		if serverAlloc.Accelerator == "" {
+			t.Error("Expected server allocation to have an accelerator")
+		}
+		if serverAlloc.NumReplicas <= 0 {
+			t.Errorf("Expected positive NumReplicas in solution, got %d", serverAlloc.NumReplicas)
+		}
 	}
 }
 

@@ -57,6 +57,7 @@ type MetricsValidationResult struct {
 // Returns a validation result with details about metric availability
 func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelName, namespace string) MetricsValidationResult {
 	// Query for basic vLLM metric to validate scraping is working
+	// Try with namespace label first (real vLLM), fall back to just model_name (vllme emulator)
 	testQuery := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, namespace)
 
 	val, _, err := promAPI.Query(ctx, testQuery, time.Now())
@@ -80,11 +81,29 @@ func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelN
 	}
 
 	vec := val.(model.Vector)
+	// If no results with namespace label, try without it (for vllme emulator compatibility)
 	if len(vec) == 0 {
-		return MetricsValidationResult{
-			Available: false,
-			Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsMissing,
-			Message:   fmt.Sprintf("No vLLM metrics found for model '%s' in namespace '%s'. Check: (1) ServiceMonitor exists in monitoring namespace, (2) ServiceMonitor selector matches vLLM service labels, (3) vLLM pods are running and exposing /metrics endpoint, (4) Prometheus is scraping the monitoring namespace", modelName, namespace),
+		testQueryFallback := fmt.Sprintf(`vllm:request_success_total{model_name="%s"}`, modelName)
+		val, _, err = promAPI.Query(ctx, testQueryFallback, time.Now())
+		if err != nil {
+			return MetricsValidationResult{
+				Available: false,
+				Reason:    llmdVariantAutoscalingV1alpha1.ReasonPrometheusError,
+				Message:   fmt.Sprintf("Failed to query Prometheus: %v", err),
+			}
+		}
+		
+		if val.Type() == model.ValVector {
+			vec = val.(model.Vector)
+		}
+		
+		// If still no results, metrics are truly missing
+		if len(vec) == 0 {
+			return MetricsValidationResult{
+				Available: false,
+				Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsMissing,
+				Message:   fmt.Sprintf("No vLLM metrics found for model '%s' in namespace '%s'. Check: (1) ServiceMonitor exists in monitoring namespace, (2) ServiceMonitor selector matches vLLM service labels, (3) vLLM pods are running and exposing /metrics endpoint, (4) Prometheus is scraping the monitoring namespace", modelName, namespace),
+			}
 		}
 	}
 

@@ -46,7 +46,7 @@ export HF_TOKEN="your-hf-token-here"
 # Optional: Customize deployment
 export BASE_NAME="inference-scheduling"                          # Default
 export MODEL_ID="unsloth/Meta-Llama-3.1-8B"                     # Default
-export WVA_IMAGE="quay.io/mmunirab/inferno-autoscaler:0.0.6-multi-arch"  # Default
+export WVA_IMAGE="ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"  # Default
 export ACCELERATOR_TYPE="A100"                                  # Auto-detected or default
 ```
 
@@ -84,7 +84,7 @@ That's it! The script will:
 | `MONITORING_NAMESPACE` | Prometheus monitoring namespace | `workload-variant-autoscaler-monitoring` |
 | `MODEL_ID` | Model to deploy | `unsloth/Meta-Llama-3.1-8B` |
 | `ACCELERATOR_TYPE` | GPU type (auto-detected) | `A100` |
-| `WVA_IMAGE` | WVA controller image | `quay.io/mmunirab/inferno-autoscaler:0.0.6-multi-arch` |
+| `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1 |
 | `LLM_D_RELEASE` | llm-d-infra release version | `v1.3.1` |
 
 ### Deployment Flags
@@ -143,7 +143,7 @@ export USE_VLLM_EMULATOR=true
 
 ```bash
 export HF_TOKEN="hf_xxxxx"
-export WVA_IMAGE="quay.io/yourorg/inferno-autoscaler:latest"
+export WVA_IMAGE="ghcr.io/yourorg/workload-variant-autoscaler:latest"
 ./hack/deploy-llmd+wva-kubernetes.sh
 ```
 
@@ -724,7 +724,7 @@ kubectl set env deployment/workload-variant-autoscaler-controller-manager \
 ### Update WVA Image
 
 ```bash
-export WVA_IMAGE="quay.io/yourorg/inferno-autoscaler:custom-tag"
+export WVA_IMAGE="ghcr.io/yourorg/workload-variant-autoscaler:custom-tag"
 export DEPLOY_LLM_D=false  # Don't redeploy llm-d
 export DEPLOY_PROMETHEUS=false  # Don't redeploy Prometheus
 ./hack/deploy-llmd+wva-kubernetes.sh

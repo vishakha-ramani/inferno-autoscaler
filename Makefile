@@ -107,12 +107,12 @@ deploy-llm-d-inferno-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		hack/deploy-llm-d-inferno-emulated-on-kind.sh $(KIND_ARGS) -i $(IMG)
 
-## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
-.PHONY: deploy-inferno-on-openshift
-deploy-inferno-on-openshift: manifests kustomize ## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
-	@echo "Deploying Inferno Autoscaler to OpenShift with image: $(IMG)"
+## Deploy llm-d and the Workload Variant Autoscaler to OpenShift cluster with specified image.
+.PHONY: deploy-wva-on-openshift
+deploy-llm-d-wva-on-openshift: manifests kustomize ## Deploy Workload Variant Autoscaler to OpenShift cluster with specified image.
+	@echo "Deploying Workload Variant Autoscaler to OpenShift with image: $(IMG)"
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./hack/deploy-inferno-openshift.sh
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./hack/deploy-llmd+wva-openshift.sh
 
 .PHONY: undeploy-llm-d-inferno-emulated-on-kind
 undeploy-llm-d-inferno-emulated-on-kind:

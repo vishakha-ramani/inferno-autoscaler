@@ -22,22 +22,37 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+if [[ -z "${WELL_LIT_PATH_NAME}" ]]; then
+    WELL_LIT_PATH_NAME="inference-scheduling"
+fi
+
+if [[ -z "${WVA_PROJECT}" ]]; then
+    WVA_PROJECT="$PWD"
+fi
+
+if [[ -z "${LLM_D_PROJECT}" ]]; then
+    LLM_D_PROJECT="llm-d"
+fi
+
 # Configuration
-WVA_PROJECT=${WVA_PROJECT:-$PWD}
-BASE_NAME=${BASE_NAME:-"inference-scheduling"}
-LLMD_NS=${LLMD_NS:-"llm-d-$BASE_NAME"}
+LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"openshift-user-workload-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 WVA_IMAGE=${WVA_IMAGE:-"ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"}
-LLM_D_OWNER=${LLM_D_OWNER:-"llm-d-incubation"}
-LLM_D_PROJECT=${LLM_D_PROJECT:-"llm-d-infra"}
-LLM_D_RELEASE=${LLM_D_RELEASE:-"v1.3.1"}
+LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
+LLM_D_RELEASE=${LLM_D_RELEASE:-"v0.3.0"}
+PREREQ_DIR=${PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq"}
+EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
+DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
 MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"H100"}
+SLO_TPOT=${SLO_TPOT:-9}  # Target time-per-output-token SLO (in ms)
+SLO_TTFT=${SLO_TTFT:-1000}  # Target time-to-first-token SLO (in ms)
 THANOS_SVC_URL=${THANOS_SVC_URL:-"https://thanos-querier.openshift-monitoring.svc.cluster.local"}
 THANOS_PORT=${THANOS_PORT:-"9091"}
 THANOS_URL=${THANOS_URL:-"$THANOS_SVC_URL:$THANOS_PORT"}
-GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"kgateway"}
+GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"}
+INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"false"}
 
 # Flags for deployment steps
 DEPLOY_WVA=${DEPLOY_WVA:-true}
@@ -161,6 +176,10 @@ create_namespace() {
 
 deploy_wva_controller() {
     log_info "Deploying Workload-Variant-Autoscaler..."
+
+    # Extract Thanos TLS certificate
+    log_info "Extracting Thanos TLS certificate"
+    kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
     
     # Update Prometheus URL in configmap
     log_info "Updating Prometheus URL in config/manager/configmap.yaml"
@@ -171,13 +190,14 @@ deploy_wva_controller() {
 
     cd $WVA_PROJECT/charts
 
+    # TODO: update to use Helm repo
     helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
     -n $WVA_NS \
     --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
-    --set variantAutoscaling.accelerator=L40S \
-    --set variantAutoscaling.modelID=unsloth/Meta-Llama-3.1-8B \
-    --set variantAutoscaling.sloTpot=30 \
-    --set variantAutoscaling.sloTtft=1000 \
+    --set variantAutoscaling.accelerator=$ACCELERATOR_TYPE \
+    --set variantAutoscaling.modelID=$MODEL_ID \
+    --set variantAutoscaling.sloTpot=$SLO_TPOT \
+    --set variantAutoscaling.sloTtft=$SLO_TTFT \
     --set vllmService.enabled=true \
     --set vllmService.nodePort=30000
 
@@ -213,139 +233,55 @@ deploy_llm_d_infrastructure() {
     
     # Install dependencies
     log_info "Installing llm-d dependencies"
-    cd $WVA_PROJECT/$LLM_D_PROJECT/quickstart
-    bash dependencies/install-deps.sh
-    bash gateway-control-plane-providers/install-gateway-provider-dependencies.sh
+    bash $PREREQ_DIR/client-setup/install-deps.sh
+    bash $PREREQ_DIR/gateway-provider/install-gateway-provider-dependencies.sh
 
     if [[ "$GATEWAY_PROVIDER" != "kgateway" && "$GATEWAY_PROVIDER" != "istio" ]]; then
         log_error "Unsupported gateway provider: $GATEWAY_PROVIDER"
         exit 1
     fi
 
-    # Install Gateway provider (kgateway v2.0.3)
+    # Install Gateway provider (if kgateway, using v2.0.3)
     if [ "$GATEWAY_PROVIDER" == "kgateway" ]; then
         log_info "Installing $GATEWAY_PROVIDER v2.0.3"
         yq eval '.releases[].version = "v2.0.3"' -i "gateway-control-plane-providers/$GATEWAY_PROVIDER.helmfile.yaml"
     fi
 
-    log_info "Applying $GATEWAY_PROVIDER helmfile"
-    helmfile apply -f "gateway-control-plane-providers/$GATEWAY_PROVIDER.helmfile.yaml"
+    if [ "$INSTALL_GATEWAY_CTRLPLANE" == "true" ]; then
+        log_info "Installing Gateway control plane ($GATEWAY_PROVIDER)"
+        helmfile apply -f "$PREREQ_DIR/gateway-provider/$GATEWAY_PROVIDER.helmfile.yaml"
+    else
+        log_info "Skipping Gateway control plane installation (INSTALL_GATEWAY_CTRLPLANE=false)"
+    fi
 
     # Configure llm-d for NodePort and correct model
     log_info "Configuring llm-d infrastructure"
-    # yq eval '.gateway.service.type = "NodePort"' -i $WVA_PROJECT/$LLM_D_PROJECT/charts/llm-d-infra/values.yaml
     
-    export EXAMPLES_DIR="$WVA_PROJECT/$LLM_D_PROJECT/quickstart/examples/$BASE_NAME"
-    cd $EXAMPLES_DIR
+    cd $EXAMPLE_DIR
     sed -i.bak "s/llm-d-inference-scheduler/$LLMD_NS/g" helmfile.yaml.gotmpl
-    yq eval "(.. | select(. == \"Qwen/Qwen3-0.6B\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://Qwen/Qwen3-0.6B\")) = \"hf://$MODEL_ID\"" -i ms-$BASE_NAME/values.yaml
-    
-    # TODO: remove this once the issue with the prefix-cache-scorer is resolved
-    log_info "Removing prefix-cache-scorer from Inference Scheduler configuration"
-    kubectl delete cm gaie-$BASE_NAME-epp -n $LLMD_NS
+
+    if [ $MODEL_ID != $DEFAULT_MODEL_ID ]; then
+        log_info "Updating deployment to use model: $MODEL_ID"
+        yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
+
+        # Increase model-storage volume size 
+        log_info "Increasing model-storage volume size for model: $MODEL_ID"
+        yq eval '.modelArtifacts.size = "30Gi"' -i ms-$WELL_LIT_PATH_NAME/values.yaml
+    fi
 
     # Deploy llm-d core components
     log_info "Deploying llm-d core components"
     helmfile apply -e $GATEWAY_PROVIDER
+    kubectl apply -f httproute.yaml -n ${NAMESPACE}
 
-    log_info "Removing prefix-cache-scorer from Inference Scheduler configuration"
-    kubectl apply -f - <<EOF
-apiVersion: v1
-data:
-  default-plugins.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
-    kind: EndpointPickerConfig
-    plugins:
-    - type: low-queue-filter
-      parameters:
-        threshold: 128
-    - type: lora-affinity-filter
-      parameters:
-        threshold: 0.999
-    - type: least-queue-filter
-    - type: least-kv-cache-filter
-    - type: decision-tree-filter
-      name: low-latency-filter
-      parameters:
-        current:
-          pluginRef: low-queue-filter
-        nextOnSuccess:
-          decisionTree:
-            current:
-              pluginRef: lora-affinity-filter
-            nextOnSuccessOrFailure:
-              decisionTree:
-                current:
-                  pluginRef: least-queue-filter
-                nextOnSuccessOrFailure:
-                  decisionTree:
-                    current:
-                      pluginRef: least-kv-cache-filter
-        nextOnFailure:
-          decisionTree:
-            current:
-              pluginRef: least-queue-filter
-            nextOnSuccessOrFailure:
-              decisionTree:
-                current:
-                  pluginRef: lora-affinity-filter
-                nextOnSuccessOrFailure:
-                  decisionTree:
-                    current:
-                      pluginRef: least-kv-cache-filter
-    - type: random-picker
-      parameters:
-        maxNumOfEndpoints: 1
-    - type: single-profile-handler
-    schedulingProfiles:
-    - name: default
-      plugins:
-      - pluginRef: low-latency-filter
-      - pluginRef: random-picker
-  plugins-v2.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
-    kind: EndpointPickerConfig
-    plugins:
-    - type: queue-scorer
-    - type: kv-cache-scorer
-    # - type: prefix-cache-scorer
-    #  parameters:
-    #    hashBlockSize: 64
-    #    maxPrefixBlocksToMatch: 256
-    #    lruCapacityPerServer: 31250
-    - type: max-score-picker
-      parameters:
-        maxNumOfEndpoints: 1
-    - type: single-profile-handler
-    schedulingProfiles:
-    - name: default
-      plugins:
-      - pluginRef: queue-scorer
-        weight: 1
-      - pluginRef: kv-cache-scorer
-        weight: 1
-      # - pluginRef: prefix-cache-scorer
-      #   weight: 1
-      - pluginRef: max-score-picker
-kind: ConfigMap
-metadata:
-  annotations:
-    meta.helm.sh/release-name: gaie-$BASE_NAME
-    meta.helm.sh/release-namespace: $LLMD_NS
-  labels:
-    app.kubernetes.io/managed-by: Helm
-  name: gaie-$BASE_NAME-epp
-  namespace: $LLMD_NS
-EOF
-
-    # Restart EPP deployment
-    kubectl rollout restart deployment gaie-$BASE_NAME-epp -n $LLMD_NS
-
-    export GATEWAY_NAME="infra-inference-scheduling-inference-gateway"
-    kubectl patch gatewayparameters.gateway.kgateway.dev $GATEWAY_NAME \
-    -n $LLMD_NS \
-    --type='merge' \
-    -p '{"spec":{"kube":{"service":{"type":"NodePort"}}}}'
+    if [ "$GATEWAY_PROVIDER" == "kgateway" ]; then
+        log_info "Patching kgateway service to NodePort"
+        export GATEWAY_NAME="infra-inference-scheduling-inference-gateway"
+        kubectl patch gatewayparameters.gateway.kgateway.dev $GATEWAY_NAME \
+        -n $LLMD_NS \
+        --type='merge' \
+        -p '{"spec":{"kube":{"service":{"type":"NodePort"}}}}'
+    fi
     
     cd $WVA_PROJECT
     log_success "llm-d infrastructure deployment complete"
@@ -354,11 +290,7 @@ EOF
 deploy_prometheus_adapter() {
     log_info "Deploying Prometheus Adapter..."
     
-    # Extract Thanos TLS certificate
-    log_info "Extracting Thanos TLS certificate"
-    kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
-    
-    # Create CA ConfigMap
+    # Create CA ConfigMap on Thanos TLS certificate
     kubectl create configmap prometheus-ca \
         --from-file=ca.crt=/tmp/prometheus-ca.crt \
         -n $MONITORING_NAMESPACE \
@@ -464,7 +396,7 @@ spec:
 YAML
     fi
     
-    kubectl patch deployment ms-$BASE_NAME-llm-d-modelservice-decode \
+    kubectl patch deployment ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode \
         -n $LLMD_NS \
         --patch-file config/samples/probes-patch.yaml
     
@@ -487,7 +419,7 @@ verify_deployment() {
     
     # Check llm-d pods
     log_info "Checking llm-d infrastructure..."
-    if kubectl get deployment ms-$BASE_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
+    if kubectl get deployment ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
         log_success "vLLM deployment exists"
     else
         log_error "vLLM deployment not found"
@@ -505,7 +437,7 @@ verify_deployment() {
     
     # Check VariantAutoscaling
     log_info "Checking VariantAutoscaling resource..."
-    if kubectl get variantautoscaling ms-$BASE_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
+    if kubectl get variantautoscaling ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
         log_success "VariantAutoscaling resource exists"
     else
         log_error "VariantAutoscaling resource not found"

@@ -79,6 +79,14 @@ type VariantAutoscalingStatus struct {
 
 	// Actuation provides details about the actuation process and its current status.
 	Actuation ActuationStatus `json:"actuation,omitempty"`
+
+	// Conditions represent the latest available observations of the VariantAutoscaling's state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // Allocation describes the current resource allocation for a model variant.
@@ -153,6 +161,7 @@ type ActuationStatus struct {
 // +kubebuilder:printcolumn:name="Accelerator",type=string,JSONPath=".status.currentAlloc.accelerator"
 // +kubebuilder:printcolumn:name="CurrentReplicas",type=integer,JSONPath=".status.currentAlloc.numReplicas"
 // +kubebuilder:printcolumn:name="Optimized",type=string,JSONPath=".status.desiredOptimizedAlloc.numReplicas"
+// +kubebuilder:printcolumn:name="MetricsReady",type=string,JSONPath=".status.conditions[?(@.type=='MetricsAvailable')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // VariantAutoscaling is the Schema for the variantautoscalings API.
@@ -181,3 +190,33 @@ type VariantAutoscalingList struct {
 func init() {
 	SchemeBuilder.Register(&VariantAutoscaling{}, &VariantAutoscalingList{})
 }
+
+// Condition Types for VariantAutoscaling
+const (
+	// TypeMetricsAvailable indicates whether vLLM metrics are available from Prometheus
+	TypeMetricsAvailable = "MetricsAvailable"
+	// TypeOptimizationReady indicates whether the optimization engine can run successfully
+	TypeOptimizationReady = "OptimizationReady"
+)
+
+// Condition Reasons for MetricsAvailable
+const (
+	// ReasonMetricsFound indicates vLLM metrics were successfully retrieved
+	ReasonMetricsFound = "MetricsFound"
+	// ReasonMetricsMissing indicates vLLM metrics are not available (likely ServiceMonitor issue)
+	ReasonMetricsMissing = "MetricsMissing"
+	// ReasonMetricsStale indicates metrics exist but are outdated
+	ReasonMetricsStale = "MetricsStale"
+	// ReasonPrometheusError indicates error querying Prometheus
+	ReasonPrometheusError = "PrometheusError"
+)
+
+// Condition Reasons for OptimizationReady
+const (
+	// ReasonOptimizationSucceeded indicates optimization completed successfully
+	ReasonOptimizationSucceeded = "OptimizationSucceeded"
+	// ReasonOptimizationFailed indicates optimization failed
+	ReasonOptimizationFailed = "OptimizationFailed"
+	// ReasonMetricsUnavailable indicates optimization cannot run due to missing metrics
+	ReasonMetricsUnavailable = "MetricsUnavailable"
+)

@@ -166,6 +166,22 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
+
+		// Update OptimizationReady condition to False for all VAs in the update list
+		for i := range updateList.Items {
+			va := &updateList.Items[i]
+			llmdVariantAutoscalingV1alpha1.SetCondition(va,
+				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
+				metav1.ConditionFalse,
+				llmdVariantAutoscalingV1alpha1.ReasonOptimizationFailed,
+				fmt.Sprintf("Optimization failed: %v", err))
+
+			if statusErr := r.Status().Update(ctx, va); statusErr != nil {
+				logger.Log.Error(statusErr, "failed to update status condition after optimization failure",
+					"variantAutoscaling", va.Name)
+			}
+		}
+
 		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
@@ -257,9 +273,32 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			continue
 		}
 
+		// Validate metrics availability before collecting metrics
+		metricsValidation := collector.ValidateMetricsAvailability(ctx, r.PromAPI, modelName, deploy.Namespace)
+
+		// Update MetricsAvailable condition based on validation result
+		if metricsValidation.Available {
+			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVA,
+				llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable,
+				metav1.ConditionTrue,
+				metricsValidation.Reason,
+				metricsValidation.Message)
+		} else {
+			// Metrics unavailable - just log and skip (don't update status yet to avoid CRD validation errors)
+			// Conditions will be set properly once metrics become available or after first successful collection
+			logger.Log.Warnw("Metrics unavailable, skipping optimization for variant",
+				"variant", updateVA.Name,
+				"namespace", updateVA.Namespace,
+				"model", modelName,
+				"reason", metricsValidation.Reason,
+				"troubleshooting", metricsValidation.Message)
+			continue
+		}
+
 		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
 		if err != nil {
 			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
+			// Don't update status here - will be updated in next reconcile when metrics are available
 			continue
 		}
 		updateVA.Status.CurrentAlloc = currentAllocation
@@ -335,6 +374,20 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
 		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
 		updateVa.Status.Actuation.Applied = false // No longer directly applying changes
+
+		// Copy existing conditions from updateList (includes MetricsAvailable condition set during preparation)
+		// This ensures we don't lose the MetricsAvailable condition when fetching fresh copy from API
+		// Always copy, even if empty, to preserve conditions set during prepareVariantAutoscalings
+		updateVa.Status.Conditions = va.Status.Conditions
+
+		// Set OptimizationReady condition to True on successful optimization
+		llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,
+			llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
+			metav1.ConditionTrue,
+			llmdVariantAutoscalingV1alpha1.ReasonOptimizationSucceeded,
+			fmt.Sprintf("Optimization completed: %d replicas on %s",
+				updateVa.Status.DesiredOptimizedAlloc.NumReplicas,
+				updateVa.Status.DesiredOptimizedAlloc.Accelerator))
 
 		act := actuator.NewActuator(r.Client)
 

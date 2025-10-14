@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -727,10 +728,18 @@ data:
 		})
 
 		It("should prepare active VAs for optimization", func() {
+			// Create a mock Prometheus API with valid metric data that passes validation
+			mockPromAPI := &testutils.MockPromAPI{
+				QueryResults: map[string]model.Value{
+					// Default: return a vector with one sample to pass validation
+				},
+				QueryErrors: map[string]error{},
+			}
+
 			controllerReconciler := &VariantAutoscalingReconciler{
 				Client:  k8sClient,
 				Scheme:  k8sClient.Scheme(),
-				PromAPI: &testutils.MockPromAPI{},
+				PromAPI: mockPromAPI,
 			}
 
 			By("Reading the required configmaps")
@@ -772,6 +781,93 @@ data:
 				Expect(updatedVa.Status.CurrentAlloc.NumReplicas).To(Equal(1), fmt.Sprintf("Current NumReplicas for %s should be 1 after preparation", updatedVa.Name))
 				Expect(updatedVa.Status.DesiredOptimizedAlloc.Accelerator).To(BeEmpty(), fmt.Sprintf("Desired Accelerator for %s should be empty value after preparation", updatedVa.Name))
 				Expect(updatedVa.Status.DesiredOptimizedAlloc.NumReplicas).To(BeZero(), fmt.Sprintf("Desired NumReplicas for %s should be zero after preparation", updatedVa.Name))
+			}
+		})
+
+		It("should set MetricsAvailable condition when metrics validation fails", func() {
+			By("Creating a mock Prometheus API that returns no metrics")
+			mockPromAPI := &testutils.MockPromAPI{
+				QueryResults: map[string]model.Value{},
+				QueryErrors:  map[string]error{},
+			}
+
+			controllerReconciler := &VariantAutoscalingReconciler{
+				Client:  k8sClient,
+				Scheme:  k8sClient.Scheme(),
+				PromAPI: mockPromAPI,
+			}
+
+			By("Reading the required configmaps")
+			accMap, err := controllerReconciler.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			serviceClassMap, err := controllerReconciler.readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
+			err = k8sClient.List(ctx, &variantAutoscalingList)
+			Expect(err).NotTo(HaveOccurred())
+
+			activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
+			Expect(len(activeVAs)).To(BeNumerically(">", 0))
+
+			By("Preparing system data and calling prepareVariantAutoscalings")
+			systemData := utils.CreateSystemData(accMap, serviceClassMap, dummyInventory)
+
+			_, _, _, err = controllerReconciler.prepareVariantAutoscalings(ctx, activeVAs, accMap, serviceClassMap, systemData)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that MetricsAvailable condition is set to False")
+			for _, va := range activeVAs {
+				var updatedVa llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: va.Name, Namespace: va.Namespace}, &updatedVa)
+				Expect(err).NotTo(HaveOccurred())
+
+				metricsCondition := llmdVariantAutoscalingV1alpha1.GetCondition(&updatedVa, llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable)
+				if metricsCondition != nil {
+					Expect(metricsCondition.Status).To(Equal(metav1.ConditionFalse),
+						fmt.Sprintf("MetricsAvailable condition should be False for %s", va.Name))
+					Expect(metricsCondition.Reason).To(Or(
+						Equal(llmdVariantAutoscalingV1alpha1.ReasonPrometheusError),
+						Equal(llmdVariantAutoscalingV1alpha1.ReasonMetricsMissing),
+					))
+				}
+			}
+		})
+
+		It("should set OptimizationReady condition when optimization succeeds", func() {
+			By("Using a working mock Prometheus API with sample data")
+			mockPromAPI := &testutils.MockPromAPI{
+				QueryResults: map[string]model.Value{
+					// Add default responses for common queries
+				},
+				QueryErrors: map[string]error{},
+			}
+
+			controllerReconciler := &VariantAutoscalingReconciler{
+				Client:  k8sClient,
+				Scheme:  k8sClient.Scheme(),
+				PromAPI: mockPromAPI,
+			}
+
+			By("Performing a full reconciliation")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that conditions are set correctly")
+			var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
+			err = k8sClient.List(ctx, &variantAutoscalingList)
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, va := range variantAutoscalingList.Items {
+				if va.DeletionTimestamp.IsZero() {
+					metricsCondition := llmdVariantAutoscalingV1alpha1.GetCondition(&va, llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable)
+					if metricsCondition != nil && metricsCondition.Status == metav1.ConditionTrue {
+						optimizationCondition := llmdVariantAutoscalingV1alpha1.GetCondition(&va, llmdVariantAutoscalingV1alpha1.TypeOptimizationReady)
+						Expect(optimizationCondition).NotTo(BeNil(),
+							fmt.Sprintf("OptimizationReady condition should be set for %s", va.Name))
+					}
+				}
 			}
 		})
 	})

@@ -80,44 +80,60 @@ destroy-kind-cluster:
         deploy/kind-emulator/teardown.sh
 
 # Create Kind cluster (if needed)
-# Deploys the Inferno Autoscaler on a Kind cluster with emulated GPU support.
+# Deploys the WVA controller on a Kind cluster with emulated GPU support.
 # This target assumes that the Kind cluster has been created and is running.
-.PHONY: deploy-inferno-emulated-on-kind
-deploy-inferno-emulated-on-kind:
+.PHONY: deploy-wva-emulated-on-kind
+deploy-wva-emulated-on-kind:
 	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) && \
-		deploy/kind-emulator/deploy-inferno.sh $(KIND_ARGS)
+		deploy/kind-emulator/deploy-wva.sh $(KIND_ARGS)
 
 # Deploy controller in emulator mode
 .PHONY: deploy-emulated
 deploy-emulated: deploy
 
-.PHONY: undeploy-inferno-on-kind
-undeploy-inferno-on-kind:
+.PHONY: undeploy-wva-on-kind
+undeploy-wva-on-kind:
 	make undeploy
 	kubectl delete ns/workload-variant-autoscaler-system --ignore-not-found
 	kubectl delete ns/workload-variant-autoscaler-monitoring --ignore-not-found
 
 # Creates Kind cluster with emulated GPU support (if needed)
-# Deploys the Inferno Autoscaler on a Kind cluster
+# Deploys the WVA controller on a Kind cluster
 # Deploys the llm-d components in the same Kind cluster
-.PHONY: deploy-llm-d-inferno-emulated-on-kind
-deploy-llm-d-inferno-emulated-on-kind:
+.PHONY: deploy-llm-d-wva-emulated-on-kind
+deploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		deploy/kind-emulator/deploy-llm-d.sh $(KIND_ARGS) -i $(IMG)
 
-## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
-.PHONY: deploy-inferno-on-openshift
-deploy-inferno-on-openshift: manifests kustomize ## Deploy Inferno Autoscaler to OpenShift cluster with specified image.
-	@echo "Deploying Inferno Autoscaler to OpenShift with image: $(IMG)"
+## Deploy WVA to OpenShift cluster with specified image.
+.PHONY: deploy-wva-on-openshift
+deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster with specified image.
+	@echo "Deploying WVA to OpenShift with image: $(IMG)"
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./hack/deploy-inferno-openshift.sh
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./deploy/openshift/install.sh
 
-.PHONY: undeploy-llm-d-inferno-emulated-on-kind
-undeploy-llm-d-inferno-emulated-on-kind:
+.PHONY: undeploy-llm-d-wva-emulated-on-kind
+undeploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler"
 	deploy/kind-emulator/undeploy-llm-d.sh
+
+# Backwards compatibility aliases (deprecated - use wva targets above)
+.PHONY: deploy-inferno-emulated-on-kind
+deploy-inferno-emulated-on-kind: deploy-wva-emulated-on-kind
+
+.PHONY: undeploy-inferno-on-kind
+undeploy-inferno-on-kind: undeploy-wva-on-kind
+
+.PHONY: deploy-llm-d-inferno-emulated-on-kind
+deploy-llm-d-inferno-emulated-on-kind: deploy-llm-d-wva-emulated-on-kind
+
+.PHONY: undeploy-llm-d-inferno-emulated-on-kind
+undeploy-llm-d-inferno-emulated-on-kind: undeploy-llm-d-wva-emulated-on-kind
+
+.PHONY: deploy-inferno-on-openshift
+deploy-inferno-on-openshift: deploy-wva-on-openshift
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

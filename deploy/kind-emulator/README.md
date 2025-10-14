@@ -42,12 +42,12 @@ make create-kind-cluster KIND_ARGS="-t mix -n 4 -g 2"
 
 **2. Deploy WVA only:**
 ```bash
-make deploy-inferno-emulated-on-kind
+make deploy-wva-emulated-on-kind
 ```
 
 **3. Deploy with llm-d:**
 ```bash
-make deploy-llm-d-inferno-emulated-on-kind
+make deploy-llm-d-wva-emulated-on-kind
 ```
 
 ## Scripts
@@ -65,12 +65,12 @@ Creates Kind cluster with emulated GPU support.
 - `-n`: Number of nodes - default: 3
 - `-g`: GPUs per node - default: 2
 
-### deploy-inferno.sh
+### deploy-wva.sh
 
 Deploys WVA controller to existing cluster.
 
 ```bash
-./deploy-inferno.sh
+./deploy-wva.sh
 ```
 
 ### deploy-llm-d.sh

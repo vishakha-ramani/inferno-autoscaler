@@ -85,7 +85,7 @@ make create-kind-cluster
 make deploy IMG=<your-image>
 
 # Or deploy with llm-d infrastructure
-make deploy-llm-d-inferno-emulated-on-kind
+make deploy-llm-d-wva-emulated-on-kind
 ```
 
 ### Making Changes
@@ -175,7 +175,7 @@ See [Testing Guide](testing.md) for more details.
 
 1. **Deploy to Kind cluster:**
    ```bash
-   make deploy-llm-d-inferno-emulated-on-kind IMG=<your-image>
+   make deploy-llm-d-wva-emulated-on-kind IMG=<your-image>
    ```
 
 2. **Create test resources:**

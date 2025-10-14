@@ -1,12 +1,12 @@
 # HPA Integration with the workload-variant-autoscaler
 
-This guide shows how to integrate Kubernetes HorizontalPodAutoscaler (HPA) with the Inferno Autoscaler using the existing deployment environment.
+This guide shows how to integrate Kubernetes HorizontalPodAutoscaler (HPA) with the WVA using the existing deployment environment.
 
 ## Overview
 
 After deploying the workload-variant-autoscaler following the provided guides, this guide allows the integration of the following components:
 
-1. **Inferno Controller**: processes VariantAutoscaling objects and emits the `inferno_current_replicas`, the `inferno_desired_replicas` and the `inferno_desired_ratio` metrics
+1. **WVA controller**: processes VariantAutoscaling objects and emits the `inferno_current_replicas`, the `inferno_desired_replicas` and the `inferno_desired_ratio` metrics
 
 2. **Prometheus**: scrapes these metrics from the workload-variant-autoscaler `/metrics` endpoint using TLS
 
@@ -205,7 +205,7 @@ kubectl logs -n workload-variant-autoscaler-system deploy/workload-variant-autos
 
 ## Feature: Scale to Zero
 
-The Inferno Autoscaler can leverage on HPA's *alpha* feature for scale to zero functionality, enabling complete resource optimization by scaling deployments down to zero replicas when no load is detected.
+The WVA can leverage on HPA's *alpha* feature for scale to zero functionality, enabling complete resource optimization by scaling deployments down to zero replicas when no load is detected.
 
 To enable `HPAScaleToZero`, you need to enable the corresponding feature flags in the Kind cluster configuration:
 

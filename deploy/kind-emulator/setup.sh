@@ -5,7 +5,7 @@ set -euo pipefail
 # --------------------------------------------------------------------
 # Defaults
 # --------------------------------------------------------------------
-DEFAULT_CLUSTER_NAME="kind-inferno-gpu-cluster"
+DEFAULT_CLUSTER_NAME="kind-wva-gpu-cluster"
 DEFAULT_NODES=3
 DEFAULT_GPUS_PER_NODE=2
 DEFAULT_GPU_TYPE="mix"

@@ -209,14 +209,6 @@ Displays:
   - ServiceMonitor for WVA metrics
   - ConfigMaps (service classes, accelerator costs, config)
   - RBAC (roles, bindings, service account)
-  
-- **NEW Features in v0.0.6**:
-  - ✅ Metrics validation before optimization
-  - ✅ Status conditions (MetricsAvailable, OptimizationReady)
-  - ✅ Graceful degradation when metrics unavailable
-  - ✅ Actionable troubleshooting messages
-  - ✅ MetricsReady column in kubectl output
-  - ✅ Improved structured logging
 
 ### 3. llm-d Infrastructure
 
@@ -601,11 +593,11 @@ When metrics are unavailable, you'll see structured logs like:
 ```
 
 This means:
-- ✅ WVA is working correctly
-- ✅ Detecting no metrics available
-- ✅ Skipping optimization gracefully
-- ✅ Providing troubleshooting steps
-- ✅ Will retry automatically
+- WVA is working correctly
+- Detecting no metrics available
+- Skipping optimization gracefully
+- Providing troubleshooting steps
+- Will retry automatically
 
 ## Architecture
 
@@ -618,19 +610,6 @@ ServiceMonitors:     workload-variant-autoscaler-monitoring
 WVA Controller:      workload-variant-autoscaler-system
 vLLM Pods:           llm-d-inference-scheduling
 ```
-
-**Why?**
-- ✅ Centralized monitoring configuration
-- ✅ Follows Kubernetes best practices
-- ✅ Works with kube-prometheus-stack defaults
-- ✅ Easier to manage monitoring resources
-
-**Why WVA Doesn't Watch ServiceMonitor**:
-- ✅ Avoids cross-namespace complexity
-- ✅ Validates metrics through Prometheus API instead
-- ✅ Works with ANY Prometheus setup
-- ✅ Simpler RBAC requirements
-- ✅ Better separation of concerns
 
 ### Metrics Flow
 
@@ -654,7 +633,7 @@ vLLM Pods:           llm-d-inference-scheduling
 │ WVA Controller (workload-variant-autoscaler-system)         │
 │   ├─ ValidateMetricsAvailability() ← NEW!                   │
 │   ├─ Collect metrics from Prometheus                        │
-│   ├─ Run Inferno optimization                               │
+│   ├─ Run WVA optimization                               │
 │   ├─ Set status conditions ← NEW!                           │
 │   └─ Emit inferno_desired_replicas metric                   │
 └─────────────────────────────────────────────────────────────┘
@@ -788,26 +767,4 @@ For issues or questions:
 2. Check WVA and llm-d logs
 3. Review `docs/metrics-health-monitoring.md` for metrics issues
 4. Open an issue on GitHub
-
-## Version History
-
-### v0.0.6 (Current)
-- ✅ Added metrics validation system
-- ✅ Added status conditions to VariantAutoscaling
-- ✅ Improved structured logging
-- ✅ Fixed CRD validation errors
-- ✅ Enhanced troubleshooting messages
-
-### v0.0.5
-- Metrics validation implementation
-- Status conditions (initial)
-- Structured logging (initial)
-
-### v0.0.4
-- Basic metrics validation
-- CRD validation error (fixed in v0.0.6)
-
-## License
-
-Apache License 2.0
 

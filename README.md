@@ -44,7 +44,7 @@ helm upgrade -i workload-variant-autoscaler ./charts/workload-variant-autoscaler
 
 ```bash
 # Deploy WVA with llm-d infrastructure on a local Kind cluster
-make deploy-llm-d-inferno-emulated-on-kind
+make deploy-llm-d-wva-emulated-on-kind
 
 # This creates a Kind cluster with emulated GPUs and deploys:
 # - WVA controller

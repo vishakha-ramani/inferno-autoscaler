@@ -1,6 +1,6 @@
 # Custom Metrics Documentation
 
-The Inferno Autoscaler exposes a focused set of custom metrics that provide insights into the autoscaling behavior and optimization performance. These metrics are exposed via Prometheus and can be used for monitoring, alerting, and dashboard creation.
+The WVA exposes a focused set of custom metrics that provide insights into the autoscaling behavior and optimization performance. These metrics are exposed via Prometheus and can be used for monitoring, alerting, and dashboard creation.
 
 ## Metrics Overview
 

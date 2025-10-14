@@ -72,7 +72,7 @@ var _ = BeforeSuite(func() {
 
 	// Deploy llm-d and workload-variant-autoscaler on the Kind cluster
 	By("deploying llm-d and workload-variant-autoscaler on Kind")
-	launchCmd := exec.Command("make", "deploy-llm-d-inferno-emulated-on-kind", fmt.Sprintf("KIND_ARGS=-n %d -g %d -t %s", numNodes, maximumAvailableGPUs, gpuTypes), fmt.Sprintf("IMG=%s", projectImage))
+	launchCmd := exec.Command("make", "deploy-llm-d-wva-emulated-on-kind", fmt.Sprintf("KIND_ARGS=-n %d -g %d -t %s", numNodes, maximumAvailableGPUs, gpuTypes), fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(launchCmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install llm-d and workload-variant-autoscaler")
 

@@ -3,7 +3,7 @@
 set -eou pipefail
 
 KIND=${KIND:-kind}
-KIND_NAME=${KIND_NAME:-"kind-inferno-gpu-cluster"}
+KIND_NAME=${KIND_NAME:-"kind-wva-gpu-cluster"}
 
 _kind() {
     "${KIND}" "$@"

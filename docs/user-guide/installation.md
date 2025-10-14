@@ -64,7 +64,7 @@ cd deploy/openshift
 **Local Development (Kind Emulator):**
 ```bash
 # See deploy/kind-emulator/README.md for detailed instructions
-make deploy-llm-d-inferno-emulated-on-kind
+make deploy-llm-d-wva-emulated-on-kind
 ```
 
 ## Configuration

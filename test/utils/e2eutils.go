@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	clusterName         = "kind-inferno-gpu-cluster"
+	clusterName         = "kind-wva-gpu-cluster"
 	prometheusHelmChart = "https://prometheus-community.github.io/helm-charts"
 	monitoringNamespace = "workload-variant-autoscaler-monitoring"
 

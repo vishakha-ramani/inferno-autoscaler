@@ -158,6 +158,8 @@ go test -cover ./...
 
 ### E2E Tests
 
+#### Kind E2E Tests
+
 ```bash
 # Run all E2E tests
 make test-e2e
@@ -168,6 +170,25 @@ make test-e2e FOCUS="single VA"
 # Skip specific tests
 make test-e2e SKIP="multiple VA"
 ```
+
+#### OpenShift E2E Tests
+
+```bash
+# Run E2E tests on OpenShift cluster
+make test-e2e-openshift
+
+# With custom image
+make test-e2e-openshift IMG=<your-registry>/wva-controller:tag
+
+# Run specific OpenShift tests
+make test-e2e-openshift FOCUS="HPA integration"
+```
+
+**Prerequisites for OpenShift E2E:**
+- Access to an OpenShift cluster (OCP 4.12+)
+- `oc` CLI tool configured and authenticated
+- Cluster admin permissions
+- Prometheus operator installed
 
 See [Testing Guide](testing.md) for more details.
 

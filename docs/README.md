@@ -19,7 +19,7 @@ Step-by-step guides:
 - **[Quick Start Demo](tutorials/demo.md)** - Getting started with WVA
 - **[Parameter Estimation](tutorials/parameter-estimation.md)** - Estimating model parameters
 - **[vLLM Samples](tutorials/vllm-samples.md)** - Working with vLLM servers
-- **[GuideML Sample](tutorials/guidellm-sample.md)** - Using GuideML for benchmarking
+- **[GuideLLM Sample](tutorials/guidellm-sample.md)** - Using GuideLLM for benchmarking
 
 ### Integrations
 

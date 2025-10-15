@@ -37,9 +37,10 @@ fi
 if [[ -z "${IMG}" ]]; then
     WVA_IMAGE_REPO="ghcr.io/llm-d/workload-variant-autoscaler"
     WVA_IMAGE_TAG="v0.0.1"
+    log_info "Using default WVA image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
 else
-    # Split IMG into repo and tag
     IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
+    log_info "Using WVA image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
 fi
 
 # Configuration

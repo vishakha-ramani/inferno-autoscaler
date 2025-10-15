@@ -12,9 +12,9 @@ import (
 	"time"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"

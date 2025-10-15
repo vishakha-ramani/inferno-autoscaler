@@ -52,13 +52,13 @@ THANOS_SVC_URL=${THANOS_SVC_URL:-"https://thanos-querier.openshift-monitoring.sv
 THANOS_PORT=${THANOS_PORT:-"9091"}
 THANOS_URL=${THANOS_URL:-"$THANOS_SVC_URL:$THANOS_PORT"}
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"}
+BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates Istio config for benchmark
 INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"false"}
 
 # Flags for deployment steps
 DEPLOY_WVA=${DEPLOY_WVA:-true}
 DEPLOY_LLM_D=${DEPLOY_LLM_D:-true}
 DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
-# DEPLOY_HPA=${DEPLOY_HPA:-false}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
 
 # Helper functions
@@ -208,6 +208,11 @@ deploy_wva_controller() {
 
 deploy_llm_d_infrastructure() {
     log_info "Deploying llm-d infrastructure..."
+
+    if [ "$BENCHMARK_MODE" == "true" ]; then
+        log_info "Benchmark mode enabled - using benchmark configuration for Istio"
+        GATEWAY_PROVIDER="istioBench"
+    fi
     
     # Check for HF_TOKEN
     if [ -z "$HF_TOKEN" ]; then
@@ -236,7 +241,7 @@ deploy_llm_d_infrastructure() {
     bash $PREREQ_DIR/client-setup/install-deps.sh
     bash $PREREQ_DIR/gateway-provider/install-gateway-provider-dependencies.sh
 
-    if [[ "$GATEWAY_PROVIDER" != "kgateway" && "$GATEWAY_PROVIDER" != "istio" ]]; then
+    if [[ "$GATEWAY_PROVIDER" != "kgateway" && "$GATEWAY_PROVIDER" != "istio" && "$GATEWAY_PROVIDER" != "istioBench" ]]; then
         log_error "Unsupported gateway provider: $GATEWAY_PROVIDER"
         exit 1
     fi
@@ -271,8 +276,8 @@ deploy_llm_d_infrastructure() {
 
     # Deploy llm-d core components
     log_info "Deploying llm-d core components"
-    helmfile apply -e $GATEWAY_PROVIDER
-    kubectl apply -f httproute.yaml -n ${NAMESPACE}
+    helmfile apply -e $GATEWAY_PROVIDER -n ${LLMD_NS}
+    kubectl apply -f httproute.yaml -n ${LLMD_NS}
 
     if [ "$GATEWAY_PROVIDER" == "kgateway" ]; then
         log_info "Patching kgateway service to NodePort"

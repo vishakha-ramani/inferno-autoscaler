@@ -3,7 +3,7 @@ package core
 import (
 	"testing"
 
-	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 )
 
 func TestNewModel(t *testing.T) {

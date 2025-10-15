@@ -3,9 +3,9 @@ package manager
 import (
 	"testing"
 
-	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
-	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/core"
-	"github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/solver"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/solver"
 )
 
 func TestNewManager(t *testing.T) {

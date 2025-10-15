@@ -199,7 +199,7 @@ deploy_wva_controller() {
     cd $WVA_PROJECT/charts
 
     # TODO: update to use Helm repo
-    helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
+    helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
     -n $WVA_NS \
     --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
     --set wva.image.repository=$WVA_IMAGE_REPO \

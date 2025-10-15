@@ -4,7 +4,7 @@ Automated deployment script for WVA and llm-d infrastructure on OpenShift cluste
 
 ## Overview
 
-The `deploy-llmd+wva-openshift.sh` script automates the complete deployment process on OpenShift cluster including:
+This script automates the complete deployment process on OpenShift cluster including:
 
 - Workload-Variant-Autoscaler controller
 - llm-d infrastructure (Gateway, Scheduler, vLLM)
@@ -57,7 +57,7 @@ export WVA_IMAGE="ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"  # Default
 ### 2. Deploy the Workload Variant Autoscaler and llm-d using Make
 
 ```bash
-make deploy-llm-d-wva-on-openshift
+make deploy-wva-on-openshift
 ```
 
 That's it! The script will:
@@ -90,7 +90,10 @@ That's it! The script will:
 | `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1` |
 | `LLM_D_RELEASE` | llm-d release version | `v0.3.0` |
 | `GATEWAY_PROVIDER` | Deployed Gateway API implementation | `istio` |
+| `BENCHMARK_MODE` | Deploying using benchmark configuration for Istio | `true` |
 | `INSTALL_GATEWAY_CTRLPLANE` | Need to install Gateway Control Plane | `false` |
+
+*Note*: when `true`, the `BENCHMARK_MODE` will override any `GATEWAY_PROVIDER` previously set.
 
 ### Deployment Flags
 

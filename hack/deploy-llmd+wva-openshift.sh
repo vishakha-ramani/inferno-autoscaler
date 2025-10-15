@@ -34,11 +34,20 @@ if [[ -z "${LLM_D_PROJECT}" ]]; then
     LLM_D_PROJECT="llm-d"
 fi
 
+if [[ -z "${IMG}" ]]; then
+    WVA_IMAGE_REPO="ghcr.io/llm-d/workload-variant-autoscaler"
+    WVA_IMAGE_TAG="v0.0.1"
+else
+    # Split IMG into repo and tag
+    IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
+fi
+
 # Configuration
 LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"openshift-user-workload-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
-WVA_IMAGE=${WVA_IMAGE:-"ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1"}
+WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
+WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.1"}
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
 LLM_D_RELEASE=${LLM_D_RELEASE:-"v0.3.0"}
 PREREQ_DIR=${PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq"}
@@ -194,6 +203,8 @@ deploy_wva_controller() {
     helm upgrade -i workload-variant-autoscaler ./wva-llmd-infra \
     -n $WVA_NS \
     --set-file prometheus.caCert=/tmp/prometheus-ca.crt \
+    --set wva.image.repository=$WVA_IMAGE_REPO \
+    --set wva.image.tag=$WVA_IMAGE_TAG \
     --set variantAutoscaling.accelerator=$ACCELERATOR_TYPE \
     --set variantAutoscaling.modelID=$MODEL_ID \
     --set variantAutoscaling.sloTpot=$SLO_TPOT \
@@ -269,7 +280,7 @@ deploy_llm_d_infrastructure() {
         log_info "Updating deployment to use model: $MODEL_ID"
         yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
 
-        # Increase model-storage volume size 
+        # Increase model-storage volume size
         log_info "Increasing model-storage volume size for model: $MODEL_ID"
         yq eval '.modelArtifacts.size = "30Gi"' -i ms-$WELL_LIT_PATH_NAME/values.yaml
     fi
@@ -401,6 +412,7 @@ spec:
 YAML
     fi
     
+    # TODO: update to parametrize deployment name
     kubectl patch deployment ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode \
         -n $LLMD_NS \
         --patch-file config/samples/probes-patch.yaml
@@ -424,6 +436,7 @@ verify_deployment() {
     
     # Check llm-d pods
     log_info "Checking llm-d infrastructure..."
+    # TODO: update to parametrize deployment name
     if kubectl get deployment ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
         log_success "vLLM deployment exists"
     else
@@ -442,6 +455,7 @@ verify_deployment() {
     
     # Check VariantAutoscaling
     log_info "Checking VariantAutoscaling resource..."
+    # TODO: update to parametrize deployment name
     if kubectl get variantautoscaling ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode -n $LLMD_NS &> /dev/null; then
         log_success "VariantAutoscaling resource exists"
     else
@@ -484,7 +498,7 @@ print_summary() {
     echo "Monitoring Namespace:   $MONITORING_NAMESPACE"
     echo "Model:                  $MODEL_ID"
     echo "Accelerator:            $ACCELERATOR_TYPE"
-    echo "WVA Image:              $WVA_IMAGE"
+    echo "WVA Image:              $WVA_IMAGE_REPO":"$WVA_IMAGE_TAG"
     echo ""
     echo "Next Steps:"
     echo "==========="
@@ -540,6 +554,9 @@ main() {
     # Deploy llm-d
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         deploy_llm_d_infrastructure
+        
+        # Apply vLLM probes
+        apply_vllm_probes
     else
         log_info "Skipping llm-d deployment (DEPLOY_LLM_D=false)"
     fi
@@ -550,9 +567,6 @@ main() {
     else
         log_info "Skipping Prometheus Adapter deployment (DEPLOY_PROMETHEUS_ADAPTER=false)"
     fi
-    
-    # Apply vLLM probes
-    apply_vllm_probes
     
     # Verify deployment
     verify_deployment

@@ -42,7 +42,7 @@ const (
 	controllerNamespace = "workload-variant-autoscaler-system"
 	monitoringNamespace = "openshift-user-workload-monitoring"
 	llmDNamespace       = "llm-d-inference-scheduling"
-	gatewayName         = "infra-inference-scheduling-inference-gateway"
+	gatewayName         = "infra-inference-scheduling-inference-gateway-istio"
 )
 
 const (

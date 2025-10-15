@@ -22,7 +22,7 @@ _kind() {
 # Check if the Kind cluster exists, if not, create it
 if ! _kind get kubeconfig --name "${KIND_NAME}" &>/dev/null; then
   echo "Kind cluster '${KIND_NAME}' does not exist. Creating..."
-  hack/create-kind-gpu-cluster.sh "$@"
+  deploy/kind-emulator/setup.sh "$@"
 else
   echo "Kind cluster '${KIND_NAME}' is already running."
 fi
@@ -50,6 +50,9 @@ _kind load docker-image ${IMG} --name ${KIND_NAME}
 echo "Creating namespace ${NAMESPACE}"
 _kubectl create ns ${NAMESPACE} 2>/dev/null || true
 
+echo "Creating monitoring namespace ${MONITORING_NAMESPACE}"
+_kubectl create ns ${MONITORING_NAMESPACE} 2>/dev/null || true
+
 echo "Installing inferno CRD"
 make install
 sleep 10
@@ -63,7 +66,9 @@ _kubectl apply -f deploy/configmap-serviceclass.yaml
 _kubectl apply -f deploy/configmap-accelerator-unitcost.yaml
 
 # deploy emulated vllme server (includes Prometheus with TLS)
-hack/deploy-emulated-vllme-server.sh
+# Export cluster name so the deploy script uses the same cluster
+export KIND_NAME=${KIND_NAME}
+deploy/examples/vllm-emulator/deploy.sh
 
 echo "Deploying Inferno controller-manager"
 make deploy-emulated

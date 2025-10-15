@@ -34,15 +34,6 @@ if [[ -z "${LLM_D_PROJECT}" ]]; then
     LLM_D_PROJECT="llm-d"
 fi
 
-if [[ -z "${IMG}" ]]; then
-    WVA_IMAGE_REPO="ghcr.io/llm-d/workload-variant-autoscaler"
-    WVA_IMAGE_TAG="v0.0.1"
-    log_info "Using default WVA image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
-else
-    IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
-    log_info "Using WVA image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
-fi
-
 # Configuration
 LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"openshift-user-workload-monitoring"}
@@ -62,7 +53,7 @@ THANOS_SVC_URL=${THANOS_SVC_URL:-"https://thanos-querier.openshift-monitoring.sv
 THANOS_PORT=${THANOS_PORT:-"9091"}
 THANOS_URL=${THANOS_URL:-"$THANOS_SVC_URL:$THANOS_PORT"}
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"}
-BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates Istio config for benchmark
+BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmark
 INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"false"}
 
 # Flags for deployment steps
@@ -186,6 +177,13 @@ create_namespace() {
 
 deploy_wva_controller() {
     log_info "Deploying Workload-Variant-Autoscaler..."
+
+    if [[ -z "${IMG}" ]]; then
+        WVA_IMAGE_REPO="ghcr.io/llm-d/workload-variant-autoscaler"
+        WVA_IMAGE_TAG="v0.0.1"
+    else
+        IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
+    fi
 
     # Extract Thanos TLS certificate
     log_info "Extracting Thanos TLS certificate"
@@ -499,7 +497,17 @@ print_summary() {
     echo "Monitoring Namespace:   $MONITORING_NAMESPACE"
     echo "Model:                  $MODEL_ID"
     echo "Accelerator:            $ACCELERATOR_TYPE"
-    echo "WVA Image:              $WVA_IMAGE_REPO":"$WVA_IMAGE_TAG"
+    echo "SLO (TPOT):             $SLO_TPOT ms"
+    echo "SLO (TTFT):             $SLO_TTFT ms"
+    if [ "$BENCHMARK_MODE" == "true" ]; then
+        echo "Gateway Provider:       $GATEWAY_PROVIDER (benchmark mode)"
+    else
+        echo "Gateway Provider:       $GATEWAY_PROVIDER"
+    fi
+    if [ "$DEPLOY_WVA" == "true" ]; then
+        echo "WVA Image:              $WVA_IMAGE_REPO":"$WVA_IMAGE_TAG"
+
+    fi
     echo ""
     echo "Next Steps:"
     echo "==========="

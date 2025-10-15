@@ -1,7 +1,7 @@
 # Image URL to use all building/pushing image targets
-IMAGE_TAG_BASE ?= ghcr.io/llm-d/workload-variant-autoscaler
+IMAGE_TAG_BASE ?= ghcr.io/llm-d
 IMG_TAG ?= v0.0.1
-IMG ?= $(IMAGE_TAG_BASE)/inferno-controller:$(IMG_TAG)
+IMG ?= $(IMAGE_TAG_BASE)/workload-variant-autoscaler:$(IMG_TAG)
 KIND_ARGS ?= -t mix -n 3 -g 2   # Default: 3 nodes, 2 GPUs per node, mixed vendors
 KUBECONFIG ?= $(HOME)/.kube/config
 K8S_VERSION ?= v1.32.0

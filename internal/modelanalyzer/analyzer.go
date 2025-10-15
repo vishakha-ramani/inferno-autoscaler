@@ -4,9 +4,9 @@ import (
 	"context"
 
 	llmdOptv1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/core"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
 )
 
 // Performance analyzer of queueing models associated with variant servers

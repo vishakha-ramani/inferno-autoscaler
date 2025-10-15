@@ -31,15 +31,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
-	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/core"
-	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/manager"
-	infernoSolver "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/solver"
 	collector "github.com/llm-d-incubation/workload-variant-autoscaler/internal/collector"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	analyzer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/modelanalyzer"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
+	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
+	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/manager"
+	infernoSolver "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/solver"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
 

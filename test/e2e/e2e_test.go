@@ -686,7 +686,7 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 		}, 1*time.Minute, 1*time.Second).Should(Succeed())
 
 		By("cleaning up Prometheus operator resources")
-		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
+		cmd := exec.Command("kubectl", "delete", "-f", "deploy/examples/vllm-emulator/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
 		output, err := utils.Run(cmd)
 		if err != nil {
 			fmt.Printf("Prometheus cleanup output: %s\n", output)
@@ -1200,7 +1200,7 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		}, 1*time.Minute, 1*time.Second).Should(Succeed())
 
 		By("cleaning up Prometheus operator resources")
-		cmd := exec.Command("kubectl", "delete", "-f", "hack/vllme/deploy/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
+		cmd := exec.Command("kubectl", "delete", "-f", "deploy/examples/vllm-emulator/prometheus-operator/prometheus-deploy-all-in-one.yaml", "--ignore-not-found=true")
 		output, err := utils.Run(cmd)
 		if err != nil {
 			fmt.Printf("Prometheus cleanup output: %s\n", output)

@@ -46,6 +46,86 @@ type MetricKV struct {
 	Value  float64
 }
 
+// MetricsValidationResult contains the result of metrics availability check
+type MetricsValidationResult struct {
+	Available bool
+	Reason    string
+	Message   string
+}
+
+// ValidateMetricsAvailability checks if vLLM metrics are available for the given model and namespace
+// Returns a validation result with details about metric availability
+func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelName, namespace string) MetricsValidationResult {
+	// Query for basic vLLM metric to validate scraping is working
+	// Try with namespace label first (real vLLM), fall back to just model_name (vllme emulator)
+	testQuery := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, namespace)
+
+	val, _, err := promAPI.Query(ctx, testQuery, time.Now())
+	if err != nil {
+		logger.Log.Error(err, "Error querying Prometheus for metrics validation",
+			"model", modelName, "namespace", namespace)
+		return MetricsValidationResult{
+			Available: false,
+			Reason:    llmdVariantAutoscalingV1alpha1.ReasonPrometheusError,
+			Message:   fmt.Sprintf("Failed to query Prometheus: %v", err),
+		}
+	}
+
+	// Check if we got any results
+	if val.Type() != model.ValVector {
+		return MetricsValidationResult{
+			Available: false,
+			Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsMissing,
+			Message:   fmt.Sprintf("No vLLM metrics found for model '%s' in namespace '%s'. Check ServiceMonitor configuration and ensure vLLM pods are exposing /metrics endpoint", modelName, namespace),
+		}
+	}
+
+	vec := val.(model.Vector)
+	// If no results with namespace label, try without it (for vllme emulator compatibility)
+	if len(vec) == 0 {
+		testQueryFallback := fmt.Sprintf(`vllm:request_success_total{model_name="%s"}`, modelName)
+		val, _, err = promAPI.Query(ctx, testQueryFallback, time.Now())
+		if err != nil {
+			return MetricsValidationResult{
+				Available: false,
+				Reason:    llmdVariantAutoscalingV1alpha1.ReasonPrometheusError,
+				Message:   fmt.Sprintf("Failed to query Prometheus: %v", err),
+			}
+		}
+
+		if val.Type() == model.ValVector {
+			vec = val.(model.Vector)
+		}
+
+		// If still no results, metrics are truly missing
+		if len(vec) == 0 {
+			return MetricsValidationResult{
+				Available: false,
+				Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsMissing,
+				Message:   fmt.Sprintf("No vLLM metrics found for model '%s' in namespace '%s'. Check: (1) ServiceMonitor exists in monitoring namespace, (2) ServiceMonitor selector matches vLLM service labels, (3) vLLM pods are running and exposing /metrics endpoint, (4) Prometheus is scraping the monitoring namespace", modelName, namespace),
+			}
+		}
+	}
+
+	// Check if metrics are stale (older than 5 minutes)
+	for _, sample := range vec {
+		age := time.Since(sample.Timestamp.Time())
+		if age > 5*time.Minute {
+			return MetricsValidationResult{
+				Available: false,
+				Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsStale,
+				Message:   fmt.Sprintf("vLLM metrics for model '%s' are stale (last update: %v ago). ServiceMonitor may not be scraping correctly.", modelName, age),
+			}
+		}
+	}
+
+	return MetricsValidationResult{
+		Available: true,
+		Reason:    llmdVariantAutoscalingV1alpha1.ReasonMetricsFound,
+		Message:   "vLLM metrics are available and up-to-date",
+	}
+}
+
 func AddMetricsToOptStatus(ctx context.Context,
 	opt *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	deployment appsv1.Deployment,

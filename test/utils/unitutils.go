@@ -113,8 +113,15 @@ func (m *MockPromAPI) Query(ctx context.Context, query string, ts time.Time, opt
 	if val, exists := m.QueryResults[query]; exists {
 		return val, nil, nil
 	}
-	// Default return empty vector
-	return model.Vector{}, nil, nil
+	// Default return vector with one sample (to pass metrics validation)
+	// This simulates Prometheus having scraped at least one metric
+	return model.Vector{
+		&model.Sample{
+			Metric:    model.Metric{},
+			Value:     0,
+			Timestamp: model.TimeFromUnix(ts.Unix()),
+		},
+	}, nil, nil
 }
 
 func (m *MockPromAPI) QueryRange(ctx context.Context, query string, r promv1.Range, opts ...promv1.Option) (model.Value, promv1.Warnings, error) {

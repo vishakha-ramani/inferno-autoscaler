@@ -50,7 +50,6 @@ import (
 	"github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -166,6 +165,22 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
 	if err != nil {
 		logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
+
+		// Update OptimizationReady condition to False for all VAs in the update list
+		for i := range updateList.Items {
+			va := &updateList.Items[i]
+			llmdVariantAutoscalingV1alpha1.SetCondition(va,
+				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
+				metav1.ConditionFalse,
+				llmdVariantAutoscalingV1alpha1.ReasonOptimizationFailed,
+				fmt.Sprintf("Optimization failed: %v", err))
+
+			if statusErr := r.Status().Update(ctx, va); statusErr != nil {
+				logger.Log.Error(statusErr, "failed to update status condition after optimization failure",
+					"variantAutoscaling", va.Name)
+			}
+		}
+
 		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
@@ -257,9 +272,65 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			continue
 		}
 
+		// Set ownerReference early, before metrics validation, to ensure it's always set
+		// This ensures the VA will be garbage collected when the Deployment is deleted
+		if !metav1.IsControlledBy(&updateVA, &deploy) {
+			original := updateVA.DeepCopy()
+
+			// Ensure APIVersion is set (should be "apps/v1" for Deployments)
+			apiVersion := deploy.APIVersion
+			if apiVersion == "" {
+				apiVersion = "apps/v1"
+			}
+			kind := deploy.Kind
+			if kind == "" {
+				kind = "Deployment"
+			}
+
+			updateVA.OwnerReferences = append(updateVA.OwnerReferences, metav1.OwnerReference{
+				APIVersion:         apiVersion,
+				Kind:               kind,
+				Name:               deploy.Name,
+				UID:                deploy.UID,
+				Controller:         utils.Ptr(true),
+				BlockOwnerDeletion: utils.Ptr(false),
+			})
+
+			// Patch metadata change (ownerReferences)
+			patch := client.MergeFrom(original)
+			if err := r.Patch(ctx, &updateVA, patch); err != nil {
+				logger.Log.Error(err, "failed to patch ownerReference - ", "variantAutoscaling-name: ", updateVA.Name)
+				continue
+			}
+			logger.Log.Info("Set ownerReference on VariantAutoscaling - ", "variantAutoscaling-name: ", updateVA.Name, ", owner: ", deploy.Name)
+		}
+
+		// Validate metrics availability before collecting metrics
+		metricsValidation := collector.ValidateMetricsAvailability(ctx, r.PromAPI, modelName, deploy.Namespace)
+
+		// Update MetricsAvailable condition based on validation result
+		if metricsValidation.Available {
+			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVA,
+				llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable,
+				metav1.ConditionTrue,
+				metricsValidation.Reason,
+				metricsValidation.Message)
+		} else {
+			// Metrics unavailable - just log and skip (don't update status yet to avoid CRD validation errors)
+			// Conditions will be set properly once metrics become available or after first successful collection
+			logger.Log.Warnw("Metrics unavailable, skipping optimization for variant",
+				"variant", updateVA.Name,
+				"namespace", updateVA.Namespace,
+				"model", modelName,
+				"reason", metricsValidation.Reason,
+				"troubleshooting", metricsValidation.Message)
+			continue
+		}
+
 		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
 		if err != nil {
 			logger.Log.Error(err, "unable to fetch metrics, skipping this variantAutoscaling loop")
+			// Don't update status here - will be updated in next reconcile when metrics are available
 			continue
 		}
 		updateVA.Status.CurrentAlloc = currentAllocation
@@ -298,58 +369,39 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 			logger.Log.Error(err, "failed to get latest VariantAutoscaling from API server: ", "variantAutoscaling-name: ", va.Name)
 			continue
 		}
-		original := updateVa.DeepCopy()
 
-		//TODO: remove calling duplicate deployment calls
-		// Check if Deployment exists for this variantAutoscaling
-		var deploy appsv1.Deployment
-		err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				logger.Log.Info("Deployment not found, skipping - ", "variantAutoscaling-name: ", updateVa.Name)
-				continue
-			}
-			logger.Log.Error(err, "failed to get Deployment after retries - ", "variantAutoscaling-name: ", updateVa.Name)
-			return err
-		}
-
-		if !metav1.IsControlledBy(&updateVa, &deploy) {
-			updateVa.OwnerReferences = append(updateVa.OwnerReferences, metav1.OwnerReference{
-				APIVersion: deploy.APIVersion,
-				Kind:       deploy.Kind,
-				Name:       deploy.Name,
-				UID:        deploy.UID,
-				Controller: utils.Ptr(true),
-				//don’t need foreground blocking semantics
-				BlockOwnerDeletion: utils.Ptr(false),
-			})
-
-			// Patch metadata change (ownerReferences)
-			patch := client.MergeFrom(original)
-			if err := r.Patch(ctx, &updateVa, patch); err != nil {
-				logger.Log.Error(err, "failed to patch ownerReference - ", "variantAutoscaling-name: ", updateVa.Name)
-				return err
-			}
-		}
+		// Note: ownerReference is now set earlier in prepareVariantAutoscalings
+		// This ensures it's set even if metrics aren't available yet
 
 		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
 		updateVa.Status.DesiredOptimizedAlloc = optimizedAllocation[va.Name]
 		updateVa.Status.Actuation.Applied = false // No longer directly applying changes
 
+		// Copy existing conditions from updateList (includes MetricsAvailable condition set during preparation)
+		// This ensures we don't lose the MetricsAvailable condition when fetching fresh copy from API
+		// Always copy, even if empty, to preserve conditions set during prepareVariantAutoscalings
+		updateVa.Status.Conditions = va.Status.Conditions
+
+		// Set OptimizationReady condition to True on successful optimization
+		llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,
+			llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
+			metav1.ConditionTrue,
+			llmdVariantAutoscalingV1alpha1.ReasonOptimizationSucceeded,
+			fmt.Sprintf("Optimization completed: %d replicas on %s",
+				updateVa.Status.DesiredOptimizedAlloc.NumReplicas,
+				updateVa.Status.DesiredOptimizedAlloc.Accelerator))
+
 		act := actuator.NewActuator(r.Client)
 
 		// Emit optimization signals for external autoscalers
-		err = act.EmitMetrics(ctx, &updateVa)
-		if err != nil {
+		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to emit optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
 		} else {
 			logger.Log.Debug("Successfully emitted optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
 			updateVa.Status.Actuation.Applied = true // Signals emitted successfully
 		}
 
-		err = utils.UpdateStatusWithBackoff(ctx, r.Client, &updateVa, utils.StandardBackoff, "VariantAutoscaling")
-
-		if err != nil {
+		if err := utils.UpdateStatusWithBackoff(ctx, r.Client, &updateVa, utils.StandardBackoff, "VariantAutoscaling"); err != nil {
 			logger.Log.Error(err, "failed to patch status for variantAutoscaling after retries - ", "variantAutoscaling-name: ", updateVa.Name)
 			continue
 		}

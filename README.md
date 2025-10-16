@@ -100,7 +100,7 @@ For detailed architecture information, see the [design documentation](docs/desig
 
 ## How It Works
 
-1. Platform admin deploys model server and waits for it to warm up and start serving requests
+1. Platform admin deploys llm-d infrastructure (including model servers) and waits for servers to warm up and start serving requests
 2. Platform admin creates a `VariantAutoscaling` CR for the running deployment
 3. WVA continuously monitors request rates and server performance via Prometheus metrics
 4. Model Analyzer estimates latency and throughput using queueing models

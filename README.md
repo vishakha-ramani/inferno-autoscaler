@@ -12,17 +12,15 @@ The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs i
 ## Key Features
 
 - **Intelligent Autoscaling**: Optimizes replica count and GPU allocation based on workload, performance models, and SLO requirements
-- **Multi-GPU Support**: Can select optimal GPU types (NVIDIA, AMD, Intel) when multiple accelerator profiles are configured
 - **Cost Optimization**: Minimizes infrastructure costs while meeting SLO requirements  
 - **Performance Modeling**: Uses queueing theory (M/M/1/k, M/G/1 models) for accurate latency and throughput prediction
 - **Multi-Model Support**: Manages multiple models with different service classes and priorities
-- **Production Ready**: Integrates with HPA, KEDA, Prometheus, and llm-d infrastructure
 
 ## Quick Start
 
 ### Prerequisites
 
-- Kubernetes v1.32.0+
+- Kubernetes v1.31.0+ (or OpenShift 4.18+)
 - Helm 3.x
 - kubectl
 
@@ -40,7 +38,7 @@ helm upgrade -i workload-variant-autoscaler ./charts/workload-variant-autoscaler
   --create-namespace
 ```
 
-### Try it Locally with Kind
+### Try it Locally with Kind (No GPU Required!)
 
 ```bash
 # Deploy WVA with llm-d infrastructure on a local Kind cluster
@@ -52,6 +50,9 @@ make deploy-llm-d-wva-emulated-on-kind
 # - Prometheus and monitoring stack
 # - vLLM emulator for testing
 ```
+
+**Works on Mac (Apple Silicon/Intel) and Windows** - no physical GPUs needed!  
+Perfect for development and testing with GPU emulation.
 
 See the [Installation Guide](docs/user-guide/installation.md) for detailed instructions.
 
@@ -74,11 +75,10 @@ See the [Installation Guide](docs/user-guide/installation.md) for detailed instr
 
 ### Design & Architecture
 - [Architecture Overview](docs/design/modeling-optimization.md)
-- [Design Diagrams](docs/design/diagrams/)
+- [Architecture Diagrams](docs/design/diagrams/) - Visual architecture and workflow diagrams
 
 ### Developer Guide
 - [Development Setup](docs/developer-guide/development.md)
-- [Testing](docs/developer-guide/testing.md)
 - [Contributing](CONTRIBUTING.md)
 
 ### Deployment Options
@@ -100,11 +100,18 @@ For detailed architecture information, see the [design documentation](docs/desig
 
 ## How It Works
 
-1. Platform admin creates a `VariantAutoscaling` CR for each model
-2. WVA continuously monitors request rates and server performance
-3. Model Analyzer estimates latency and throughput using queueing models
-4. Optimizer solves for minimal cost allocation meeting all SLOs
-5. Actuator emits metrics for HPA/KEDA or directly scales replicas
+1. Platform admin deploys model server and waits for it to warm up and start serving requests
+2. Platform admin creates a `VariantAutoscaling` CR for the running deployment
+3. WVA continuously monitors request rates and server performance via Prometheus metrics
+4. Model Analyzer estimates latency and throughput using queueing models
+5. Optimizer solves for minimal cost allocation meeting all SLOs
+6. Actuator emits optimization metrics to Prometheus and updates VariantAutoscaling status
+7. External autoscaler (HPA/KEDA) reads the metrics and scales the deployment accordingly
+
+**Important Notes**:
+- Create the VariantAutoscaling CR **only after** your deployment is warmed up to avoid immediate scale-down
+- Configure HPA stabilization window (recommend 120s+) for gradual scaling behavior
+- WVA updates the VA status with current and desired allocations every reconciliation cycle
 
 ## Example
 
@@ -126,7 +133,7 @@ More examples in [config/samples/](config/samples/).
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! See the [llm-d Contributing Guide](https://github.com/llm-d-incubation/llm-d/blob/main/CONTRIBUTING.md) for guidelines.
 
 Join the llm-d autoscaling community meetings to get involved.
 
@@ -137,12 +144,8 @@ Apache 2.0 - see [LICENSE](LICENSE) for details.
 ## Related Projects
 
 - [llm-d infrastructure](https://github.com/llm-d-incubation/llm-d-infra)
-- Community proposal: [Google Doc](https://docs.google.com/document/d/1n6SAhloQaoSyF2k3EveIOerT-f97HuWXTLFm07xcvqk/edit)
-
-## Status
-
-This project is in **alpha** stage. The API (v1alpha1) may change in future releases.
+- [llm-d main repository](https://github.com/llm-d-incubation/llm-d)
 
 ---
 
-For detailed documentation, visit the [docs](docs/) directory or read the [full documentation online](#).
+For detailed documentation, visit the [docs](docs/) directory.

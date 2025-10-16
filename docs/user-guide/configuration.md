@@ -115,10 +115,11 @@ See [CRD Reference](crd-reference.md) for advanced configuration options.
 
 ### Batch Size Tuning
 
-Larger batch sizes improve throughput but increase latency:
-- Start with defaults (256)
-- Monitor SLO compliance
-- Adjust based on your workload characteristics
+Batch size affects throughput and latency performance:
+- WVA **mirrors** the vLLM server's configured batch size (e.g., `--max-num-seqs`)
+- Do not override `maxBatchSize` in VariantAutoscaling unless you also change the vLLM server configuration
+- When tuning batch size, update **both** the vLLM server argument and the WVA VariantAutoscaling spec together
+- Monitor SLO compliance after any batch size changes
 
 ## Monitoring Configuration
 

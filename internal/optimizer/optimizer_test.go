@@ -31,15 +31,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/config"
-	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/core"
-	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/manager"
-	infernoSolver "github.com/llm-d-incubation/workload-variant-autoscaler/hack/inferno/pkg/solver"
 	collector "github.com/llm-d-incubation/workload-variant-autoscaler/internal/collector"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	analyzer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/modelanalyzer"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
+	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
+	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/manager"
+	infernoSolver "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/solver"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
 
@@ -140,33 +140,8 @@ var _ = Describe("Optimizer", Ordered, func() {
 				minNumReplicas = 0
 			}
 
-			By("Creating dummy inventory")
-			dummyInventory := map[string]map[string]collector.AcceleratorModelInfo{
-				"gpu-node-1": {
-					"A100": collector.AcceleratorModelInfo{
-						Count:  4,
-						Memory: "40Gi",
-					},
-					"H100": collector.AcceleratorModelInfo{
-						Count:  2,
-						Memory: "80Gi",
-					},
-				},
-				"gpu-node-2": {
-					"A100": collector.AcceleratorModelInfo{
-						Count:  8,
-						Memory: "40Gi",
-					},
-				},
-				"gpu-node-3": {
-					"V100": collector.AcceleratorModelInfo{
-						Count:  4,
-						Memory: "32Gi",
-					},
-				},
-			}
-
-			systemData = utils.CreateSystemData(acceleratorCm, serviceClassCm, dummyInventory)
+			// WVA operates in unlimited mode - no inventory data needed
+			systemData = utils.CreateSystemData(acceleratorCm, serviceClassCm)
 
 			By("Creating test VariantAutoscaling resources")
 			for i := 1; i <= 3; i++ {

@@ -394,7 +394,7 @@ var _ = Describe("Optimizer", Ordered, func() {
 				// Setup high load metrics for simulation
 				testNamespace := va.Namespace
 				arrivalQuery := testutils.CreateArrivalQuery(modelName, testNamespace)
-				avgDecToksQuery := testutils.CreateTokenQuery(modelName, testNamespace)
+				avgDecToksQuery := testutils.CreateDecToksQuery(modelName, testNamespace)
 				ttftQuery := testutils.CreateTTFTQuery(modelName, testNamespace)
 				itlQuery := testutils.CreateITLQuery(modelName, testNamespace)
 

@@ -15,7 +15,11 @@ func CreateArrivalQuery(modelID, namespace string) string {
 	return `sum(rate(vllm:request_success_total{model_name="` + modelID + `",namespace="` + namespace + `"}[1m])) * 60`
 }
 
-func CreateTokenQuery(modelID, namespace string) string {
+func CreatePromptToksQuery(modelID, namespace string) string {
+	return `sum(rate(vllm:request_prompt_tokens_sum{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))/sum(rate(vllm:request_prompt_tokens_count{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))`
+}
+
+func CreateDecToksQuery(modelID, namespace string) string {
 	return `sum(rate(vllm:request_generation_tokens_sum{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="` + modelID + `",namespace="` + namespace + `"}[1m]))`
 }
 

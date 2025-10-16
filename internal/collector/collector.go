@@ -192,20 +192,20 @@ func AddMetricsToOptStatus(ctx context.Context,
 	}
 	arrivalVal *= 60 // convert from req/sec to req/min
 
-	avgInputTokens, _ := queryAndExtractMetric(ctx, promAPI, avgPromptToksQuery, "AvgInputTokens")
-	// if err != nil {
-	// 	return llmdVariantAutoscalingV1alpha1.Allocation{}, err
-	// }
+	avgInputTokens, err := queryAndExtractMetric(ctx, promAPI, avgPromptToksQuery, "AvgInputTokens")
+	if err != nil {
+		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	}
 
 	avgOutputTokens, err := queryAndExtractMetric(ctx, promAPI, avgDecToksQuery, "AvgOutputTokens")
 	if err != nil {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
 
-	ttftAverageTime, _ := queryAndExtractMetric(ctx, promAPI, ttftQuery, "TTFTAverageTime")
-	// if err != nil {
-	// 	return llmdVariantAutoscalingV1alpha1.Allocation{}, err
-	// }
+	ttftAverageTime, err := queryAndExtractMetric(ctx, promAPI, ttftQuery, "TTFTAverageTime")
+	if err != nil {
+		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	}
 	ttftAverageTime *= 1000 // convert to msec
 
 	itlAverage, err := queryAndExtractMetric(ctx, promAPI, itlQuery, "ITLAverage")

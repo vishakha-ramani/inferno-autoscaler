@@ -4,7 +4,7 @@ Automated deployment script for WVA, llm-d infrastructure, Prometheus, and HPA o
 
 ## Overview
 
-The `deploy-llmd+wva-kubernetes.sh` script automates the complete deployment process including:
+This script automates the complete deployment process on kubernetes cluster including:
 
 - **kube-prometheus-stack** (Prometheus + Grafana + Alertmanager)
 - **Workload-Variant-Autoscaler** controller with metrics validation
@@ -54,8 +54,8 @@ export ACCELERATOR_TYPE="A100"                                  # Auto-detected 
 
 ```bash
 cd /path/to/workload-variant-autoscaler
-chmod +x hack/deploy-llmd+wva-kubernetes.sh
-./hack/deploy-llmd+wva-kubernetes.sh
+chmod +x deploy/kubernetes/install.sh
+./deploy/kubernetes/install.sh
 ```
 
 That's it! The script will:
@@ -108,7 +108,7 @@ export SKIP_CHECKS=false              # Skip prerequisite checks
 
 ```bash
 export HF_TOKEN="hf_xxxxx"
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Example 2: Custom Model and Namespace
@@ -117,7 +117,7 @@ export HF_TOKEN="hf_xxxxx"
 export HF_TOKEN="hf_xxxxx"
 export BASE_NAME="my-inference"
 export MODEL_ID="meta-llama/Llama-2-7b-hf"
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Example 3: Deploy Only WVA (llm-d Already Deployed)
@@ -128,7 +128,7 @@ export DEPLOY_LLM_D=false
 export DEPLOY_PROMETHEUS=false
 export DEPLOY_PROMETHEUS_ADAPTER=false
 export DEPLOY_HPA=false
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Example 4: Demo Mode (No GPUs Available)
@@ -136,7 +136,7 @@ export DEPLOY_HPA=false
 ```bash
 export HF_TOKEN="hf_xxxxx"
 export USE_VLLM_EMULATOR=true
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Example 5: Deploy with Different WVA Image
@@ -144,7 +144,7 @@ export USE_VLLM_EMULATOR=true
 ```bash
 export HF_TOKEN="hf_xxxxx"
 export WVA_IMAGE="ghcr.io/yourorg/workload-variant-autoscaler:latest"
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ## Script Features
@@ -256,8 +256,7 @@ Displays:
 │   ├─ VariantAutoscaling CR                                  │
 │   └─ HPA (scales based on inferno_desired_replicas)         │
 ├─────────────────────────────────────────────────────────────┤
-│ kgateway-system                                             │
-│   └─ kgateway Controller                                    │
+│ Istio                                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -338,7 +337,7 @@ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.
 **Option 3**: Use Emulator Mode (for demo/testing)
 ```bash
 export USE_VLLM_EMULATOR=true
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 **Note for KIND clusters**: KIND (Kubernetes IN Docker) requires special configuration for GPU passthrough. Consider using a real Kubernetes cluster or emulator mode.
@@ -508,7 +507,7 @@ kubectl get pods -n llm-d-inference-scheduling -w
 To remove all deployed components:
 
 ```bash
-./hack/deploy-llmd+wva-kubernetes.sh cleanup
+./deploy/kubernetes/install.sh cleanup
 ```
 
 Or manually:
@@ -681,14 +680,14 @@ vLLM Pods:           llm-d-inference-scheduling
 # Use existing Prometheus
 export DEPLOY_PROMETHEUS=false
 export PROMETHEUS_URL="https://my-prometheus.monitoring.svc:9090"
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Deploy to Specific Cluster Context
 
 ```bash
 kubectl config use-context my-cluster
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ### Debug Mode
@@ -706,7 +705,7 @@ kubectl set env deployment/workload-variant-autoscaler-controller-manager \
 export WVA_IMAGE="ghcr.io/yourorg/workload-variant-autoscaler:custom-tag"
 export DEPLOY_LLM_D=false  # Don't redeploy llm-d
 export DEPLOY_PROMETHEUS=false  # Don't redeploy Prometheus
-./hack/deploy-llmd+wva-kubernetes.sh
+./deploy/kubernetes/install.sh
 ```
 
 ## Performance Tuning
@@ -754,7 +753,6 @@ When modifying the script:
 
 ## Related Documentation
 
-- `deploy-llmd+wva-openshift-README.md`: OpenShift deployment documentation
 - `docs/metrics-health-monitoring.md`: Metrics validation feature guide
 - `docs/hpa-integration.md`: HPA integration guide
 - `README.md`: Main project documentation

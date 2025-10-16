@@ -79,16 +79,20 @@ That's it! The script will:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HF_TOKEN` | HuggingFace token (required) | - |
-| `BASE_NAME` | Base name for resources | `inference-scheduling` |
-| `NAMESPACE` | Kubernetes namespace | `llm-d-$BASE_NAME` |
+| `WELL_LIT_PATH_NAME` | Name of the deployed well-lit path | `inference-scheduling` |
+| `NAMESPACE` | Kubernetes namespace | `llm-d-$WELL_LIT_PATH_NAME` |
 | `MONITORING_NAMESPACE` | Prometheus monitoring namespace | `openshift-user-workload-monitoring` |
 | `MODEL_ID` | Model to deploy | `unsloth/Meta-Llama-3.1-8B` |
 | `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
 | `SLO_TPOT` | Time per Output Token SLO target for the deployed model and GPU type | `9` |
 | `SLO_TTFT` | Time to First Token SLO target for the deployed model and GPU type | `1000` |
-| `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
-| `WVA_IMAGE` | WVA controller image | `ghcr.io/llm-d/workload-variant-autoscaler:v0.0.1` |
+| `WVA_IMAGE_REPO` | WVA controller image base repository | `ghcr.io/llm-d/workload-variant-autoscaler` |
+| `WVA_IMAGE_TAG` | WVA controller image tag | `v0.0.1` |
 | `LLM_D_RELEASE` | llm-d release version | `v0.3.0` |
+| `LLM_D_MODELSERVICE_NAME` | Name of the ModelService deployed by llm-d | `ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode` |
+| `PROM_CA_CERT_PATH` | Path for the Prometheus certificate | `/tmp/prometheus-ca.crt` |
+| `VLLM_SVC_ENABLED` | Flag to enable deployment of the Service exposing vLLM Deployment | `true` |
+| `VLLM_SVC_NODEPORT` | Port used as NodePort by the Service | `ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode` |
 | `GATEWAY_PROVIDER` | Deployed Gateway API implementation | `istio` |
 | `BENCHMARK_MODE` | Deploying using benchmark configuration for Istio | `true` |
 | `INSTALL_GATEWAY_CTRLPLANE` | Need to install Gateway Control Plane | `false` |

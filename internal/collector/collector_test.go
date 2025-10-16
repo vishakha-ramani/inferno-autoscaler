@@ -286,7 +286,7 @@ var _ = Describe("Collector", func() {
 			itlQuery := utils.CreateITLQuery(modelID, testNamespace)
 
 			mockProm.QueryResults[arrivalQuery] = model.Vector{
-				&model.Sample{Value: model.SampleValue(10.5)}, // 10.5 requests/min
+				&model.Sample{Value: model.SampleValue(0.175)}, // 0.175 req/sec = 10.5 req/min after * 60
 			}
 			mockProm.QueryResults[avgPromptToksQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(100.0)}, // 100 input tokens per request

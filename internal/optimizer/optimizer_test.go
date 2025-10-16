@@ -400,7 +400,7 @@ var _ = Describe("Optimizer", Ordered, func() {
 
 				// High load metrics that should trigger scaling up
 				mockProm.QueryResults[arrivalQuery] = model.Vector{
-					&model.Sample{Value: model.SampleValue(40.0)}, // 40 requests/min - high load
+					&model.Sample{Value: model.SampleValue(0.7)}, // 42 req/min after * 60
 				}
 				mockProm.QueryResults[avgDecToksQuery] = model.Vector{
 					&model.Sample{Value: model.SampleValue(200.0)},

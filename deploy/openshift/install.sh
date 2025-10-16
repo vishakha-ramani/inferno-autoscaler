@@ -415,7 +415,6 @@ spec:
 YAML
     fi
     
-    # TODO: update to parametrize deployment name
     kubectl patch deployment $LLM_D_MODELSERVICE_NAME \
         -n $LLMD_NS \
         --patch-file config/samples/probes-patch.yaml

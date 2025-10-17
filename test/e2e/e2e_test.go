@@ -197,7 +197,7 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployName))
 
 		By("adding an InferenceModel for the deployment")
-		inferenceModel := utils.CreateInferenceModel(deployName, namespace, modelName)
+		inferenceModel = utils.CreateInferenceModel(deployName, namespace, modelName)
 		err = crClient.Create(ctx, inferenceModel)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create InferenceModel: %s", modelName))
 

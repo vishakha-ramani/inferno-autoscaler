@@ -44,12 +44,12 @@ LLM_D_OWNER=${LLM_D_OWNER:-"llm-d-incubation"}
 LLM_D_PROJECT=${LLM_D_PROJECT:-"llm-d-infra"}
 LLM_D_RELEASE=${LLM_D_RELEASE:-"v1.3.1"}
 LLM_D_MODELSERVICE_NAME=${LLM_D_MODELSERVICE_NAME:-"ms-$WELL_LIT_PATH_NAME-llm-d-modelservice"}
+VLLM_EMULATOR_NAME=${VLLM_EMULATOR_NAME:-"vllm-emulator"}
 CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/dependencies"}
 GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/gateway-control-plane-providers"}
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/examples/$WELL_LIT_PATH_NAME"}
 
 # Model and SLO Configuration
-DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
 MODEL_ID=${MODEL_ID:-"default/default"}  # vLLM emulator model
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
 SLO_TPOT=${SLO_TPOT:-24}  # Target time-per-output-token SLO (in ms)
@@ -58,7 +58,7 @@ SLO_TTFT=${SLO_TTFT:-500}  # Target time-to-first-token SLO (in ms)
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"kgateway"} # Options: kgateway, istio
 BENCHMARK_MODE=${BENCHMARK_MODE:-"false"} # if true, updates to Istio config for benchmark
-INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"}
+INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
 
 # Prometheus Configuration
 PROM_CA_CERT_PATH=${PROM_CA_CERT_PATH:-"/tmp/prometheus-ca.crt"}
@@ -77,10 +77,19 @@ CREATE_CLUSTER=${CREATE_CLUSTER:-true}
 DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-true}
 DEPLOY_WVA=${DEPLOY_WVA:-true}
 DEPLOY_LLM_D=${DEPLOY_LLM_D:-true}
+VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-false}
+VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-"30000"}
+DEPLOY_VA=${DEPLOY_VA:-true}
+DEPLOY_HPA=${DEPLOY_HPA:-true}
 DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
 DEPLOY_VLLM_EMULATOR=${DEPLOY_VLLM_EMULATOR:-true}
+DEPLOY_INFERENCE_MODEL=${DEPLOY_INFERENCE_MODEL:-true}
 APPLY_VLLM_EMULATOR_FIXES=${APPLY_VLLM_EMULATOR_FIXES:-true}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
+
+# Undeployment flags
+UNDEPLOY_ALL=${UNDEPLOY_ALL:-false}
+DELETE_CLUSTER=${DELETE_CLUSTER:-false}
 
 # Helper functions
 log_info() {
@@ -112,6 +121,8 @@ Options:
   -n, --nodes NUM              Number of nodes for KIND cluster (default: 3)
   -g, --gpus NUM               Number of GPUs per node (default: 4)  
   -t, --type TYPE              GPU type: nvidia, amd, intel, or mix (default: mix)
+  -u, --undeploy               Undeploy all components
+  -d, --delete-cluster         Delete the KIND cluster after undeployment
   -h, --help                   Show this help and exit
 
 Environment Variables:
@@ -124,6 +135,8 @@ Environment Variables:
   DEPLOY_PROMETHEUS_ADAPTER    Deploy Prometheus Adapter (default: true)
   DEPLOY_VLLM_EMULATOR         Deploy vLLM-emulator (default: true)
   APPLY_VLLM_EMULATOR_FIXES    Apply fixes for vLLM-emulator compatibility (default: true)
+  UNDEPLOY_ALL                 Undeploy mode (default: false)
+  DELETE_CLUSTER               Delete cluster after undeploy (default: false)
 
 Examples:
   # Deploy with default values (creates cluster, deploys everything)
@@ -140,6 +153,12 @@ Examples:
   
   # Use existing cluster (skip cluster creation)
   CREATE_CLUSTER=false $(basename "$0")
+  
+  # Undeploy all components (keep cluster)
+  $(basename "$0") --undeploy
+  
+  # Undeploy all components and delete cluster
+  $(basename "$0") --undeploy --delete-cluster
 EOF
 }
 
@@ -170,6 +189,8 @@ parse_args() {
       -n|--nodes)             CLUSTER_NODES="$2"; shift 2 ;;
       -g|--gpus)              CLUSTER_GPUS="$2"; shift 2 ;;
       -t|--type)              CLUSTER_TYPE="$2"; shift 2 ;;
+      -u|--undeploy)          UNDEPLOY_ALL=true; shift ;;
+      -d|--delete-cluster)    DELETE_CLUSTER=true; shift ;;
       -h|--help)              print_help; exit 0 ;;
       *)                      log_error "Unknown option: $1"; print_help; exit 1 ;;
     esac
@@ -355,19 +376,26 @@ deploy_wva_controller() {
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
         --set wva.baseName=$WELL_LIT_PATH_NAME \
-        --set wva.va.enabled=false \
-        --set wva.hpa.enabled=false \
+        --set wva.modelName=$VLLM_EMULATOR_NAME \
+        --set wva.va.enabled=$DEPLOY_VA \
+        --set variantAutoscaling.enabled=$DEPLOY_VA \
+        --set variantAutoscaling.accelerator=$ACCELERATOR_TYPE \
+        --set variantAutoscaling.modelID=$MODEL_ID \
+        --set variantAutoscaling.sloTpot=$SLO_TPOT \
+        --set variantAutoscaling.sloTtft=$SLO_TTFT \
+        --set wva.hpa.enabled=$DEPLOY_HPA \
         --set llmd.namespace=$LLMD_NS \
         --set prometheus.baseURL=$PROMETHEUS_URL \
         --set wva.monitoringNamespace=$MONITORING_NAMESPACE \
         --set prometheusAdapter.namespaceOverride=$MONITORING_NAMESPACE \
-        --set vllmService.enabled=false 
+        --set vllmService.enabled=$VLLM_SVC_ENABLED \
+        --set vllmService.nodePort=$VLLM_SVC_NODEPORT
     
     cd "$WVA_PROJECT"
     
     # Wait for WVA to be ready
     log_info "Waiting for WVA controller to be ready..."
-    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=120s || true
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=60s || log_warning "WVA controller is not ready yet - check 'kubectl get pods -n $WVA_NS'"
     
     log_success "WVA deployment complete"
 }
@@ -440,7 +468,8 @@ deploy_llm_d_infrastructure() {
     fi
     
     log_info "Waiting for llm-d components to initialize..."
-    sleep 15
+    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=60s || \
+        log_warning "llm-d components are not ready yet - check 'kubectl get pods -n $LLMD_NS'"
     
     cd "$WVA_PROJECT"
     log_success "llm-d infrastructure deployment complete"
@@ -462,7 +491,7 @@ apply_vllm_emulator_fixes() {
     
     log_success "InferencePool patched successfully"
     
-    # Delete default ModelService deployments - using vLLM emulator 
+    # Delete default ModelService deployments - using vLLM emulator
     log_info "Deleting default ModelService deployments..."
     kubectl delete deployments.apps \
         $LLM_D_MODELSERVICE_NAME-decode \
@@ -473,6 +502,29 @@ apply_vllm_emulator_fixes() {
     log_info "Restarting EPP deployment..."
     kubectl rollout restart deployment gaie-$WELL_LIT_PATH_NAME-epp -n $LLMD_NS 2>/dev/null || \
         log_warning "Could not restart EPP deployment"
+
+    if [ "$DEPLOY_INFERENCE_MODEL" == "true" ]; then
+      log_info "Creating InferenceModel for vLLM emulator..."
+      kubectl apply -f - <<EOF
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferenceModel
+metadata:
+  name: $VLLM_EMULATOR_NAME
+  namespace: $LLMD_NS
+spec:
+  modelName: $MODEL_ID
+  criticality: Critical  
+  poolRef:
+    name: gaie-$WELL_LIT_PATH_NAME
+  targetModels:
+    - name: $MODEL_ID
+      weight: 100
+EOF
+    log_success "InferenceModel created successfully"
+
+    else
+        log_info "Skipping InferenceModel creation (DEPLOY_INFERENCE_MODEL=false)"
+    fi
     
     log_success "vLLM emulator integration fixes applied"
 }
@@ -486,24 +538,24 @@ deploy_vllm_emulator() {
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-emulator
+  name: $VLLM_EMULATOR_NAME-decode
   namespace: $LLMD_NS
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-emulator
+      app: $VLLM_EMULATOR_NAME
       llm-d.ai/inferenceServing: "true"
-      llm-d.ai/model: $LLM_D_MODELSERVICE_NAME-decode
+      llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
   template:
     metadata:
       labels:
-        app: vllm-emulator
+        app: $VLLM_EMULATOR_NAME
         llm-d.ai/inferenceServing: "true"
-        llm-d.ai/model: $LLM_D_MODELSERVICE_NAME-decode
+        llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
     spec:
       containers:
-      - name: vllm-emulator
+      - name: $VLLM_EMULATOR_NAME
         image: quay.io/infernoautoscaler/vllme:0.2.3-multi-arch
         imagePullPolicy: Always
         env: 
@@ -546,15 +598,17 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-emulator-service
+  name: $VLLM_EMULATOR_NAME-service
   namespace: $LLMD_NS
   labels:
-    app: vllm-emulator
+    app: $VLLM_EMULATOR_NAME
+    llm-d.ai/inferenceServing: "true"
 spec:
   selector:
-    app: vllm-emulator
+    app: $VLLM_EMULATOR_NAME
+    llm-d.ai/inferenceServing: "true"
   ports:
-    - name: vllm-emulator
+    - name: $VLLM_EMULATOR_NAME
       port: 80
       protocol: TCP
       targetPort: 80
@@ -563,17 +617,17 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: vllm-emulator-servicemonitor
+  name: $VLLM_EMULATOR_NAME-servicemonitor
   namespace: $MONITORING_NAMESPACE
   labels:
-    app: vllm-emulator
+    app: $VLLM_EMULATOR_NAME
     release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
-      app: vllm-emulator
+      app: $VLLM_EMULATOR_NAME
   endpoints:
-  - port: vllm-emulator
+  - port: $VLLM_EMULATOR_NAME
     path: /metrics
     interval: 15s
   namespaceSelector:
@@ -582,7 +636,7 @@ spec:
 EOF
     
     log_info "Waiting for vLLM emulator to be ready..."
-    kubectl wait --for=condition=available deployment/vllm-emulator -n "$LLMD_NS" --timeout=120s || \
+    kubectl wait --for=condition=available deployment/ms-inference-scheduling-llm-d-modelservice-decode -n "$LLMD_NS" --timeout=120s || \
         log_warning "vLLM emulator deployment may still be starting"
     
     log_success "vLLM Emulator deployment complete"
@@ -641,19 +695,6 @@ extraVolumeMounts:
 
 extraArguments:
   - --prometheus-ca-file=/etc/prometheus-ca/ca.crt
-
-podSecurityContext:
-  fsGroup: null
-
-securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop: ["ALL"]
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: null
-  seccompProfile:
-    type: RuntimeDefault
 YAML
     
     # Deploy Prometheus Adapter
@@ -699,9 +740,9 @@ verify_deployment() {
         log_info "Checking llm-d infrastructure..."
         
         # Check for vLLM emulator
-        if kubectl get deployment vllm-emulator -n $LLMD_NS &> /dev/null; then
+        if kubectl get deployment $VLLM_EMULATOR_NAME-decode -n $LLMD_NS &> /dev/null; then
             log_success "vLLM emulator deployment exists"
-            if kubectl get pods -n $LLMD_NS -l app=vllm-emulator 2>/dev/null | grep -q Running; then
+            if kubectl get pods -n $LLMD_NS -l app=$VLLM_EMULATOR_NAME 2>/dev/null | grep -q Running; then
                 log_success "vLLM emulator pods are running"
             else
                 log_warning "vLLM emulator pods may still be starting"
@@ -783,10 +824,10 @@ print_summary() {
     echo "==========="
     echo ""
     echo "1. Check VariantAutoscaling status:"
-    echo "   kubectl get variantautoscaling -n $LLMD_NS -o wide"
+    echo "   kubectl get variantautoscaling -n $LLMD_NS"
     echo ""
     echo "2. View detailed status with conditions:"
-    echo "   kubectl describe variantautoscaling $LLM_D_MODELSERVICE_NAME -n $LLMD_NS"
+    echo "   kubectl describe variantautoscaling $LLM_D_MODELSERVICE_NAME-decode -n $LLMD_NS"
     echo ""
     echo "3. View WVA logs:"
     echo "   kubectl logs -n $WVA_NS -l app.kubernetes.io/name=workload-variant-autoscaler -f"
@@ -798,10 +839,14 @@ print_summary() {
     echo "   kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-prometheus 9090:9090"
     echo "   # Then visit https://localhost:9090 (accept self-signed cert)"
     echo ""
-    echo "6. Generate load (if needed):"
+    echo "6. Test the emulated environment by generating load:"
     echo "   # Port-forward the gateway first:"
     echo "   kubectl port-forward -n $LLMD_NS svc/infra-$WELL_LIT_PATH_NAME-inference-gateway 8000:80"
-    echo "   # Then run load generator in another terminal"
+    echo "   # Then run the vLLM-emulator load generator script in another terminal using:"
+    echo ""
+    echo "   cd tools/vllm-emulator"
+    echo "   pip install -r requirements.txt"
+    echo "   python loadgen.py --model $MODEL_ID"
     echo ""
     echo "Important Notes:"
     echo "================"
@@ -831,15 +876,198 @@ print_summary() {
     echo "=========================================="
 }
 
+# Undeployment functions
+undeploy_prometheus_adapter() {
+    log_info "Uninstalling Prometheus Adapter..."
+    helm uninstall prometheus-adapter -n $MONITORING_NAMESPACE 2>/dev/null || \
+        log_warning "Prometheus Adapter not found or already uninstalled"
+    
+    kubectl delete configmap prometheus-ca -n $MONITORING_NAMESPACE --ignore-not-found
+    rm -f /tmp/prometheus-adapter-values-kind.yaml
+    
+    log_success "Prometheus Adapter uninstalled"
+}
+
+undeploy_vllm_emulator() {
+    log_info "Removing vLLM Emulator..."
+    
+    kubectl delete servicemonitor vllm-emulator-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
+    kubectl delete service vllm-emulator-service -n $LLMD_NS --ignore-not-found
+    kubectl delete deployment vllm-emulator -n $LLMD_NS --ignore-not-found
+    
+    log_success "vLLM Emulator removed"
+}
+
+undeploy_llm_d_infrastructure() {
+    log_info "Undeploying the llm-d infrastructure..."
+    
+    if [ ! -d "$EXAMPLE_DIR" ]; then
+        log_warning "llm-d example directory not found, skipping cleanup"
+    else
+        cd "$EXAMPLE_DIR"
+        
+        log_info "Removing llm-d core components..."
+
+        helm uninstall infra-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+            log_warning "llm-d infra components not found or already uninstalled"
+        helm uninstall gaie-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+            log_warning "llm-d inference-scheduler components not found or already uninstalled"
+        helm uninstall ms-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+            log_warning "llm-d ModelService components not found or already uninstalled"
+
+        cd "$WVA_PROJECT"
+    fi
+    
+    # Remove HF token secret
+    kubectl delete secret llm-d-hf-token -n "${LLMD_NS}" --ignore-not-found
+    
+    # Remove Gateway provider
+    if [[ "$INSTALL_GATEWAY_CTRLPLANE" == true ]]; then
+        log_info "Removing Gateway provider..."
+        helmfile destroy -f "$GATEWAY_PREREQ_DIR/$GATEWAY_PROVIDER.helmfile.yaml" 2>/dev/null || \
+            log_warning "Gateway provider cleanup incomplete"
+        kubectl delete namespace ${GATEWAY_PROVIDER}-system --ignore-not-found 2>/dev/null || true
+
+    fi
+        
+    log_success "llm-d infrastructure removed"
+}
+
+undeploy_wva_controller() {
+    log_info "Uninstalling Workload-Variant-Autoscaler..."
+    
+    cd "$WVA_PROJECT/charts"
+    helm uninstall workload-variant-autoscaler -n $WVA_NS 2>/dev/null || \
+        log_warning "Workload-Variant-Autoscaler not found or already uninstalled"
+    cd "$WVA_PROJECT"
+    
+    rm -f "$PROM_CA_CERT_PATH"
+    
+    log_success "WVA uninstalled"
+}
+
+undeploy_prometheus_stack() {
+    log_info "Uninstalling kube-prometheus-stack..."
+    
+    helm uninstall kube-prometheus-stack -n $MONITORING_NAMESPACE 2>/dev/null || \
+        log_warning "Prometheus stack not found or already uninstalled"
+    
+    kubectl delete secret prometheus-web-tls -n $MONITORING_NAMESPACE --ignore-not-found
+    
+    log_success "Prometheus stack uninstalled"
+}
+
+delete_namespaces() {
+    log_info "Deleting namespaces..."
+    
+    for ns in $LLMD_NS $WVA_NS $MONITORING_NAMESPACE; do
+        if kubectl get namespace $ns &> /dev/null; then
+            log_info "Deleting namespace $ns..."
+            kubectl delete namespace $ns 2>/dev/null || \
+                log_warning "Failed to delete namespace $ns"
+        fi
+    done
+    
+    log_success "Namespaces deleted"
+}
+
+delete_kind_cluster() {
+    log_info "Deleting KIND cluster '${CLUSTER_NAME}'..."
+    
+    if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
+        kind delete cluster --name "${CLUSTER_NAME}"
+        log_success "KIND cluster '${CLUSTER_NAME}' deleted"
+    else
+        log_warning "KIND cluster '${CLUSTER_NAME}' not found"
+    fi
+}
+
+undeploy_all() {
+    log_info "Starting undeployment process..."
+    log_info "======================================"
+    echo ""
+    
+    # Undeploy in reverse order
+    if [ "$DEPLOY_PROMETHEUS_ADAPTER" = "true" ]; then
+        undeploy_prometheus_adapter
+    fi
+    
+    if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
+        undeploy_vllm_emulator
+    fi
+    
+    if [ "$DEPLOY_LLM_D" = "true" ]; then
+        undeploy_llm_d_infrastructure
+    fi
+    
+    if [ "$DEPLOY_WVA" = "true" ]; then
+        undeploy_wva_controller
+    fi
+    
+    if [ "$DEPLOY_PROMETHEUS" = "true" ]; then
+        undeploy_prometheus_stack
+    fi
+    
+    # Delete namespaces
+    delete_namespaces
+    
+    # Delete cluster if requested
+    if [ "$DELETE_CLUSTER" = "true" ]; then
+        delete_kind_cluster
+    else
+        log_info "Keeping KIND cluster '${CLUSTER_NAME}' (use --delete-cluster to remove)"
+    fi
+    
+    # Remove llm-d repository
+    if [ -d "$WVA_PROJECT/$LLM_D_PROJECT" ]; then
+        log_info "llm-d repository at $WVA_PROJECT/$LLM_D_PROJECT preserved (manual cleanup if needed)"
+    fi
+    
+    echo ""
+    log_success "Undeployment complete!"
+    echo ""
+    echo "=========================================="
+    echo " Undeployment Summary"
+    echo "=========================================="
+    echo ""
+    echo "Removed components:"
+    [ "$DEPLOY_PROMETHEUS_ADAPTER" = "true" ] && echo "✓ Prometheus Adapter"
+    [ "$DEPLOY_VLLM_EMULATOR" = "true" ] && echo "✓ vLLM Emulator"
+    [ "$DEPLOY_LLM_D" = "true" ] && echo "✓ llm-d Infrastructure"
+    [ "$DEPLOY_WVA" = "true" ] && echo "✓ WVA Controller"
+    [ "$DEPLOY_PROMETHEUS" = "true" ] && echo "✓ Prometheus Stack"
+    echo "✓ Namespaces"
+    
+    if [ "$DELETE_CLUSTER" = "true" ]; then
+        echo "✓ KIND Cluster"
+    else
+        echo ""
+        echo "KIND cluster '${CLUSTER_NAME}' is still running."
+        echo "To delete it manually: kind delete cluster --name ${CLUSTER_NAME}"
+    fi
+    echo ""
+    echo "=========================================="
+}
+
 
 # Main deployment flow
 main() {
+    # Parse command line arguments first
+    parse_args "$@"
+
+    # Undeploy mode
+    if [ "$UNDEPLOY_ALL" = "true" ]; then
+        log_info "Starting Workload-Variant-Autoscaler KIND Emulator Undeployment"
+        log_info "=================================================="
+        echo ""
+        undeploy_all
+        exit 0
+    fi
+
+    # Normal deployment flow
     log_info "Starting Workload-Variant-Autoscaler KIND Emulator Deployment"
     log_info "=============================================================="
     echo ""
-    
-    # Parse command line arguments
-    parse_args "$@"
     
     # Check prerequisites
     if [ "$SKIP_CHECKS" != "true" ]; then

@@ -684,7 +684,7 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 
 		By("deleting InferenceModel")
 		err = crClient.Delete(ctx, inferenceModel)
-		// err = client.IgnoreNotFound(err)
+		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete InferenceModel: %s", modelName))
 
 		By("waiting for all pods to be deleted")

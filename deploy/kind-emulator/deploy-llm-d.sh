@@ -23,7 +23,6 @@ NC='\033[0m' # No Color
 
 # Configuration
 WVA_PROJECT=${WVA_PROJECT:-$PWD}
-INFRA_REPO_DIR="${HOME}/.cache/llm-d-infra"
 ARCH=$(uname -m)
 WELL_LIT_PATH_NAME=${WELL_LIT_PATH_NAME:-"sim"}
 

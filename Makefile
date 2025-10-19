@@ -114,17 +114,33 @@ deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster 
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
 	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./deploy/openshift/install.sh
 
+## Deploy WVA on Kubernetes with the specified image.
+.PHONY: deploy-wva-on-k8s
+deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the specified image.
+	@echo "Deploying WVA on Kubernetes with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./deploy/kubernetes/install.sh
+
+## Undeploy WVA from the emulated environment on Kind.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
 undeploy-llm-d-wva-emulated-on-kind:
-	@echo ">>> Undeploying llm-d and workload-variant-autoscaler"
+	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kind cluster"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		deploy/kind-emulator/deploy-llm-d.sh --undeploy
 
+## Undeploy WVA from the emulated environment on Kind and delete the cluster.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind-delete-cluster
 undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler and deleting Kind cluster"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		deploy/kind-emulator/deploy-llm-d.sh --undeploy --delete-cluster
+
+## Undeploy WVA from Kubernetes.
+.PHONY: undeploy-llm-d-wva-on-k8s
+undeploy-llm-d-wva-on-k8s:
+	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		deploy/kubernetes/install.sh --undeploy
 
 # Backwards compatibility aliases (deprecated - use wva targets above)
 .PHONY: deploy-inferno-emulated-on-kind

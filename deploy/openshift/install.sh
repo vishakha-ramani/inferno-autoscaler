@@ -279,7 +279,7 @@ deploy_llm_d_infrastructure() {
     cd $EXAMPLE_DIR
     sed -i.bak "s/llm-d-inference-scheduler/$LLMD_NS/g" helmfile.yaml.gotmpl
 
-    if [ $MODEL_ID != $DEFAULT_MODEL_ID ]; then
+    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ]; then
         log_info "Updating deployment to use model: $MODEL_ID"
         yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
 

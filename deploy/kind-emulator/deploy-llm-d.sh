@@ -57,7 +57,7 @@ SLO_TTFT=${SLO_TTFT:-500}  # Target time-to-first-token SLO (in ms)
 
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"kgateway"} # Options: kgateway, istio
-BENCHMARK_MODE=${BENCHMARK_MODE:-"false"} # if true, updates to Istio config for benchmark
+# BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmark
 INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
 
 # Prometheus Configuration
@@ -65,6 +65,7 @@ PROM_CA_CERT_PATH=${PROM_CA_CERT_PATH:-"/tmp/prometheus-ca.crt"}
 PROMETHEUS_BASE_URL=${PROMETHEUS_BASE_URL:-"https://kube-prometheus-stack-prometheus.$MONITORING_NAMESPACE.svc.cluster.local"}
 PROMETHEUS_PORT=${PROMETHEUS_PORT:-"9090"}
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
+PROMETHEUS_SECRET_NAME=${PROMETHEUS_SECRET_NAME:-"prometheus-web-tls"}
 
 # KIND cluster configuration
 CLUSTER_NAME=${CLUSTER_NAME:-"kind-wva-gpu-cluster"}
@@ -329,7 +330,7 @@ deploy_prometheus_stack() {
     
     # Create Kubernetes secret with TLS certificate
     log_info "Creating Kubernetes secret for Prometheus TLS"
-    kubectl create secret tls prometheus-web-tls \
+    kubectl create secret tls $PROMETHEUS_SECRET_NAME \
         --cert=/tmp/prometheus-tls.crt \
         --key=/tmp/prometheus-tls.key \
         -n $MONITORING_NAMESPACE \
@@ -346,9 +347,9 @@ deploy_prometheus_stack() {
         --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
         --set prometheus.service.type=ClusterIP \
         --set prometheus.service.port=$PROMETHEUS_PORT \
-        --set prometheus.prometheusSpec.web.tlsConfig.cert.secret.name=prometheus-web-tls \
+        --set prometheus.prometheusSpec.web.tlsConfig.cert.secret.name=$PROMETHEUS_SECRET_NAME \
         --set prometheus.prometheusSpec.web.tlsConfig.cert.secret.key=tls.crt \
-        --set prometheus.prometheusSpec.web.tlsConfig.keySecret.name=prometheus-web-tls \
+        --set prometheus.prometheusSpec.web.tlsConfig.keySecret.name=$PROMETHEUS_SECRET_NAME \
         --set prometheus.prometheusSpec.web.tlsConfig.keySecret.key=tls.key \
         --timeout=5m \
         --wait
@@ -363,7 +364,7 @@ deploy_wva_controller() {
     
     # Extract Prometheus CA certificate
     log_info "Extracting Prometheus TLS certificate"
-    kubectl get secret prometheus-web-tls -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
+    kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
     
     # Deploy WVA using Helm chart
     log_info "Installing Workload-Variant-Autoscaler via Helm chart"
@@ -431,10 +432,12 @@ deploy_llm_d_infrastructure() {
         log_info "Skipping Gateway control plane installation (INSTALL_GATEWAY_CTRLPLANE=false)"
     fi
 
-    if [[ "$BENCHMARK_MODE" == "true" ]]; then
-      log_info "Benchmark mode enabled - using benchmark configuration for Istio"
-      GATEWAY_PROVIDER="istioBench"
-    fi
+    # Configure benchmark mode for Istio if enabled
+    # TODO: Currently disabled - to be re-enable once we move to llm-d
+    # if [[ "$BENCHMARK_MODE" == "true" ]]; then
+    #   log_info "Benchmark mode enabled - using benchmark configuration for Istio"
+    #   GATEWAY_PROVIDER="istioBench"
+    # fi
 
     # Configure llm-d infrastructure
     log_info "Configuring llm-d infrastructure"
@@ -652,7 +655,7 @@ deploy_prometheus_adapter() {
     
     # Extract Prometheus CA certificate and create ConfigMap
     log_info "Creating prometheus-ca ConfigMap for TLS verification"
-    kubectl get secret prometheus-web-tls -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
+    kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
     
     # Create or update prometheus-ca ConfigMap
     kubectl create configmap prometheus-ca --from-file=ca.crt=$PROM_CA_CERT_PATH -n $MONITORING_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
@@ -890,11 +893,11 @@ undeploy_prometheus_adapter() {
 
 undeploy_vllm_emulator() {
     log_info "Removing vLLM Emulator..."
-    
-    kubectl delete servicemonitor vllm-emulator-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
-    kubectl delete service vllm-emulator-service -n $LLMD_NS --ignore-not-found
-    kubectl delete deployment vllm-emulator -n $LLMD_NS --ignore-not-found
-    
+
+    kubectl delete servicemonitor $VLLM_EMULATOR_NAME-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
+    kubectl delete service $VLLM_EMULATOR_NAME-service -n $LLMD_NS --ignore-not-found
+    kubectl delete deployment $VLLM_EMULATOR_NAME -n $LLMD_NS --ignore-not-found
+
     log_success "vLLM Emulator removed"
 }
 
@@ -951,9 +954,9 @@ undeploy_prometheus_stack() {
     
     helm uninstall kube-prometheus-stack -n $MONITORING_NAMESPACE 2>/dev/null || \
         log_warning "Prometheus stack not found or already uninstalled"
-    
-    kubectl delete secret prometheus-web-tls -n $MONITORING_NAMESPACE --ignore-not-found
-    
+
+    kubectl delete secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE --ignore-not-found
+
     log_success "Prometheus stack uninstalled"
 }
 

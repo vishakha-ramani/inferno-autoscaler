@@ -154,7 +154,7 @@ parse_args() {
     if [[ "$IMG" == *":"* ]]; then
       IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
     else
-      WVA_IMAGE_REPO="$IMG"
+      log_warning "IMG has wrong format, using default image"
     fi
   fi
   
@@ -257,7 +257,7 @@ detect_gpu_type() {
     
     export ACCELERATOR_TYPE
     export DEPLOY_VLLM_EMULATOR
-    log_info "Using accelerator type: $ACCELERATOR_TYPE"
+    log_info "Using detected accelerator type: $ACCELERATOR_TYPE"
     log_info "Emulator mode: $DEPLOY_VLLM_EMULATOR"
 }
 
@@ -266,7 +266,7 @@ create_namespaces() {
     
     for ns in $WVA_NS $MONITORING_NAMESPACE $LLMD_NS; do
         if kubectl get namespace $ns &> /dev/null; then
-            log_warning "Namespace $ns already exists"
+            log_info "Namespace $ns already exists"
         else
             kubectl create namespace $ns
             log_success "Namespace $ns created"
@@ -381,12 +381,13 @@ deploy_llm_d_infrastructure() {
     bash $CLIENT_PREREQ_DIR/install-deps.sh
     bash $GATEWAY_PREREQ_DIR/install-gateway-provider-dependencies.sh
 
-    # Install Gateway provider (kgateway v2.0.3)
+    # Install Gateway provider (if kgateway, use v2.0.3)
     if [ "$GATEWAY_PROVIDER" == "kgateway" ]; then
         log_info "Installing $GATEWAY_PROVIDER v2.0.3"
         yq eval '.releases[].version = "v2.0.3"' -i "$GATEWAY_PREREQ_DIR/$GATEWAY_PROVIDER.helmfile.yaml"
     fi
 
+    # Install Gateway control plane if enabled
     if [[ "$INSTALL_GATEWAY_CTRLPLANE" == "true" ]]; then
         log_info "Installing Gateway control plane ($GATEWAY_PROVIDER)"
         helmfile apply -f "$GATEWAY_PREREQ_DIR/$GATEWAY_PROVIDER.helmfile.yaml"
@@ -439,7 +440,7 @@ deploy_llm_d_infrastructure() {
     fi
 
     # Edit GAIE image for ARM64 architecture if needed
-    # TODO: remove once ARM64 is supported natively
+    # TODO: remove once multi-arch image is available in llm-d
     if [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
         log_info "Patching EPP image for ARM64 architecture"
         kubectl patch deployment gaie-$WELL_LIT_PATH_NAME-epp \
@@ -898,9 +899,9 @@ undeploy_prometheus_adapter() {
 undeploy_vllm_emulator() {
     log_info "Removing vLLM Emulator..."
     
-    kubectl delete deployment $LLM_D_MODELSERVICE_NAME-decode -n $LLMD_NS --ignore-not-found
-    kubectl delete service vllm-service -n $LLMD_NS --ignore-not-found
-    kubectl delete servicemonitor vllm-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
+    kubectl delete deployment $VLLM_EMULATOR_NAME-decode -n $LLMD_NS --ignore-not-found
+    kubectl delete service $VLLM_EMULATOR_NAME-service -n $LLMD_NS --ignore-not-found
+    kubectl delete servicemonitor $VLLM_EMULATOR_NAME-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
     
     log_success "vLLM Emulator removed"
 }

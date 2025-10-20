@@ -461,7 +461,7 @@ deploy_llm_d_infrastructure() {
     fi
 
     # Edit GAIE image for ARM64 architecture if needed
-    # TODO: remove once ARM64 is supported natively
+    # TODO: remove once multi-arch image is available in llm-d 
     if [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
         log_info "Patching EPP image for ARM64 architecture"
         kubectl patch deployment gaie-$WELL_LIT_PATH_NAME-epp \
@@ -469,6 +469,14 @@ deploy_llm_d_infrastructure() {
             --type='json' \
             -p="[{'op':'replace','path':'/spec/template/spec/containers/0/image','value':'$GAIE_IMAGE_ARM64'}]"
     fi
+
+    # Delete default ModelService deployments
+    # TODO: remove once we move to llm-d-inference-simulator
+    log_info "Deleting default ModelService deployments..."
+    kubectl delete deployments.apps \
+        $LLM_D_MODELSERVICE_NAME-decode \
+        $LLM_D_MODELSERVICE_NAME-prefill \
+        --ignore-not-found -n "$LLMD_NS"
     
     log_info "Waiting for llm-d components to initialize..."
     kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=60s || \
@@ -482,8 +490,6 @@ deploy_llm_d_infrastructure() {
 apply_vllm_emulator_fixes() {
     log_info "Applying vLLM emulator integration fixes..."
     
-    log_success "InferencePool 'gaie-$WELL_LIT_PATH_NAME' found"
-    
     # Patch InferencePool to target vLLM emulator port
     kubectl get inferencepool "gaie-$WELL_LIT_PATH_NAME" -n "$LLMD_NS" &> /dev/null || \
         log_error "InferencePool 'gaie-$WELL_LIT_PATH_NAME' not found"
@@ -493,13 +499,6 @@ apply_vllm_emulator_fixes() {
         -p '{"spec":{"targetPortNumber":80}}' || log_error "Failed to patch InferencePool"
     
     log_success "InferencePool patched successfully"
-    
-    # Delete default ModelService deployments - using vLLM emulator
-    log_info "Deleting default ModelService deployments..."
-    kubectl delete deployments.apps \
-        $LLM_D_MODELSERVICE_NAME-decode \
-        $LLM_D_MODELSERVICE_NAME-prefill \
-        --ignore-not-found -n "$LLMD_NS"
     
     # Restart EPP deployment to pick up ConfigMap changes
     log_info "Restarting EPP deployment..."

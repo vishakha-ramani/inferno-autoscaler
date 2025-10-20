@@ -28,6 +28,32 @@ This creates:
 - Prometheus monitoring
 - vLLM emulator
 
+## Configuration Options
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HF_TOKEN` | HuggingFace token (required) | - |
+| `WELL_LIT_PATH_NAME` | Name of the deployed well-lit path | `inference-scheduling` |
+| `LLMD_NS` | llm-d namespace | `llm-d-$WELL_LIT_PATH_NAME` |
+| `MONITORING_NAMESPACE` | Prometheus monitoring namespace | `openshift-user-workload-monitoring` |
+| `MODEL_ID` | Model to deploy | `unsloth/Meta-Llama-3.1-8B` |
+| `ACCELERATOR_TYPE` | GPU type (auto-detected) | `H100` |
+| `SLO_TPOT` | Time per Output Token SLO target for the deployed model and GPU type | `9` |
+| `SLO_TTFT` | Time to First Token SLO target for the deployed model and GPU type | `1000` |
+| `WVA_IMAGE_REPO` | WVA controller image base repository | `ghcr.io/llm-d/workload-variant-autoscaler` |
+| `WVA_IMAGE_TAG` | WVA controller image tag | `v0.0.1` |
+| `LLM_D_RELEASE` | llm-d release version | `v0.3.0` |
+| `LLM_D_MODELSERVICE_NAME` | Name of the ModelService deployed by llm-d | `ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode` |
+| `PROM_CA_CERT_PATH` | Path for the Prometheus certificate | `/tmp/prometheus-ca.crt` |
+| `VLLM_SVC_ENABLED` | Flag to enable deployment of the Service exposing vLLM Deployment | `true` |
+| `VLLM_SVC_NODEPORT` | Port used as NodePort by the Service | `ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode` |
+| `GATEWAY_PROVIDER` | Deployed Gateway API implementation | `kgateway` |
+| `INSTALL_GATEWAY_CTRLPLANE` | Need to install Gateway Control Plane | `false` |
+
+*Note*: the emulated environment currently uses the `llm-d-infra v1.3.1` release, using kgateway, for retrocompatibility with vLLM-emulator. This will change once the `llm-d-inference-sim` implements the required metrics needed for scaling with WVA. For more information, see this [issue](https://github.com/llm-d/llm-d-inference-sim/issues/211).
+
 ### Step-by-Step Setup
 
 **1. Create Kind cluster:**
@@ -45,10 +71,16 @@ make create-kind-cluster KIND_ARGS="-t mix -n 4 -g 2"
 **2. Deploy WVA only:**
 
 ```bash
-make deploy-wva-emulated-on-kind
+export DEPLOY_WVA=true
+export DEPLOY_LLM_D=false
+export DEPLOY_PROMETHEUS=true # Prometheus is needed for WVA to scrape metrics
+export VLLM_SVC_ENABLED=true
+export DEPLOY_PROMETHEUS_ADAPTER=false
+export DEPLOY_HPA=false
+make deploy-llm-d-wva-emulated-on-kind
 ```
 
-**3. Deploy with llm-d:**
+**3. Deploy with llm-d (by default):**
 
 ```bash
 make deploy-llm-d-wva-emulated-on-kind
@@ -270,6 +302,12 @@ kubectl get pods -n <namespace>
 
 ```bash
 make undeploy-llm-d-wva-emulated-on-kind
+```
+
+**Remove deployments and delete the Kind cluster:**
+
+```bash
+make undeploy-llm-d-wva-emulated-on-kind-delete-cluster
 ```
 
 **Destroy cluster:**

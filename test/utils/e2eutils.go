@@ -1122,8 +1122,8 @@ func SetupTestEnvironment(image string, numNodes, gpusPerNode int, gpuTypes stri
 	gom.Expect(os.Setenv("CLUSTER_NODES", fmt.Sprintf("%d", numNodes))).To(gom.Succeed())
 	gom.Expect(os.Setenv("CLUSTER_GPUS", fmt.Sprintf("%d", gpusPerNode))).To(gom.Succeed())
 	gom.Expect(os.Setenv("CLUSTER_TYPE", gpuTypes)).To(gom.Succeed())
-	gom.Expect(os.Setenv("WVA_IMAGE_PULL_POLICY", "IfNotPresent")).To(gom.Succeed())
-	gom.Expect(os.Setenv("CREATE_CLUSTER", "true")).To(gom.Succeed())
+	gom.Expect(os.Setenv("WVA_IMAGE_PULL_POLICY", "IfNotPresent")).To(gom.Succeed()) 			// The image is built locally by the tests
+	gom.Expect(os.Setenv("CREATE_CLUSTER", "true")).To(gom.Succeed()) 				 			// Always create a new cluster for E2E tests
 
 	// Enable components needed for the tests
 	gom.Expect(os.Setenv("DEPLOY_LLM_D", "true")).To(gom.Succeed())
@@ -1133,11 +1133,10 @@ func SetupTestEnvironment(image string, numNodes, gpusPerNode int, gpuTypes stri
 
 	// Disable components not needed to be deployed by the script
 	// Tests create their own vLLM deployments, but script still patches InferencePool
-	gom.Expect(os.Setenv("DEPLOY_VLLM_EMULATOR", "false")).To(gom.Succeed())
-	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed())
-	gom.Expect(os.Setenv("DEPLOY_HPA", "false")).To(gom.Succeed())
-	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS_ADAPTER", "false")).To(gom.Succeed())
-	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed())
-	gom.Expect(os.Setenv("DEPLOY_INFERENCE_MODEL", "false")).To(gom.Succeed())
-
+	gom.Expect(os.Setenv("DEPLOY_VLLM_EMULATOR", "false")).To(gom.Succeed()) 					// we deploy our own vLLM deployments in the tests
+	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed()) 								// we create our own VariantAutoscaling resources in the tests
+	gom.Expect(os.Setenv("DEPLOY_HPA", "false")).To(gom.Succeed()) 								// HPA is not needed for these tests
+	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS_ADAPTER", "false")).To(gom.Succeed()) 				// Prometheus Adapter is not needed for these tests
+	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed()) 						// we deploy our own Service in the tests
+	gom.Expect(os.Setenv("DEPLOY_INFERENCE_MODEL", "false")).To(gom.Succeed()) 					// we create our own InferenceModel resources in the tests
 }

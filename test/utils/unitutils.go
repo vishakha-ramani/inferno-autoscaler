@@ -20,7 +20,17 @@ func CreateArrivalQuery(modelID, namespace string) string {
 		constants.LabelNamespace, namespace)
 }
 
-func CreateTokenQuery(modelID, namespace string) string {
+func CreatePromptToksQuery(modelID, namespace string) string {
+	return fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
+		constants.VLLMRequestPromptTokensSum,
+		constants.LabelModelName, modelID,
+		constants.LabelNamespace, namespace,
+		constants.VLLMRequestPromptTokensCount,
+		constants.LabelModelName, modelID,
+		constants.LabelNamespace, namespace)
+}
+
+func CreateDecToksQuery(modelID, namespace string) string {
 	return fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
 		constants.VLLMRequestGenerationTokensSum,
 		constants.LabelModelName, modelID,
@@ -30,12 +40,12 @@ func CreateTokenQuery(modelID, namespace string) string {
 		constants.LabelNamespace, namespace)
 }
 
-func CreateWaitQuery(modelID, namespace string) string {
+func CreateTTFTQuery(modelID, namespace string) string {
 	return fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
-		constants.VLLMRequestQueueTimeSecondsSum,
+		constants.VLLMTimeToFirstTokenSecondsSum,
 		constants.LabelModelName, modelID,
 		constants.LabelNamespace, namespace,
-		constants.VLLMRequestQueueTimeSecondsCount,
+		constants.VLLMTimeToFirstTokenSecondsCount,
 		constants.LabelModelName, modelID,
 		constants.LabelNamespace, namespace)
 }

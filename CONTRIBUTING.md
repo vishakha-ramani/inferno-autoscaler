@@ -2,97 +2,98 @@
 
 Welcome! We're excited that you're interested in contributing to the Workload-Variant-Autoscaler (WVA) project.
 
-## Table of Contents
+## General Contributing Guidelines
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Submitting Pull Requests](#submitting-pull-requests)
-- [Coding Guidelines](#coding-guidelines)
-- [Testing](#testing)
-- [Documentation](#documentation)
-- [Community](#community)
+For general contribution guidelines including code of conduct, commit message format, PR process, and community standards, please see the **[llm-d Contributing Guide](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md)**.
 
-## Code of Conduct
+This document covers **WVA-specific** development setup and workflows.
 
-This project follows the [Kubernetes Community Code of Conduct](https://github.com/kubernetes/community/blob/master/code-of-conduct.md). By participating, you are expected to uphold this code.
-
-## Getting Started
+## WVA-Specific Development
 
 ### Prerequisites
 
 - Go 1.23.0+
 - Docker 17.03+
-- kubectl 1.32.0+
+- kubectl 1.31.0+ (or `oc` for OpenShift)
 - Kind (for local development)
-- Basic understanding of Kubernetes controllers
+- Basic understanding of Kubernetes controllers and operators
 
 ### Setting Up Your Development Environment
 
-1. **Fork the repository** on GitHub
-
-2. **Clone your fork:**
+1. **Fork and clone the repository:**
    ```bash
    git clone https://github.com/<your-username>/workload-variant-autoscaler.git
    cd workload-variant-autoscaler
    ```
 
-3. **Add upstream remote:**
+2. **Add upstream remote:**
    ```bash
    git remote add upstream https://github.com/llm-d-incubation/workload-variant-autoscaler.git
    ```
 
-4. **Install dependencies:**
+3. **Install dependencies:**
    ```bash
    go mod download
    ```
 
-5. **Set up a local Kind cluster:**
+4. **Set up a local Kind cluster with emulated GPUs:**
    ```bash
-   make create-kind-cluster
+   make deploy-llm-d-wva-emulated-on-kind
    ```
 
-6. **Run tests to verify setup:**
+5. **Run tests to verify setup:**
    ```bash
    make test
    ```
 
-## Development Workflow
+See [Developer Guide](docs/developer-guide/development.md) for detailed setup instructions.
 
-### Creating a Feature Branch
+## WVA Project Structure
 
-Always work on a feature branch:
-
-```bash
-git checkout -b feature/my-new-feature
+```
+workload-variant-autoscaler/
+├── api/v1alpha1/         # CRD definitions and types
+├── cmd/                  # Main application entry point
+├── config/               # Kubernetes manifests
+│   ├── crd/             # CRD base manifests
+│   ├── rbac/            # RBAC configurations
+│   ├── manager/         # Controller deployment configs
+│   └── samples/         # Example VariantAutoscaling CRs
+├── deploy/               # Deployment scripts
+│   ├── kubernetes/      # Standard K8s deployment
+│   ├── openshift/       # OpenShift-specific deployment
+│   └── kind-emulator/   # Local development with Kind
+├── docs/                 # Documentation
+│   ├── user-guide/      # User-facing documentation
+│   ├── developer-guide/ # Development and testing guides
+│   ├── integrations/    # Integration guides (HPA, KEDA, Prometheus)
+│   ├── tutorials/       # Step-by-step tutorials
+│   └── design/          # Architecture and design docs
+├── internal/             # Private application code
+│   ├── controller/      # Main reconciliation logic
+│   ├── collector/       # Metrics collection
+│   ├── optimizer/       # Optimization engine
+│   ├── actuator/        # Metric emission & actuation
+│   ├── modelanalyzer/   # Model performance analysis
+│   ├── metrics/         # Metrics definitions
+│   └── utils/           # Utility functions
+├── pkg/                  # Public libraries (inferno optimizer)
+│   ├── analyzer/        # Queue theory models
+│   ├── solver/          # Optimization algorithms
+│   ├── core/            # Core domain models
+│   ├── config/          # Configuration structures
+│   └── manager/         # Optimization manager
+├── test/                 # Tests
+│   ├── e2e/             # End-to-end tests (Kind)
+│   ├── e2e-openshift/   # OpenShift E2E tests
+│   └── utils/           # Test utilities
+├── tools/                # Development tools
+│   └── vllm-emulator/   # vLLM emulator for testing
+└── charts/               # Helm charts
+    └── workload-variant-autoscaler/
 ```
 
-Use descriptive branch names:
-- `feature/add-new-metric`
-- `fix/memory-leak-collector`
-- `docs/update-installation-guide`
-
-### Building and Running Locally
-
-**Build the controller:**
-```bash
-make build
-```
-
-**Run the controller locally (outside cluster):**
-```bash
-make run
-```
-
-**Build and push Docker image:**
-```bash
-make docker-build docker-push IMG=<your-registry>/wva-controller:tag
-```
-
-**Deploy to your cluster:**
-```bash
-make deploy IMG=<your-registry>/wva-controller:tag
-```
+## WVA-Specific Development Tasks
 
 ### Testing Your Changes
 
@@ -101,295 +102,184 @@ make deploy IMG=<your-registry>/wva-controller:tag
 make test
 ```
 
-**Run E2E tests:**
+**Run E2E tests on Kind:**
 ```bash
 make test-e2e
+
+# Run specific tests
+make test-e2e FOCUS="single VA"
+make test-e2e SKIP="multiple VA"
 ```
 
-**Run specific E2E tests:**
+**Run E2E tests on OpenShift:**
 ```bash
-make test-e2e FOCUS="single VA"
+make test-e2e-openshift
 ```
 
 **Run linter:**
 ```bash
 make lint
-```
 
-**Auto-fix linting issues:**
-```bash
+# Auto-fix linting issues
 make lint-fix
 ```
 
-### Making Changes
+### Modifying CRDs
 
-1. **Keep changes focused:** One logical change per PR
-2. **Write tests:** Add unit tests for new functionality
-3. **Update documentation:** Keep docs in sync with code changes
-4. **Follow conventions:** Match existing code style and patterns
+If you modify the `VariantAutoscaling` CRD in `api/v1alpha1/`:
 
-## Submitting Pull Requests
-
-### Before Submitting
-
-- [ ] Run `make test` and ensure all tests pass
-- [ ] Run `make lint` and fix any issues
-- [ ] Update documentation if needed
-- [ ] Add or update tests for your changes
-- [ ] Commit messages follow [conventional commits](https://www.conventionalcommits.org/)
-
-### Commit Message Format
-
-Use clear, descriptive commit messages:
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `test`: Adding or updating tests
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `chore`: Maintenance tasks
-
-**Examples:**
-```
-feat(optimizer): add support for multi-GPU allocation
-
-Implement greedy algorithm for optimal GPU type selection
-across multiple models with different service classes.
-
-Closes #123
-```
-
-```
-fix(collector): resolve memory leak in metrics collection
-
-The collector was not properly releasing Prometheus client
-connections, causing gradual memory growth.
-
-Fixes #456
-```
-
-### Pull Request Process
-
-1. **Update your fork:**
+1. **Generate updated manifests and code:**
    ```bash
-   git fetch upstream
-   git rebase upstream/main
+   make manifests generate
    ```
 
-2. **Push to your fork:**
+2. **Update CRD documentation:**
    ```bash
-   git push origin feature/my-new-feature
+   make crd-docs
    ```
 
-3. **Create a Pull Request** on GitHub
-
-4. **Fill out the PR template** completely
-
-5. **Address review feedback** promptly
-
-6. **Keep PR updated** with main branch:
+3. **Verify CRD changes:**
    ```bash
-   git fetch upstream
-   git rebase upstream/main
-   git push --force-with-lease origin feature/my-new-feature
+   kubectl explain variantautoscaling.spec
    ```
 
-### PR Requirements
+### Building and Deploying
 
-- All CI checks must pass
-- At least one approval from a maintainer
-- No unresolved conversations
-- Documentation updated if applicable
-- Tests added/updated as needed
-
-## Coding Guidelines
-
-### Go Code Style
-
-- Follow standard Go conventions: [Effective Go](https://golang.org/doc/effective_go.html)
-- Use `gofmt` for formatting (run `make fmt`)
-- Follow [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
-
-### Project Structure
-
-```
-workload-variant-autoscaler/
-├── api/              # CRD definitions
-├── cmd/              # Main applications
-├── config/           # Kubernetes manifests
-├── deploy/           # Deployment scripts and examples
-├── docs/             # Documentation
-├── internal/         # Private application code
-├── pkg/              # Public libraries
-├── test/             # Tests
-└── tools/            # Development tools
+**Build the controller binary:**
+```bash
+make build
 ```
 
-**Import Guidelines:**
-- Group imports: stdlib, external, internal
-- Use meaningful package names
-- Avoid circular dependencies
-
-### Error Handling
-
-- Always check errors
-- Wrap errors with context: `fmt.Errorf("context: %w", err)`
-- Use structured logging with appropriate levels
-
-**Example:**
-```go
-if err := doSomething(); err != nil {
-    return fmt.Errorf("failed to do something: %w", err)
-}
+**Run controller locally (connects to configured cluster):**
+```bash
+make run
 ```
 
-### Logging
-
-Use the project's logger from `internal/logger`:
-
-```go
-logger.Info("Reconciling VariantAutoscaling", "name", va.Name, "namespace", va.Namespace)
-logger.Debug("Computed allocation", "replicas", replicas, "accelerator", accelerator)
-logger.Error(err, "Failed to update status")
+**Build Docker image:**
+```bash
+make docker-build IMG=<your-registry>/wva-controller:tag
 ```
 
-## Testing
-
-### Unit Tests
-
-- Test files should be `*_test.go`
-- Use table-driven tests for multiple scenarios
-- Mock external dependencies
-- Aim for >80% code coverage
-
-**Example:**
-```go
-func TestOptimizer_Optimize(t *testing.T) {
-    tests := []struct {
-        name    string
-        input   OptimizerInput
-        want    OptimizerOutput
-        wantErr bool
-    }{
-        // test cases
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // test logic
-        })
-    }
-}
+**Deploy to cluster:**
+```bash
+make deploy IMG=<your-registry>/wva-controller:tag
 ```
 
-### E2E Tests
-
-Located in `test/e2e/`:
-- Test full controller workflows
-- Use real Kubernetes clusters (Kind)
-- Clean up resources after tests
-
-### Integration Tests
-
-- Test interactions between components
-- Use envtest for Kubernetes API server
-- Located in `test/integration/`
+**Deploy with llm-d for testing:**
+```bash
+make deploy-llm-d-wva-emulated-on-kind IMG=<your-registry>/wva-controller:tag
+```
 
 ## Documentation
 
-### Where to Document
+### Updating Documentation
 
-- **User-facing docs:** `docs/user-guide/`
-- **Developer docs:** `docs/developer-guide/`
-- **Design decisions:** `docs/design/`
-- **Integration guides:** `docs/integrations/`
-- **Tutorials:** `docs/tutorials/`
+When making code changes, update relevant documentation in:
+- `docs/user-guide/` - User-facing changes (CRD changes, new features)
+- `docs/developer-guide/` - Development workflow changes
+- `docs/integrations/` - Integration guide updates
+- `docs/design/` - Architecture or design changes
+- `README.md` - High-level feature changes
 
-### Documentation Standards
+### Testing Documentation
 
-- Use clear, concise language
-- Include code examples
-- Keep docs in sync with code
-- Add diagrams for complex concepts
-- Test all commands/examples
-
-### Updating CRD Documentation
-
-After modifying CRDs:
+Verify all commands and examples work:
 ```bash
-make crd-docs
+# Test installation steps from docs
+# Test configuration examples
+# Verify all code snippets are correct
 ```
 
-## Community
+## WVA-Specific Code Guidelines
 
-### Communication Channels
+### Controller Development
 
-- **GitHub Issues:** Bug reports and feature requests
-- **GitHub Discussions:** Questions and community help
-- **Community Meetings:** Join llm-d autoscaling meetings
+- Use the `logger` package from `internal/logger`
+- Always use backoff retries for Kubernetes API calls (see `internal/utils`)
+- Update Kubernetes conditions for status visibility
+- Emit metrics for observability
 
-### Getting Help
+### Performance Modeling
 
-- Check existing [documentation](docs/)
-- Search [GitHub issues](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues)
+When modifying queue models in `pkg/analyzer/`:
+- Ensure mathematical correctness
+- Add comprehensive unit tests
+- Validate against real workload data when possible
+- Document assumptions and limitations
+
+### Optimization Algorithms
+
+When modifying solvers in `pkg/solver/`:
+- Consider computational complexity
+- Test edge cases (zero load, overload, etc.)
+- Ensure feasibility checking
+- Document algorithm choices
+
+## Getting Help
+
+- Check [Developer Guide](docs/developer-guide/development.md)
+- Review existing code and tests
+- Search [GitHub Issues](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues)
 - Ask in GitHub Discussions
-- Attend community meetings
+- Attend llm-d community meetings
 
-### Reporting Bugs
+## Common Development Tasks
 
-Use the bug report template when creating issues. Include:
-- Clear description of the problem
-- Steps to reproduce
-- Expected vs actual behavior
-- Environment details (K8s version, WVA version, etc.)
-- Relevant logs
+### Running the Controller Locally
 
-### Requesting Features
+```bash
+# Option 1: Run outside cluster (connects to KUBECONFIG cluster)
+make run
 
-Use the feature request template. Include:
-- Clear use case description
-- Expected behavior
-- Alternative solutions considered
-- Willingness to contribute
+# Option 2: Deploy to Kind cluster
+make deploy-llm-d-wva-emulated-on-kind
+```
 
-## Review Process
+### Debugging
 
-### What Reviewers Look For
+```bash
+# View controller logs
+kubectl logs -n workload-variant-autoscaler-system \
+  -l control-plane=controller-manager --tail=100 -f
 
-- **Correctness:** Does the code do what it claims?
-- **Testing:** Are there adequate tests?
-- **Documentation:** Is it documented appropriately?
-- **Style:** Does it follow project conventions?
-- **Design:** Is it well-architected?
+# Check VariantAutoscaling status
+kubectl describe variantautoscaling <name> -n <namespace>
 
-### Response Time
+# Check emitted metrics
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/<namespace>/inferno_desired_replicas" | jq
+```
 
-- Initial response: Within 3-5 business days
-- Follow-up reviews: Within 2-3 business days
-- Stale PRs (no activity >30 days) may be closed
+### Cleaning Up
+
+```bash
+# Destroy Kind cluster
+make destroy-kind-cluster
+
+# Undeploy from cluster
+make undeploy
+
+# Uninstall CRDs
+make uninstall
+```
+
+## Pre-Submission Checklist
+
+Before submitting your PR, ensure:
+
+- [ ] `make test` passes
+- [ ] `make lint` passes (fix issues with `make lint-fix`)
+- [ ] `make test-e2e` passes (if controller logic changed)
+- [ ] Documentation updated (if user-facing changes)
+- [ ] CRD docs regenerated (if CRD changed): `make crd-docs`
+- [ ] Commit messages follow [conventional commits](https://www.conventionalcommits.org/)
+- [ ] PR description clearly explains the change
 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
 
-## Recognition
-
-Contributors are recognized in:
-- Release notes
-- Project README
-- Special recognition for significant contributions
-
 ---
 
 Thank you for contributing to Workload-Variant-Autoscaler!
 
+For general llm-d contribution guidelines, visit the [llm-d Contributing Guide](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md).

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -163,31 +164,47 @@ func AddMetricsToOptStatus(ctx context.Context,
 	deployNamespace := deployment.Namespace
 	modelName := opt.Spec.ModelID
 
-	// --- 1. Define Queries ---
-
-	// Metric 1: Arrival rate (requests per minute)
-	arrivalQuery := fmt.Sprintf(`sum(rate(vllm:request_success_total{model_name="%s",namespace="%s"}[1m]))`, modelName, deployNamespace)
+	// Setup Prometheus client
+	// TODO: agree on using standard vllm metrics
+	// Query 1: Arrival rate (requests per minute)
+	arrivalQuery := fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m])) * 60`,
+		constants.VLLMRequestSuccessTotal,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace)
+	arrivalVal := 0.0
+	if val, warn, err := promAPI.Query(ctx, arrivalQuery, time.Now()); err == nil && val.Type() == model.ValVector {
+		vec := val.(model.Vector)
+		if len(vec) > 0 {
+			arrivalVal = float64(vec[0].Value)
+		}
+		if warn != nil {
+			logger.Log.Warn("Prometheus warnings - ", "warnings: ", warn)
+		}
+	} else {
+		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	}
+	FixValue(&arrivalVal)
 
 	// Metric 2: Average prompt length (Input Tokens)
 	avgPromptToksQuery := fmt.Sprintf(`sum(rate(vllm:request_prompt_tokens_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_prompt_tokens_count{model_name="%s",namespace="%s"}[1m]))`,
 		modelName, deployNamespace, modelName, deployNamespace)
 
-	// Metric 3: Average decode length (Output Tokens)
-	avgDecToksQuery := fmt.Sprintf(`sum(rate(vllm:request_generation_tokens_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:request_generation_tokens_count{model_name="%s",namespace="%s"}[1m]))`,
-		modelName, deployNamespace, modelName, deployNamespace)
-
-	// Metric 4: Average TTFT (Time to First Token) - converted to msec
-	ttftQuery := fmt.Sprintf(`sum(rate(vllm:time_to_first_token_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:time_to_first_token_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
-		modelName, deployNamespace, modelName, deployNamespace)
-
-	// Metric 5: Average ITL (Inter-Token Latency) - converted to msec
-	itlQuery := fmt.Sprintf(`sum(rate(vllm:time_per_output_token_seconds_sum{model_name="%s",namespace="%s"}[1m]))/sum(rate(vllm:time_per_output_token_seconds_count{model_name="%s",namespace="%s"}[1m]))`,
-		modelName, deployNamespace, modelName, deployNamespace)
-
-	// --- 2. Execute Queries ---
-
-	arrivalVal, err := queryAndExtractMetric(ctx, promAPI, arrivalQuery, "ArrivalRate")
-	if err != nil {
+	// Query 2: Average token length
+	// TODO: split composite query to individual queries
+	avgDecToksQuery := fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
+		constants.VLLMRequestGenerationTokensSum,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace,
+		constants.VLLMRequestGenerationTokensCount,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace)
+	avgOutputTokens := 0.0
+	if val, _, err := promAPI.Query(ctx, avgDecToksQuery, time.Now()); err == nil && val.Type() == model.ValVector {
+		vec := val.(model.Vector)
+		if len(vec) > 0 {
+			avgOutputTokens = float64(vec[0].Value)
+		}
+	} else {
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
 	arrivalVal *= 60 // convert from req/sec to req/min
@@ -197,20 +214,40 @@ func AddMetricsToOptStatus(ctx context.Context,
 		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
 	}
 
-	avgOutputTokens, err := queryAndExtractMetric(ctx, promAPI, avgDecToksQuery, "AvgOutputTokens")
-	if err != nil {
-		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	// Query 3: Average waiting time
+	ttftQuery := fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
+		constants.VLLMRequestQueueTimeSecondsSum,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace,
+		constants.VLLMRequestQueueTimeSecondsCount,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace)
+	ttftAverageTime := 0.0
+	if val, _, err := promAPI.Query(ctx, ttftQuery, time.Now()); err == nil && val.Type() == model.ValVector {
+		vec := val.(model.Vector)
+		if len(vec) > 0 {
+			ttftAverageTime = float64(vec[0].Value) * 1000 //msec
+		}
+	} else {
+		logger.Log.Warn("failed to get avg wait time, using 0: ", "model: ", modelName)
 	}
 
-	ttftAverageTime, err := queryAndExtractMetric(ctx, promAPI, ttftQuery, "TTFTAverageTime")
-	if err != nil {
-		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
-	}
-	ttftAverageTime *= 1000 // convert to msec
-
-	itlAverage, err := queryAndExtractMetric(ctx, promAPI, itlQuery, "ITLAverage")
-	if err != nil {
-		return llmdVariantAutoscalingV1alpha1.Allocation{}, err
+	// Query 4: Average ITL
+	itlQuery := fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))/sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
+		constants.VLLMTimePerOutputTokenSecondsSum,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace,
+		constants.VLLMTimePerOutputTokenSecondsCount,
+		constants.LabelModelName, modelName,
+		constants.LabelNamespace, deployNamespace)
+	itlAverage := 0.0
+	if val, _, err := promAPI.Query(ctx, itlQuery, time.Now()); err == nil && val.Type() == model.ValVector {
+		vec := val.(model.Vector)
+		if len(vec) > 0 {
+			itlAverage = float64(vec[0].Value) * 1000 //msec
+		}
+	} else {
+		logger.Log.Warn("failed to get avg itl time, using 0: ", "model: ", modelName)
 	}
 	itlAverage *= 1000 // convert to msec
 

@@ -52,6 +52,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // VariantAutoscalingReconciler reconciles a variantAutoscaling object
@@ -276,25 +277,11 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 		// This ensures the VA will be garbage collected when the Deployment is deleted
 		if !metav1.IsControlledBy(&updateVA, &deploy) {
 			original := updateVA.DeepCopy()
-
-			// Ensure APIVersion is set (should be "apps/v1" for Deployments)
-			apiVersion := deploy.APIVersion
-			if apiVersion == "" {
-				apiVersion = "apps/v1"
+			err := controllerutil.SetControllerReference(&deploy, &updateVA, r.Scheme, controllerutil.WithBlockOwnerDeletion(false))
+			if err != nil {
+				logger.Log.Error(err, "failed to set ownerReference - ", "variantAutoscaling-name: ", updateVA.Name)
+				continue
 			}
-			kind := deploy.Kind
-			if kind == "" {
-				kind = "Deployment"
-			}
-
-			updateVA.OwnerReferences = append(updateVA.OwnerReferences, metav1.OwnerReference{
-				APIVersion:         apiVersion,
-				Kind:               kind,
-				Name:               deploy.Name,
-				UID:                deploy.UID,
-				Controller:         utils.Ptr(true),
-				BlockOwnerDeletion: utils.Ptr(false),
-			})
 
 			// Patch metadata change (ownerReferences)
 			patch := client.MergeFrom(original)

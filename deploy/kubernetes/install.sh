@@ -861,10 +861,6 @@ print_summary() {
         echo "• vLLM emulator generates synthetic metrics for testing"
         echo "• Perfect for development and testing without GPU hardware"
     else
-        echo "• GPU Requirements:"
-        echo "  - GPUs must be visible to Kubernetes (check: kubectl get nodes -o json | jq '.items[].status.allocatable[\"nvidia.com/gpu\"]')"
-        echo "  - NVIDIA Device Plugin or GPU Operator must be installed for GPU passthrough"
-        echo ""
         echo "• Model Loading:"
         echo "  - Using $MODEL_ID"
         echo "  - Model loading takes 2-3 minutes on $ACCELERATOR_TYPE GPUs"
@@ -885,9 +881,8 @@ print_summary() {
     echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-prometheus 9090:9090"
     echo "  # Then visit https://localhost:9090 and query: vllm:request_success_total"
     echo ""
-    echo "• View Grafana dashboards:"
-    echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-grafana 3000:80"
-    echo "  # Username: admin, Password: prom-operator"
+    echo "• Check Prometheus Adapter logs:"
+    echo "  kubectl logs -n $MONITORING_NAMESPACE deployment/prometheus-adapter"
     echo ""
     echo "=========================================="
 }

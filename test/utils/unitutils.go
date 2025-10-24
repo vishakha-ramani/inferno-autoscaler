@@ -14,7 +14,7 @@ import (
 
 // The following utility functions are used to create Prometheus queries for testing
 func CreateArrivalQuery(modelID, namespace string) string {
-	return fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m])) * 60`,
+	return fmt.Sprintf(`sum(rate(%s{%s="%s",%s="%s"}[1m]))`,
 		constants.VLLMRequestSuccessTotal,
 		constants.LabelModelName, modelID,
 		constants.LabelNamespace, namespace)

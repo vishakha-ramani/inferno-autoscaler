@@ -395,15 +395,18 @@ var _ = Describe("Optimizer", Ordered, func() {
 				testNamespace := va.Namespace
 				arrivalQuery := testutils.CreateArrivalQuery(modelName, testNamespace)
 				avgDecToksQuery := testutils.CreateDecToksQuery(modelName, testNamespace)
+				avgPromptToksQuery := testutils.CreatePromptToksQuery(modelName, testNamespace)
 				ttftQuery := testutils.CreateTTFTQuery(modelName, testNamespace)
 				itlQuery := testutils.CreateITLQuery(modelName, testNamespace)
-
 				// High load metrics that should trigger scaling up
 				mockProm.QueryResults[arrivalQuery] = model.Vector{
-					&model.Sample{Value: model.SampleValue(0.7)}, // 42 req/min after * 60
+					&model.Sample{Value: model.SampleValue(20.0)},
 				}
 				mockProm.QueryResults[avgDecToksQuery] = model.Vector{
 					&model.Sample{Value: model.SampleValue(200.0)},
+				}
+				mockProm.QueryResults[avgPromptToksQuery] = model.Vector{
+					&model.Sample{Value: model.SampleValue(20)},
 				}
 				mockProm.QueryResults[ttftQuery] = model.Vector{
 					&model.Sample{Value: model.SampleValue(0.02)},

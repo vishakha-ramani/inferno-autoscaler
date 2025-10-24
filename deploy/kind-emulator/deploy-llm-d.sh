@@ -388,7 +388,6 @@ deploy_wva_controller() {
         --set llmd.namespace=$LLMD_NS \
         --set wva.prometheus.baseURL=$PROMETHEUS_URL \
         --set wva.prometheus.monitoringNamespace=$MONITORING_NAMESPACE \
-        --set prometheusAdapter.namespaceOverride=$MONITORING_NAMESPACE \
         --set vllmService.enabled=$VLLM_SVC_ENABLED \
         --set vllmService.nodePort=$VLLM_SVC_NODEPORT
     

@@ -365,6 +365,14 @@ deploy_wva_controller() {
 
 deploy_llm_d_infrastructure() {
     log_info "Deploying llm-d infrastructure..."
+
+     # Clone llm-d repo if not exists
+    if [ ! -d "$LLM_D_PROJECT" ]; then
+        log_info "Cloning $LLM_D_PROJECT repository (release: $LLM_D_RELEASE)"
+        git clone -b $LLM_D_RELEASE -- https://github.com/$LLM_D_OWNER/$LLM_D_PROJECT.git $LLM_D_PROJECT
+    else
+        log_warning "$LLM_D_PROJECT directory already exists, skipping clone"
+    fi
     
     # Check for HF_TOKEN (use dummy for emulator)
     export HF_TOKEN=${HF_TOKEN:-"dummy-token"}

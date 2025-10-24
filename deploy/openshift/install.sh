@@ -205,13 +205,13 @@ deploy_wva_controller() {
     # TODO: update to use Helm repo
     helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
     -n $WVA_NS \
-    --set-file prometheus.caCert=$PROM_CA_CERT_PATH \
+    --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
     --set wva.image.repository=$WVA_IMAGE_REPO \
     --set wva.image.tag=$WVA_IMAGE_TAG \
-    --set variantAutoscaling.accelerator=$ACCELERATOR_TYPE \
-    --set variantAutoscaling.modelID=$MODEL_ID \
-    --set variantAutoscaling.sloTpot=$SLO_TPOT \
-    --set variantAutoscaling.sloTtft=$SLO_TTFT \
+    --set va.accelerator=$ACCELERATOR_TYPE \
+    --set llmd.modelID=$MODEL_ID \
+    --set va.sloTpot=$SLO_TPOT \
+    --set va.sloTtft=$SLO_TTFT \
     --set vllmService.enabled=$VLLM_SVC_ENABLED \
     --set vllmService.nodePort=$VLLM_SVC_NODEPORT
 

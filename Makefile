@@ -1,6 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMAGE_TAG_BASE ?= ghcr.io/llm-d
-IMG_TAG ?= v0.0.1
+IMG_TAG ?= v0.0.2
 IMG ?= $(IMAGE_TAG_BASE)/workload-variant-autoscaler:$(IMG_TAG)
 KIND_ARGS ?= -t mix -n 3 -g 2   # Default: 3 nodes, 2 GPUs per node, mixed vendors
 KUBECONFIG ?= $(HOME)/.kube/config

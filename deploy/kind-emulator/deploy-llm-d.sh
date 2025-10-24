@@ -33,7 +33,7 @@ WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 
 # WVA Configuration
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
-WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.1"}
+WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.2"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
 # TODO: remove once llm-d-inference-scheduler multi-arch image is available - when moving to llm-d
 GAIE_IMAGE_ARM64=${GAIE_IMAGE_ARM64:-"quay.io/infernoautoscaler/llm-d-inference-scheduler:v0.2.1-arm64"}

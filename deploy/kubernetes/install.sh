@@ -32,7 +32,7 @@ WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 
 # WVA Configuration
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
-WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.1"}
+WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.2"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
 VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-true}
 VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}

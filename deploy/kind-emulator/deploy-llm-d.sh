@@ -372,7 +372,7 @@ deploy_wva_controller() {
     
     helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
         -n $WVA_NS \
-        --set-file prometheus.caCert=$PROM_CA_CERT_PATH \
+        --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
@@ -1079,7 +1079,9 @@ main() {
     if [ "$CREATE_CLUSTER" = "true" ]; then
         # Check if the specific cluster exists
         if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-            log_info "KIND cluster '${CLUSTER_NAME}' already exists, using it"
+            log_info "KIND cluster '${CLUSTER_NAME}' already exists, tearing it down and recreating..."
+            kind delete cluster --name "${CLUSTER_NAME}"
+            create_kind_cluster
             # Set kubectl context to this cluster
             kubectl config use-context "kind-${CLUSTER_NAME}" &> /dev/null
         else

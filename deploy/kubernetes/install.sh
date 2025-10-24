@@ -947,7 +947,12 @@ undeploy_llm_d_infrastructure() {
     fi
 
     log_info "Deleting llm-d cloned repository..."
-    rm -rf "$(dirname $WVA_PROJECT)/$LLM_D_PROJECT"
+    if [ ! -d "$(dirname $WVA_PROJECT)/$LLM_D_PROJECT" ]; then
+        log_warning "llm-d repository directory not found, skipping deletion"
+    else
+        rm -rf "$(dirname $WVA_PROJECT)/$LLM_D_PROJECT" 2>/dev/null || \
+            log_warning "Failed to delete llm-d repository directory"
+    fi
 
     log_success "llm-d infrastructure removed"
 }

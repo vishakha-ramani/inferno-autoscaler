@@ -335,23 +335,23 @@ deploy_wva_controller() {
     
     helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
         -n $WVA_NS \
-        --set-file prometheus.caCert=$PROM_CA_CERT_PATH \
+        --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
         --set wva.baseName=$WELL_LIT_PATH_NAME \
         --set wva.modelName=$LLM_D_MODELSERVICE_NAME \
-        --set wva.va.enabled=$DEPLOY_VA \
-        --set variantAutoscaling.enabled=$DEPLOY_VA \
-        --set variantAutoscaling.accelerator=$ACCELERATOR_TYPE \
-        --set variantAutoscaling.modelID=$MODEL_ID \
-        --set variantAutoscaling.sloTpot=$SLO_TPOT \
-        --set variantAutoscaling.sloTtft=$SLO_TTFT \
-        --set wva.hpa.enabled=$DEPLOY_HPA \
+        --set va.enabled=$DEPLOY_VA \
+        --set va.accelerator=$ACCELERATOR_TYPE \
+        --set llmd.modelID=$MODEL_ID \
+        --set va.sloTpot=$SLO_TPOT \
+        --set va.sloTtft=$SLO_TTFT \
+        --set hpa.enabled=$DEPLOY_HPA \
         --set llmd.namespace=$LLMD_NS \
-        --set prometheus.baseURL=$PROMETHEUS_URL \
-        --set wva.monitoringNamespace=$MONITORING_NAMESPACE \
-        --set prometheusAdapter.namespaceOverride=$MONITORING_NAMESPACE
+        --set wva.prometheus.baseURL=$PROMETHEUS_URL \
+        --set wva.prometheus.monitoringNamespace=$MONITORING_NAMESPACE \
+        --set vllmService.enabled=$VLLM_SVC_ENABLED \
+        --set vllmService.nodePort=$VLLM_SVC_NODEPORT
     
     cd "$WVA_PROJECT"
     

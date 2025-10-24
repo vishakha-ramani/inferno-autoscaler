@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -280,17 +281,21 @@ var _ = Describe("Collector", func() {
 		It("should collect metrics successfully", func() {
 			// Setup mock responses
 			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
-			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
-			waitQuery := utils.CreateWaitQuery(modelID, testNamespace)
+			avgPromptToksQuery := utils.CreatePromptToksQuery(modelID, testNamespace)
+			avgDecToksQuery := utils.CreateDecToksQuery(modelID, testNamespace)
+			ttftQuery := utils.CreateTTFTQuery(modelID, testNamespace)
 			itlQuery := utils.CreateITLQuery(modelID, testNamespace)
 
 			mockProm.QueryResults[arrivalQuery] = model.Vector{
-				&model.Sample{Value: model.SampleValue(10.5)}, // 10.5 requests/min
+				&model.Sample{Value: model.SampleValue(0.175)}, // 0.175 req/sec = 10.5 req/min after * 60
 			}
-			mockProm.QueryResults[tokenQuery] = model.Vector{
-				&model.Sample{Value: model.SampleValue(150.0)}, // 150 tokens per request
+			mockProm.QueryResults[avgPromptToksQuery] = model.Vector{
+				&model.Sample{Value: model.SampleValue(100.0)}, // 100 input tokens per request
 			}
-			mockProm.QueryResults[waitQuery] = model.Vector{
+			mockProm.QueryResults[avgDecToksQuery] = model.Vector{
+				&model.Sample{Value: model.SampleValue(150.0)}, // 150 output tokens per request
+			}
+			mockProm.QueryResults[ttftQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(0.5)}, // 0.5 seconds
 			}
 			mockProm.QueryResults[itlQuery] = model.Vector{
@@ -307,7 +312,8 @@ var _ = Describe("Collector", func() {
 			Expect(allocation.TTFTAverage).To(Equal("500.00"))          // 0.5 * 1000 ms
 			Expect(allocation.ITLAverage).To(Equal("50.00"))            // 0.05 * 1000 ms
 			Expect(allocation.Load.ArrivalRate).To(Equal("10.50"))      // req per min
-			Expect(allocation.Load.AvgOutputTokens).To(Equal("150.00")) // tokens per req
+			Expect(allocation.Load.AvgInputTokens).To(Equal("100.00"))  // input tokens per req
+			Expect(allocation.Load.AvgOutputTokens).To(Equal("150.00")) // output tokens per req
 		})
 
 		It("should handle missing accelerator label", func() {
@@ -316,7 +322,7 @@ var _ = Describe("Collector", func() {
 
 			// Setup minimal mock responses
 			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
-			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
+			tokenQuery := utils.CreateDecToksQuery(modelID, testNamespace)
 
 			mockProm.QueryResults[arrivalQuery] = model.Vector{
 				&model.Sample{Value: model.SampleValue(5.0)},
@@ -346,7 +352,7 @@ var _ = Describe("Collector", func() {
 		It("should handle empty metric results gracefully", func() {
 			// Setup empty responses (no data points)
 			arrivalQuery := utils.CreateArrivalQuery(modelID, testNamespace)
-			tokenQuery := utils.CreateTokenQuery(modelID, testNamespace)
+			tokenQuery := utils.CreateDecToksQuery(modelID, testNamespace)
 
 			// Empty vectors (no data)
 			mockProm.QueryResults[arrivalQuery] = model.Vector{}
@@ -398,6 +404,137 @@ var _ = Describe("Collector", func() {
 			val := -15.3
 			FixValue(&val)
 			Expect(val).To(Equal(-15.3))
+		})
+	})
+
+	Context("When validating metrics availability", func() {
+		var (
+			mockProm      *utils.MockPromAPI
+			modelName     string
+			testNamespace string
+		)
+
+		BeforeEach(func() {
+			mockProm = &utils.MockPromAPI{
+				QueryResults: make(map[string]model.Value),
+				QueryErrors:  make(map[string]error),
+			}
+			modelName = "test-model"
+			testNamespace = "test-namespace"
+		})
+
+		It("should return available when metrics are found with namespace label", func() {
+			// Setup mock response with namespace label
+			query := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			mockProm.QueryResults[query] = model.Vector{
+				&model.Sample{
+					Value:     model.SampleValue(100.0),
+					Timestamp: model.TimeFromUnixNano(time.Now().UnixNano()),
+				},
+			}
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeTrue())
+			Expect(result.Reason).To(Equal("MetricsFound"))
+			Expect(result.Message).To(ContainSubstring("available and up-to-date"))
+		})
+
+		It("should fallback to query without namespace label when first query returns empty", func() {
+			// Setup mock responses - first query empty, fallback has results
+			queryWithNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			queryWithoutNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s"}`, modelName)
+
+			mockProm.QueryResults[queryWithNamespace] = model.Vector{}
+			mockProm.QueryResults[queryWithoutNamespace] = model.Vector{
+				&model.Sample{
+					Value:     model.SampleValue(50.0),
+					Timestamp: model.TimeFromUnixNano(time.Now().UnixNano()),
+				},
+			}
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeTrue())
+			Expect(result.Reason).To(Equal("MetricsFound"))
+		})
+
+		It("should return unavailable when Prometheus query fails", func() {
+			// Setup error for query
+			query := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			mockProm.QueryErrors[query] = fmt.Errorf("prometheus connection error")
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeFalse())
+			Expect(result.Reason).To(Equal("PrometheusError"))
+			Expect(result.Message).To(ContainSubstring("Failed to query Prometheus"))
+		})
+
+		It("should return unavailable when no metrics found", func() {
+			// Setup empty responses for both queries
+			queryWithNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			queryWithoutNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s"}`, modelName)
+
+			mockProm.QueryResults[queryWithNamespace] = model.Vector{}
+			mockProm.QueryResults[queryWithoutNamespace] = model.Vector{}
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeFalse())
+			Expect(result.Reason).To(Equal("MetricsMissing"))
+			Expect(result.Message).To(ContainSubstring("No vLLM metrics found"))
+			Expect(result.Message).To(ContainSubstring("ServiceMonitor"))
+		})
+
+		It("should return unavailable when metrics are stale", func() {
+			// Setup mock response with stale timestamp (older than 5 minutes)
+			query := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			staleTime := time.Now().Add(-10 * time.Minute)
+			mockProm.QueryResults[query] = model.Vector{
+				&model.Sample{
+					Value:     model.SampleValue(100.0),
+					Timestamp: model.TimeFromUnixNano(staleTime.UnixNano()),
+				},
+			}
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeFalse())
+			Expect(result.Reason).To(Equal("MetricsStale"))
+			Expect(result.Message).To(ContainSubstring("are stale"))
+		})
+
+		It("should handle fallback query errors", func() {
+			// Setup empty first query and error on fallback
+			queryWithNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			queryWithoutNamespace := fmt.Sprintf(`vllm:request_success_total{model_name="%s"}`, modelName)
+
+			mockProm.QueryResults[queryWithNamespace] = model.Vector{}
+			mockProm.QueryErrors[queryWithoutNamespace] = fmt.Errorf("fallback query failed")
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeFalse())
+			Expect(result.Reason).To(Equal("PrometheusError"))
+			Expect(result.Message).To(ContainSubstring("Failed to query Prometheus"))
+		})
+
+		It("should accept fresh metrics within the 5 minute window", func() {
+			// Setup mock response with recent timestamp
+			query := fmt.Sprintf(`vllm:request_success_total{model_name="%s",namespace="%s"}`, modelName, testNamespace)
+			freshTime := time.Now().Add(-2 * time.Minute)
+			mockProm.QueryResults[query] = model.Vector{
+				&model.Sample{
+					Value:     model.SampleValue(100.0),
+					Timestamp: model.TimeFromUnixNano(freshTime.UnixNano()),
+				},
+			}
+
+			result := ValidateMetricsAvailability(ctx, mockProm, modelName, testNamespace)
+
+			Expect(result.Available).To(BeTrue())
+			Expect(result.Reason).To(Equal("MetricsFound"))
 		})
 	})
 

@@ -56,7 +56,7 @@ INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, instal
 DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
 MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
-SLO_TPOT=${SLO_TPOT:-9}  # Target time-per-output-token SLO (in ms)
+SLO_TPOT=${SLO_TPOT:-10}  # Target time-per-output-token SLO (in ms)
 SLO_TTFT=${SLO_TTFT:-1000}  # Target time-to-first-token SLO (in ms)
 
 # Prometheus Configuration
@@ -469,6 +469,14 @@ deploy_llm_d_infrastructure() {
 
 deploy_vllm_emulator() {
     log_info "Deploying vLLM Metrics Emulator (No GPU required)..."
+
+    if [ "$VLLM_SVC_ENABLED" == "true" ]; then
+        log_info "Deleting default vLLM Service and ServiceMonitor to avoid conflicts..."
+        kubectl delete vllm-service -n "$LLMD_NS" || \
+            log_warning "Failed to delete default vLLM Service"
+        kubectl delete servicemonitor -n "$MONITORING_NAMESPACE" || \
+            log_warning "Failed to delete default vLLM ServiceMonitor"
+    fi
     
     # Create vLLM emulator deployment
     log_info "Creating vLLM emulator deployment..."

@@ -5,6 +5,10 @@ wva:
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
     tag: v0.0.1
+  imagePullPolicy: Always
+
+  modelName: ms-inference-scheduling-llm-d-modelservice
+
   metrics:
     enabled: true
     port: 8443
@@ -20,7 +24,7 @@ llmd:
 va:
   enabled: true
   accelerator: H100
-  sloTpot: 9
+  sloTpot: 10
   sloTtft: 1000
 hpa:
   enabled: true

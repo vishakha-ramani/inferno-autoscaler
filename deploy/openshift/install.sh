@@ -39,7 +39,7 @@ LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"openshift-user-workload-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
-WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.1"}
+WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.2"}
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
 LLM_D_RELEASE=${LLM_D_RELEASE:-"v0.3.0"}
 LLM_D_MODELSERVICE_NAME=${LLM_D_MODELSERVICE_NAME:-"ms-$WELL_LIT_PATH_NAME-llm-d-modelservice-decode"}
@@ -279,7 +279,7 @@ deploy_llm_d_infrastructure() {
     cd $EXAMPLE_DIR
     sed -i.bak "s/llm-d-inference-scheduler/$LLMD_NS/g" helmfile.yaml.gotmpl
 
-    if [ $MODEL_ID != $DEFAULT_MODEL_ID ]; then
+    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ]; then
         log_info "Updating deployment to use model: $MODEL_ID"
         yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
 

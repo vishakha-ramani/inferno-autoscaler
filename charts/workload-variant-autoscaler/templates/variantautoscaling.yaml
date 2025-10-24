@@ -39,11 +39,23 @@ spec:
         perfParms: 
           decodeParms:
             # Decode parameters for ITL equation: itl = alpha + beta * maxBatchSize
-            alpha: "6.958"
-            beta: "0.042"
+            alpha: "7.470"
+            beta: "0.044"
+          # Prefill parameters for TTFT equation: ttft = gamma + delta * tokens * maxBatchSize  
+          prefillParms:
+            gamma: "15.415"
+            delta: "0.000337"
+        maxBatchSize: 512
+      - acc: "A100"
+        accCount: 1
+        perfParms: 
+          decodeParms:
+            # Decode parameters for ITL equation: itl = alpha + beta * maxBatchSize
+            alpha: "20.58"
+            beta: "0.41"
           # Prefill parameters for TTFT equation: ttft = gamma + delta * tokens * maxBatchSize  
           prefillParms:
             gamma: "5.2"
             delta: "0.1"
-        maxBatchSize: 512
+        maxBatchSize: 4
 {{- end }}

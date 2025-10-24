@@ -34,6 +34,8 @@ WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
 WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.1"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
+VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-true}
+VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -52,7 +54,7 @@ INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, instal
 
 # Model and SLO Configuration
 DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
-MODEL_ID=${MODEL_ID:-"Qwen/Qwen3-0.6B"}
+MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
 SLO_TPOT=${SLO_TPOT:-9}  # Target time-per-output-token SLO (in ms)
 SLO_TTFT=${SLO_TTFT:-1000}  # Target time-to-first-token SLO (in ms)
@@ -572,7 +574,7 @@ spec:
 EOF
     
     log_info "Waiting for vLLM emulator to be ready..."
-    kubectl wait --for=condition=available deployment/ms-inference-scheduling-llm-d-modelservice-decode -n "$LLMD_NS" --timeout=120s || \
+    kubectl wait --for=condition=available deployment/$VLLM_EMULATOR_NAME-decode -n "$LLMD_NS" --timeout=120s || \
         log_warning "vLLM emulator deployment may still be starting"
     
     log_success "vLLM Emulator deployment complete"

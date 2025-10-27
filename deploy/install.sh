@@ -605,17 +605,6 @@ deploy_prometheus_adapter() {
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
     helm repo update
     
-    # Extract Prometheus CA certificate and create ConfigMap
-    log_info "Creating prometheus-ca ConfigMap for TLS verification"
-    kubectl get secret $PROMETHEUS_SECRET_NAME -n $PROMETHEUS_SECRET_NS -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH || {
-        log_error "Failed to extract Prometheus CA certificate from secret $PROMETHEUS_SECRET_NAME in namespace $PROMETHEUS_SECRET_NS"
-    }
-    
-    # Create or update prometheus-ca ConfigMap
-    kubectl create configmap prometheus-ca --from-file=ca.crt=$PROM_CA_CERT_PATH -n $MONITORING_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-
-    log_success "prometheus-ca ConfigMap created/updated"
-    
     # Create prometheus-adapter values for Kubernetes
     cat > /tmp/prometheus-adapter-values.yaml <<EOF
 prometheus:

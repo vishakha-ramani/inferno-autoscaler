@@ -16,6 +16,9 @@ set -o pipefail  # Exit on pipe failure
 PROMETHEUS_BASE_URL="https://thanos-querier.openshift-monitoring.svc.cluster.local"
 PROMETHEUS_PORT="9091"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
+MONITORING_NAMESPACE="openshift-user-workload-monitoring"
+PROMETHEUS_SECRET_NAME="thanos-querier-tls"
+PROMETHEUS_SECRET_NS="openshift-monitoring"
 DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
 
 check_specific_prerequisites() {
@@ -76,7 +79,9 @@ deploy_wva_prerequisites() {
 
     # Extract Thanos TLS certificate
     log_info "Extracting Thanos TLS certificate"
-    kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
+    kubectl get secret $PROMETHEUS_SECRET_NAME -n $PROMETHEUS_SECRET_NS -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH || {
+        log_error "Failed to extract Thanos TLS certificate from secret $PROMETHEUS_SECRET_NAME in namespace $PROMETHEUS_SECRET_NS"
+    }
 
     # Update Prometheus URL in configmap
     log_info "Updating Prometheus URL in config/manager/configmap.yaml"
@@ -88,6 +93,10 @@ deploy_wva_prerequisites() {
 # OpenShift uses built-in monitoring, nothing to undeploy
 undeploy_prometheus_stack() {
     log_info "OpenShift uses built-in monitoring stack (no cleanup needed)"
+}
+
+delete_namespaces() {
+    log_info "Not deleting namespaces on OpenShift to avoid removing user projects"
 }
 
 # Environment-specific functions are now sourced by the main install.sh script

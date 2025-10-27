@@ -8,7 +8,7 @@ K8S_VERSION ?= v1.32.0
 
 CONTROLLER_NAMESPACE ?= workload-variant-autoscaler-system
 MONITORING_NAMESPACE ?= openshift-user-workload-monitoring
-LLMD_NAMESPACE       ?= llm-d-inference-scheduling
+LLMD_NAMESPACE       ?= llm-d-inference-scheduler
 GATEWAY_NAME         ?= infra-inference-scheduling-inference-gateway-istio
 MODEL_ID             ?= unsloth/Meta-Llama-3.1-8B
 DEPLOYMENT           ?= ms-inference-scheduling-llm-d-modelservice-decode
@@ -145,18 +145,18 @@ undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 		deploy/kind-emulator/deploy-llm-d.sh --undeploy --delete-cluster
 
 ## Undeploy WVA from OpenShift.
-.PHONY: undeploy-llm-d-wva-on-openshift
-undeploy-llm-d-wva-on-openshift:
+.PHONY: undeploy-wva-on-openshift
+undeploy-wva-on-openshift:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from OpenShift"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		ENVIRONMENT=openshift deploy/openshift/install.sh --undeploy
+		ENVIRONMENT=openshift deploy/install.sh --undeploy
 
 ## Undeploy WVA from Kubernetes.
-.PHONY: undeploy-llm-d-wva-on-k8s
-undeploy-llm-d-wva-on-k8s:
+.PHONY: undeploy-wva-on-k8s
+undeploy-wva-on-k8s:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		ENVIRONMENT=kubernetes deploy/kubernetes/install.sh --undeploy
+		ENVIRONMENT=kubernetes deploy/install.sh --undeploy
 
 # Backwards compatibility aliases (deprecated - use wva targets above)
 .PHONY: deploy-inferno-emulated-on-kind

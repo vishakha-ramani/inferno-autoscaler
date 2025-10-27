@@ -1,13 +1,9 @@
 wva:
   enabled: true
-  baseName: inference-scheduling
-  replicaCount: 1
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
-    tag: v0.0.1
+    tag: v0.0.2
   imagePullPolicy: Always
-
-  modelName: ms-inference-scheduling-llm-d-modelservice
 
   metrics:
     enabled: true
@@ -18,7 +14,7 @@ wva:
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     caCert: BASE64_CERT_PLACEHOLDER
 llmd:
-  namespace: llm-d-inference-scheduling
+  namespace: llm-d-inference-scheduler
   modelName: ms-inference-scheduling-llm-d-modelservice
   modelID: "unsloth/Meta-Llama-3.1-8B"
 va:

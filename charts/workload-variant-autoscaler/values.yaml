@@ -18,7 +18,8 @@ wva:
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     # Security configuration
     tls:
-      insecureSkipVerify: false  # Production: false, Development: true
+      # Note: insecureSkipVerify defaults to true for backward compatibility
+      # Override to false in production deployments for strict TLS verification
       caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
     # caCert: |  # Uncomment and provide your CA certificate
     #   -----BEGIN CERTIFICATE-----
@@ -41,3 +42,4 @@ vllmService:
   enabled: true
   nodePort: 30000
   interval: 15s
+  scheme: http  # vLLM emulator runs on HTTP

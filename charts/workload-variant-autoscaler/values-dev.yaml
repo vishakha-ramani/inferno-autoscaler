@@ -49,3 +49,4 @@ vllmService:
   enabled: true
   nodePort: 30000
   interval: 15s
+  scheme: http  # vLLM emulator runs on HTTP

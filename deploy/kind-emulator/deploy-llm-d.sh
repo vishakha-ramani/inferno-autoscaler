@@ -370,9 +370,18 @@ deploy_wva_controller() {
     log_info "Installing Workload-Variant-Autoscaler via Helm chart"
     cd "$WVA_PROJECT/charts"
     
+    # Check if values-dev.yaml exists, if not use values.yaml
+    if [ -f "./workload-variant-autoscaler/values-dev.yaml" ]; then
+        VALUES_FILE="./workload-variant-autoscaler/values-dev.yaml"
+        log_info "Using development values file: $VALUES_FILE"
+    else
+        VALUES_FILE="./workload-variant-autoscaler/values.yaml"
+        log_info "Using production values file: $VALUES_FILE"
+    fi
+    
     helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
         -n $WVA_NS \
-        --values ./workload-variant-autoscaler/values-dev.yaml \
+        --values $VALUES_FILE \
         --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \

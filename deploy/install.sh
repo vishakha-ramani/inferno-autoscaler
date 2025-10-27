@@ -28,6 +28,7 @@ ARCH=$(uname -m)
 LLMD_NS=${LLMD_NS:-"llm-d-$NAMESPACE_SUFFIX"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"workload-variant-autoscaler-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
+PROMETHEUS_SECRET_NS=${PROMETHEUS_SECRET_NS:-$MONITORING_NAMESPACE}
 
 # WVA Configuration
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
@@ -231,11 +232,11 @@ check_prerequisites() {
 detect_gpu_type() {
     log_info "Detecting GPU type in cluster..."
     
-    # Check if GPUs are visible to Kubernetes
+    # Check if GPUs are visible
     local gpu_count=$(kubectl get nodes -o json | jq -r '.items[].status.allocatable["nvidia.com/gpu"]' | grep -v null | head -1)
     
     if [ -z "$gpu_count" ] || [ "$gpu_count" == "null" ]; then
-        log_warning "No GPUs visible to Kubernetes"
+        log_warning "No GPUs visible"
         log_warning "GPUs may exist on host but need NVIDIA Device Plugin or GPU Operator"
         
         # Check if GPUs exist on host
@@ -249,7 +250,7 @@ detect_gpu_type() {
             DEPLOY_VLLM_EMULATOR=true
         fi
     else
-        log_success "GPUs visible to Kubernetes: $gpu_count GPU(s) per node"
+        log_success "GPUs visible: $gpu_count GPU(s) per node"
         
         # Detect GPU type from labels
         local gpu_product=$(kubectl get nodes -o json | jq -r '.items[] | select(.status.allocatable["nvidia.com/gpu"] != null) | .metadata.labels["nvidia.com/gpu.product"]' | head -1)
@@ -309,7 +310,7 @@ deploy_wva_controller() {
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
         --set wva.baseName=$WELL_LIT_PATH_NAME \
-        --set wva.modelName=$LLM_D_MODELSERVICE_NAME \
+        --set llmd.modelName=$LLM_D_MODELSERVICE_NAME \
         --set va.enabled=$DEPLOY_VA \
         --set va.accelerator=$ACCELERATOR_TYPE \
         --set llmd.modelID=$MODEL_ID \
@@ -606,11 +607,13 @@ deploy_prometheus_adapter() {
     
     # Extract Prometheus CA certificate and create ConfigMap
     log_info "Creating prometheus-ca ConfigMap for TLS verification"
-    kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
+    kubectl get secret $PROMETHEUS_SECRET_NAME -n $PROMETHEUS_SECRET_NS -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH || {
+        log_error "Failed to extract Prometheus CA certificate from secret $PROMETHEUS_SECRET_NAME in namespace $PROMETHEUS_SECRET_NS"
+    }
     
     # Create or update prometheus-ca ConfigMap
-    kubectl create configmap prometheus-ca --from-file=ca.crt=/tmp/prometheus-ca.crt -n $MONITORING_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-    
+    kubectl create configmap prometheus-ca --from-file=ca.crt=$PROM_CA_CERT_PATH -n $MONITORING_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
     log_success "prometheus-ca ConfigMap created/updated"
     
     # Create prometheus-adapter values for Kubernetes
@@ -649,6 +652,7 @@ extraVolumeMounts:
 
 extraArguments:
   - --prometheus-ca-file=/etc/prometheus-ca/ca.crt
+  - --prometheus-token-file=/var/run/secrets/kubernetes.io/serviceaccount/token
 
 podSecurityContext:
   fsGroup: null
@@ -930,20 +934,6 @@ undeploy_wva_controller() {
     log_success "WVA uninstalled"
 }
 
-delete_namespaces() {
-    log_info "Deleting namespaces..."
-    
-    for ns in $LLMD_NS $WVA_NS $MONITORING_NAMESPACE; do
-        if kubectl get namespace $ns &> /dev/null; then
-            log_info "Deleting namespace $ns..."
-            kubectl delete namespace $ns 2>/dev/null || \
-                log_warning "Failed to delete namespace $ns"
-        fi
-    done
-    
-    log_success "Namespaces deleted"
-}
-
 cleanup() {
     log_info "Starting undeployment process..."
     log_info "======================================"
@@ -1022,10 +1012,10 @@ main() {
         echo ""
         
         # Source environment-specific script to make functions available
-        if [ -f "$SCRIPT_DIR/$ENVIRONMENT.sh" ]; then
-            source "$SCRIPT_DIR/$ENVIRONMENT.sh"
+        if [ -f "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh" ]; then
+            source "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh"
         else
-            log_error "Environment script not found: $SCRIPT_DIR/$ENVIRONMENT.sh"
+            log_error "Environment script not found: $SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh"
         fi
         
         cleanup

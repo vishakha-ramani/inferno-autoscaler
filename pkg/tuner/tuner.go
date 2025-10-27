@@ -3,7 +3,6 @@ package tuner
 import (
 	"bytes"
 	"fmt"
-	"sync"
 
 	kalman "github.com/llm-inferno/kalman-filter/pkg/core"
 	"github.com/llm-inferno/model-tuner/pkg/config"
@@ -14,19 +13,19 @@ import (
 type Tuner struct {
 	configurator *Configurator
 	filter       *kalman.ExtendedKalmanFilter
+	env          *Environment
 }
 
-var env *Environment
-var mutex sync.Mutex
+// var env *Environment
+// var mutex sync.Mutex
 
 func NewTuner(configData *config.ConfigData, env *Environment) (tuner *Tuner, err error) {
 	var c *Configurator
 	var f *kalman.ExtendedKalmanFilter
 
-	t := &Tuner{}
-
-	// update env
-	t.UpdateEnvironment(env)
+	t := &Tuner{
+		env: env,
+	}
 
 	// create configurator
 	if c, err = NewConfigurator(configData); err != nil {
@@ -52,7 +51,7 @@ func NewTuner(configData *config.ConfigData, env *Environment) (tuner *Tuner, er
 			return nil, err
 		}
 	}
-	if err := f.SethH(observationFunc); err != nil {
+	if err := f.SethH(t.makeObservationFunc()); err != nil {
 		return nil, err
 	}
 
@@ -70,7 +69,7 @@ func (t *Tuner) Run() error {
 	}
 
 	// correct
-	Z := env.GetObservations()
+	Z := t.env.GetObservations()
 	if err := t.filter.Update(Z, t.configurator.R); err != nil {
 		fmt.Println(err)
 		return err
@@ -79,34 +78,38 @@ func (t *Tuner) Run() error {
 	return nil
 }
 
-func observationFunc(x *mat.VecDense) *mat.VecDense {
-	if !env.Valid() || x.Len() != 2 {
-		return mat.NewVecDense(2, nil)
+// makeObservationFunc creates a closure that captures the tuner's environment
+func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
+	return func(x *mat.VecDense) *mat.VecDense {
+		if !t.env.Valid() || x.Len() != 2 {
+			return mat.NewVecDense(2, nil)
+		}
+		maxBatchSize := t.env.MaxBatchSize
+		avgNumTokens := t.env.AvgOutputToks
+		alpha := float32(x.AtVec(0))
+		beta := float32(x.AtVec(1))
+
+		// calculate state-dependent service rate
+		servRate := make([]float32, maxBatchSize)
+		for n := 1; n <= maxBatchSize; n++ {
+			servRate[n-1] = float32(n) / (alpha + beta*float32(n)) / float32(avgNumTokens)
+		}
+		// fmt.Println("servRate:", servRate)
+
+		// create queueing model
+		maxQueueSize := 100 * maxBatchSize
+		queue := queue.NewMM1ModelStateDependent(maxQueueSize, servRate)
+
+		// request per msec
+		rpm := t.env.Lambda
+		lambda := (rpm / 1000 / 60)
+		queue.Solve(lambda, 1)
+
+		avgWaitTime := float64(queue.GetAvgWaitTime())
+		avgTokenTime := float64(queue.GetAvgServTime() / float32(avgNumTokens))
+
+		return mat.NewVecDense(2, []float64{avgWaitTime, avgTokenTime})
 	}
-	maxBatchSize := env.MaxBatchSize
-	avgNumTokens := env.AvgOutputToks
-	alpha := float32(x.AtVec(0))
-	beta := float32(x.AtVec(1))
-
-	// calculate state-dependent service rate
-	servRate := make([]float32, maxBatchSize)
-	for n := 1; n <= maxBatchSize; n++ {
-		servRate[n-1] = float32(n) / (alpha + beta*float32(n)) / float32(avgNumTokens)
-	}
-	// fmt.Println("servRate:", servRate)
-
-	// create queueing model
-	maxQueueSize := 100 * maxBatchSize
-	queue := queue.NewMM1ModelStateDependent(maxQueueSize, servRate)
-
-	// request per msec
-	rpm := env.Lambda
-	lambda := (rpm / 1000 / 60)
-	queue.Solve(lambda, 1)
-	avgWaitTime := float64(queue.GetAvgWaitTime())
-	avgTokenTime := float64(queue.GetAvgServTime() / float32(avgNumTokens))
-
-	return mat.NewVecDense(2, []float64{avgWaitTime, avgTokenTime})
 }
 
 func (t *Tuner) X() *mat.VecDense {
@@ -125,14 +128,12 @@ func (t *Tuner) String() string {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "Tuner: \n")
 	fmt.Fprintf(&b, "%v\n", t.configurator)
-	fmt.Fprintf(&b, "%v\n", env)
+	fmt.Fprintf(&b, "%v\n", t.env)
 	return b.String()
 }
 
 func (t *Tuner) UpdateEnvironment(envt *Environment) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	env = envt
+	t.env = envt
 }
 
 func (t *Tuner) GetParams() *mat.VecDense {

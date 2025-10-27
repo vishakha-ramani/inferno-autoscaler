@@ -121,14 +121,14 @@ deploy-llm-d-wva-emulated-on-kind:
 deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster with specified image.
 	@echo "Deploying WVA to OpenShift with image: $(IMG)"
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./deploy/openshift/install.sh
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=openshift ./deploy/install.sh
 
 ## Deploy WVA on Kubernetes with the specified image.
 .PHONY: deploy-wva-on-k8s
 deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the specified image.
 	@echo "Deploying WVA on Kubernetes with image: $(IMG)"
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ./deploy/kubernetes/install.sh
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes ./deploy/kubernetes/install.sh
 
 ## Undeploy WVA from the emulated environment on Kind.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
@@ -144,12 +144,19 @@ undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		deploy/kind-emulator/deploy-llm-d.sh --undeploy --delete-cluster
 
+## Undeploy WVA from OpenShift.
+.PHONY: undeploy-llm-d-wva-on-openshift
+undeploy-llm-d-wva-on-openshift:
+	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from OpenShift"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		ENVIRONMENT=openshift deploy/openshift/install.sh --undeploy
+
 ## Undeploy WVA from Kubernetes.
 .PHONY: undeploy-llm-d-wva-on-k8s
 undeploy-llm-d-wva-on-k8s:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		deploy/kubernetes/install.sh --undeploy
+		ENVIRONMENT=kubernetes deploy/kubernetes/install.sh --undeploy
 
 # Backwards compatibility aliases (deprecated - use wva targets above)
 .PHONY: deploy-inferno-emulated-on-kind

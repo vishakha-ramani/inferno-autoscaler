@@ -21,10 +21,11 @@ NC='\033[0m' # No Color
 # Configuration
 WVA_PROJECT=${WVA_PROJECT:-$PWD}
 WELL_LIT_PATH_NAME=${WELL_LIT_PATH_NAME:-"inference-scheduling"}
+NAMESPACE_SUFFIX=${NAMESPACE_SUFFIX:-"inference-scheduler"}
 ARCH=$(uname -m)
 
 # Namespaces
-LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
+LLMD_NS=${LLMD_NS:-"llm-d-$NAMESPACE_SUFFIX"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"workload-variant-autoscaler-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 
@@ -47,22 +48,19 @@ GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/pre
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
 
 # Gateway Configuration
-GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"kgateway"} # Options: kgateway, istio
-BENCHMARK_MODE=${BENCHMARK_MODE:-"false"} # if true, updates to Istio config for benchmark
-INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
+GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
+BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmark
+INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"false"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
 
 # Model and SLO Configuration
 DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
 MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
-ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
+ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"H100"}
 SLO_TPOT=${SLO_TPOT:-10}  # Target time-per-output-token SLO (in ms)
 SLO_TTFT=${SLO_TTFT:-1000}  # Target time-to-first-token SLO (in ms)
 
 # Prometheus Configuration
 PROM_CA_CERT_PATH=${PROM_CA_CERT_PATH:-"/tmp/prometheus-ca.crt"}
-PROMETHEUS_BASE_URL=${PROMETHEUS_BASE_URL:-"https://kube-prometheus-stack-prometheus.$MONITORING_NAMESPACE.svc.cluster.local"}
-PROMETHEUS_PORT=${PROMETHEUS_PORT:-"9090"}
-PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
 PROMETHEUS_SECRET_NAME=${PROMETHEUS_SECRET_NAME:-"prometheus-web-tls"}
 
 # Flags for deployment steps
@@ -191,10 +189,11 @@ parse_args() {
       -u|--undeploy)          UNDEPLOY=true; shift ;;
       -d|--delete-namespaces) DELETE_NAMESPACES=true; shift ;;
       -e|--environment)
-        ENVIRONMENT="$2"
+        ENVIRONMENT="$2" ; shift 2
         if ! containsElement "$ENVIRONMENT" "${COMPATIBLE_ENV_LIST[@]}"; then
           log_error "Invalid environment: $ENVIRONMENT. Valid options are: ${COMPATIBLE_ENV_LIST[*]}"
         fi
+        ;;
       -h|--help)              print_help; exit 0 ;;
       *)                      log_error "Unknown option: $1"; print_help; exit 1 ;;
     esac
@@ -392,7 +391,6 @@ deploy_llm_d_infrastructure() {
     log_info "Configuring llm-d infrastructure"
     
     cd $EXAMPLE_DIR
-    sed -i.bak "s/llm-d-inference-scheduler/$LLMD_NS/g" helmfile.yaml.gotmpl
 
     if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ]; then
         log_info "Updating deployment to use model: $MODEL_ID"
@@ -415,16 +413,6 @@ deploy_llm_d_infrastructure() {
         -n $LLMD_NS \
         --type='merge' \
         -p '{"spec":{"kube":{"service":{"type":"NodePort"}}}}'
-    fi
-
-    # Edit GAIE image for ARM64 architecture if needed
-    # TODO: remove once multi-arch image is available in llm-d
-    if [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
-        log_info "Patching EPP image for ARM64 architecture"
-        kubectl patch deployment gaie-$WELL_LIT_PATH_NAME-epp \
-            -n $LLMD_NS \
-            --type='json' \
-            -p="[{'op':'replace','path':'/spec/template/spec/containers/0/image','value':'$GAIE_IMAGE_ARM64'}]"
     fi
     
     log_info "Waiting for llm-d components to initialize..."
@@ -680,7 +668,7 @@ EOF
     log_info "Installing Prometheus Adapter via Helm"
     helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
         -n $MONITORING_NAMESPACE \
-        -f /tmp/prometheus-adapter-values-k8s.yaml \
+        -f /tmp/prometheus-adapter-values.yaml \
         --timeout=3m \
         --wait || {
             log_warning "Prometheus Adapter deployment timed out or failed, but continuing..."

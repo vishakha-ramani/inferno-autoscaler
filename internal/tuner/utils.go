@@ -6,20 +6,19 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	tune "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/tuner"
-	"github.com/llm-inferno/model-tuner/pkg/config"
 )
 
 func BuildTunerConfig(
 	initState []float64,
 	sloTTFT, sloITL float64,
-) (*config.ConfigData, error) {
+) (*tune.TunerConfigData, error) {
 
 	expectedObs := []float64{sloTTFT, sloITL}
 
 	// build config data from defaults, init state and slos
-	return &config.ConfigData{
+	return &tune.TunerConfigData{
 		FilterData: getDefaultFilterData(),
-		ModelData: config.ModelData{
+		ModelData: tune.TunerModelData{
 			InitState:            initState,
 			PercentChange:        getDefaultPercentChange(),
 			BoundedState:         true,
@@ -30,8 +29,8 @@ func BuildTunerConfig(
 	}, nil
 }
 
-func getDefaultFilterData() config.FilterData {
-	return config.FilterData{
+func getDefaultFilterData() tune.FilterData {
+	return tune.FilterData{
 		GammaFactor: constants.DefaultGammaFactor,
 		ErrorLevel:  constants.DefaultErrorLevel,
 		TPercentile: constants.DefaultTPercentile,

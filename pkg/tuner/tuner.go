@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	kalman "github.com/llm-inferno/kalman-filter/pkg/core"
-	"github.com/llm-inferno/model-tuner/pkg/config"
 	"github.com/llm-inferno/queue-analysis/pkg/queue"
 	"gonum.org/v1/gonum/mat"
 )
@@ -19,7 +18,7 @@ type Tuner struct {
 // var env *Environment
 // var mutex sync.Mutex
 
-func NewTuner(configData *config.ConfigData, env *Environment) (tuner *Tuner, err error) {
+func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
 	var c *Configurator
 	var f *kalman.ExtendedKalmanFilter
 

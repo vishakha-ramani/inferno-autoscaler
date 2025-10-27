@@ -5,9 +5,31 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/llm-inferno/model-tuner/pkg/config"
 	"gonum.org/v1/gonum/mat"
 )
+
+// Tuner configuration data
+type TunerConfigData struct {
+	FilterData FilterData     `json:"filterData"` // filter data
+	ModelData  TunerModelData `json:"modelData"`  // model data
+}
+
+// Filter configuration data
+type FilterData struct {
+	GammaFactor float64 `json:"gammaFactor"` // gamma factor
+	ErrorLevel  float64 `json:"errorLevel"`  // error level percentile
+	TPercentile float64 `json:"tPercentile"` // tail of student distribution
+}
+
+// Model configuration data
+type TunerModelData struct {
+	InitState            []float64 `json:"initState"`            // initial state of model parameters
+	PercentChange        []float64 `json:"percentChange"`        // percent change in state
+	BoundedState         bool      `json:"boundedState"`         // are the state values bounded
+	MinState             []float64 `json:"minState"`             // lower bound on state
+	MaxState             []float64 `json:"maxState"`             // upper bound on state
+	ExpectedObservations []float64 `json:"expectedObservations"` // expected values of observations
+}
 
 type Configurator struct {
 	// dimensions
@@ -30,7 +52,7 @@ type Configurator struct {
 	Xmax          []float64
 }
 
-func NewConfigurator(configData *config.ConfigData) (c *Configurator, err error) {
+func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
 	if !checkConfigData(configData) {
 		return nil, fmt.Errorf("invalid config data")
 	}
@@ -91,7 +113,7 @@ func (c *Configurator) NumObservations() int {
 	return c.nZ
 }
 
-func checkConfigData(cd *config.ConfigData) bool {
+func checkConfigData(cd *TunerConfigData) bool {
 	if cd == nil {
 		return false
 	}

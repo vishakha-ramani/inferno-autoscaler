@@ -42,6 +42,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
 	analyzer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/optimizer"
+	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
@@ -58,9 +59,9 @@ import (
 // VariantAutoscalingReconciler reconciles a variantAutoscaling object
 type VariantAutoscalingReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-
-	PromAPI promv1.API
+	Scheme   *runtime.Scheme
+	PromAPI  promv1.API
+	TunerMgr *tuner.TunerManager
 }
 
 // +kubebuilder:rbac:groups=llmd.ai,resources=variantautoscalings,verbs=get;list;watch;create;update;patch;delete
@@ -137,6 +138,17 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		logger.Log.Error(err, "failed to prepare variant autoscalings")
 		return ctrl.Result{}, err
+	}
+
+	// tune queueing model parameters for all servers using the system data
+	if r.TunerMgr.IsEnabled() {
+		// first handle va deletions
+		r.TunerMgr.RemoveTuners(variantAutoscalingList.Items)
+
+		// tune model perf params for existing VAs
+		if err := r.TunerMgr.TuneModelPerfParams(systemData); err != nil {
+			logger.Log.Warn(err, "failed to tune system data")
+		}
 	}
 
 	// analyze
@@ -450,6 +462,11 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("critical: failed to validate Prometheus API connection - autoscaling functionality requires Prometheus: %w", err)
 	}
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
+
+	// TODO: Create Tuner Manager
+	r.TunerMgr = tuner.NewTunerManager()
+	r.TunerMgr.Enable()
+	logger.Log.Info("Tuner manager initialized")
 
 	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 

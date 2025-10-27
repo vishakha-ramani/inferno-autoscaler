@@ -24,10 +24,11 @@ NC='\033[0m' # No Color
 # Configuration
 WVA_PROJECT=${WVA_PROJECT:-$PWD}
 ARCH=$(uname -m)
-WELL_LIT_PATH_NAME=${WELL_LIT_PATH_NAME:-"sim"}
+WELL_LIT_PATH_NAME=${WELL_LIT_PATH_NAME:-"simulated-accelerators"}
+NAMESPACE_SUFFIX=${NAMESPACE_SUFFIX:-"sim"}
 
 # Namespaces
-LLMD_NS=${LLMD_NS:-"llm-d-$WELL_LIT_PATH_NAME"}
+LLMD_NS=${LLMD_NS:-"llm-d-$NAMESPACE_SUFFIX"}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-"workload-variant-autoscaler-monitoring"}
 WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 
@@ -35,29 +36,28 @@ WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
 WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.2"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
-# TODO: remove once llm-d-inference-scheduler multi-arch image is available - when moving to llm-d
-GAIE_IMAGE_ARM64=${GAIE_IMAGE_ARM64:-"quay.io/infernoautoscaler/llm-d-inference-scheduler:v0.2.1-arm64"}
 
 # llm-d Configuration
-# TODO: update to use llm-d once we move to llm-d-inference-sim 
-LLM_D_OWNER=${LLM_D_OWNER:-"llm-d-incubation"}
-LLM_D_PROJECT=${LLM_D_PROJECT:-"llm-d-infra"}
-LLM_D_RELEASE=${LLM_D_RELEASE:-"v1.3.1"}
-LLM_D_MODELSERVICE_NAME=${LLM_D_MODELSERVICE_NAME:-"ms-$WELL_LIT_PATH_NAME-llm-d-modelservice"}
+LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
+LLM_D_PROJECT=${LLM_D_PROJECT:-"llm-d"}
+LLM_D_RELEASE=${LLM_D_RELEASE:-"v0.3.0"}
+LLM_D_MODELSERVICE_NAME=${LLM_D_MODELSERVICE_NAME:-"ms-$NAMESPACE_SUFFIX-llm-d-modelservice"}
 VLLM_EMULATOR_NAME=${VLLM_EMULATOR_NAME:-"vllm-emulator"}
-CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/dependencies"}
-GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/gateway-control-plane-providers"}
-EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/quickstart/examples/$WELL_LIT_PATH_NAME"}
+CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/client-setup"}
+GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/gateway-provider"}
+EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
+LLM_D_INFERENCE_SIM_IMG_REPO=${LLM_D_INFERENCE_SIM_IMG_REPO:-"ghcr.io/llm-d/llm-d-inference-sim"}
+LLM_D_INFERENCE_SIM_IMG_TAG=${LLM_D_INFERENCE_SIM_IMG_TAG:-"v0.5.2"}
 
 # Model and SLO Configuration
-MODEL_ID=${MODEL_ID:-"default/default"}  # vLLM emulator model
+MODEL_ID=${MODEL_ID:-"random"}
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
 SLO_TPOT=${SLO_TPOT:-24}  # Target time-per-output-token SLO (in ms)
 SLO_TTFT=${SLO_TTFT:-500}  # Target time-to-first-token SLO (in ms)
 
 # Gateway Configuration
-GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"kgateway"} # Options: kgateway, istio
-# BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmark
+GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
+BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmarking mode
 INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
 
 # Prometheus Configuration
@@ -78,14 +78,12 @@ CREATE_CLUSTER=${CREATE_CLUSTER:-true}
 DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-true}
 DEPLOY_WVA=${DEPLOY_WVA:-true}
 DEPLOY_LLM_D=${DEPLOY_LLM_D:-true}
-VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-false}
+VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-true}
 VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-"30000"}
 DEPLOY_VA=${DEPLOY_VA:-true}
 DEPLOY_HPA=${DEPLOY_HPA:-true}
 DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
-DEPLOY_VLLM_EMULATOR=${DEPLOY_VLLM_EMULATOR:-true}
-DEPLOY_INFERENCE_MODEL=${DEPLOY_INFERENCE_MODEL:-true}
-APPLY_VLLM_EMULATOR_FIXES=${APPLY_VLLM_EMULATOR_FIXES:-true}
+DEPLOY_LLM_D_INFERENCE_SIM=${DEPLOY_LLM_D_INFERENCE_SIM:-true}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
 
 # Undeployment flags
@@ -134,8 +132,6 @@ Environment Variables:
   DEPLOY_WVA                   Deploy WVA controller (default: true)
   DEPLOY_LLM_D                 Deploy llm-d infrastructure (default: true)
   DEPLOY_PROMETHEUS_ADAPTER    Deploy Prometheus Adapter (default: true)
-  DEPLOY_VLLM_EMULATOR         Deploy vLLM-emulator (default: true)
-  APPLY_VLLM_EMULATOR_FIXES    Apply fixes for vLLM-emulator compatibility (default: true)
   UNDEPLOY_ALL                 Undeploy mode (default: false)
   DELETE_CLUSTER               Delete cluster after undeploy (default: false)
 
@@ -376,12 +372,10 @@ deploy_wva_controller() {
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
-        --set wva.baseName=$WELL_LIT_PATH_NAME \
-        --set wva.modelName=$VLLM_EMULATOR_NAME \
-        --set wva.va.enabled=$DEPLOY_VA \
         --set va.enabled=$DEPLOY_VA \
         --set va.accelerator=$ACCELERATOR_TYPE \
         --set llmd.modelID=$MODEL_ID \
+        --set llmd.modelName=$LLM_D_MODELSERVICE_NAME \
         --set va.sloTpot=$SLO_TPOT \
         --set va.sloTtft=$SLO_TTFT \
         --set hpa.enabled=$DEPLOY_HPA \
@@ -424,6 +418,7 @@ deploy_llm_d_infrastructure() {
         yq eval '.releases[].version = "v2.0.3"' -i "$GATEWAY_PREREQ_DIR/$GATEWAY_PROVIDER.helmfile.yaml"
     fi
 
+    # Install Gateway control plane if needed
     if [[ "$INSTALL_GATEWAY_CTRLPLANE" == "true" ]]; then
         log_info "Installing Gateway control plane ($GATEWAY_PROVIDER)"
         helmfile apply -f "$GATEWAY_PREREQ_DIR/$GATEWAY_PROVIDER.helmfile.yaml"
@@ -432,11 +427,18 @@ deploy_llm_d_infrastructure() {
     fi
 
     # Configure benchmark mode for Istio if enabled
-    # TODO: Currently disabled - to be re-enable once we move to llm-d
-    # if [[ "$BENCHMARK_MODE" == "true" ]]; then
-    #   log_info "Benchmark mode enabled - using benchmark configuration for Istio"
-    #   GATEWAY_PROVIDER="istioBench"
-    # fi
+    if [[ "$BENCHMARK_MODE" == "true" ]]; then
+      log_info "Benchmark mode enabled - using benchmark configuration for Istio"
+      GATEWAY_PROVIDER="istioBench"
+    fi
+
+    # Configure llm-d-inference-simulator if needed
+    if [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "true" ]; then
+      log_info "Deploying llm-d-inference-simulator..."
+        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\"" -i "$EXAMPLE_DIR/ms-sim/values.yaml"
+    else
+      log_info "Skipping llm-d-inference-simulator deployment (DEPLOY_LLM_D_INFERENCE_SIM=false)"
+    fi
 
     # Configure llm-d infrastructure
     log_info "Configuring llm-d infrastructure"
@@ -446,34 +448,21 @@ deploy_llm_d_infrastructure() {
     # Deploy llm-d core components
     log_info "Deploying llm-d core components"
     helmfile apply -e $GATEWAY_PROVIDER -n ${LLMD_NS}
-
-    # TODO: re-enable HTTPRoute once we move to llm-d-inference-simulator - and move to llm-d
-    # kubectl apply -f httproute.yaml -n ${LLMD_NS}
+    kubectl apply -f httproute.yaml -n ${LLMD_NS}
 
     if [ "$GATEWAY_PROVIDER" == "kgateway" ]; then
       log_info "Patching kgateway service to NodePort"
-      export GATEWAY_NAME="infra-$WELL_LIT_PATH_NAME-inference-gateway"
+      export GATEWAY_NAME="infra-$NAMESPACE_SUFFIX-inference-gateway"
       kubectl patch gatewayparameters.gateway.kgateway.dev $GATEWAY_NAME \
       -n $LLMD_NS \
       --type='merge' \
       -p '{"spec":{"kube":{"service":{"type":"NodePort"}}}}'
     fi
 
-    # Edit GAIE image for ARM64 architecture if needed
-    # TODO: remove once multi-arch image is available in llm-d 
-    if [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
-        log_info "Patching EPP image for ARM64 architecture"
-        kubectl patch deployment gaie-$WELL_LIT_PATH_NAME-epp \
-            -n $LLMD_NS \
-            --type='json' \
-            -p="[{'op':'replace','path':'/spec/template/spec/containers/0/image','value':'$GAIE_IMAGE_ARM64'}]"
-    fi
-
-    # Delete default ModelService deployments
-    # TODO: remove once we move to llm-d-inference-simulator
-    log_info "Deleting default ModelService deployments..."
+    # Delete prefill deployment
+    # TODO: remove once WVA supports both prefill and decode
+    log_info "Deleting prefill deployments..."
     kubectl delete deployments.apps \
-        $LLM_D_MODELSERVICE_NAME-decode \
         $LLM_D_MODELSERVICE_NAME-prefill \
         --ignore-not-found -n "$LLMD_NS"
     
@@ -486,31 +475,13 @@ deploy_llm_d_infrastructure() {
 }
 
 # TODO: remove once we move to llm-d-inference-simulator
-apply_vllm_emulator_fixes() {
-    log_info "Applying vLLM emulator integration fixes..."
-    
-    # Patch InferencePool to target vLLM emulator port
-    kubectl get inferencepool "gaie-$WELL_LIT_PATH_NAME" -n "$LLMD_NS" &> /dev/null || \
-        log_error "InferencePool 'gaie-$WELL_LIT_PATH_NAME' not found"
-
-    log_info "Patching InferencePool to target vLLM emulator port 80..."
-    kubectl patch inferencepool "gaie-$WELL_LIT_PATH_NAME" -n "$LLMD_NS" --type='merge' \
-        -p '{"spec":{"targetPortNumber":80}}' || log_error "Failed to patch InferencePool"
-    
-    log_success "InferencePool patched successfully"
-    
-    # Restart EPP deployment to pick up ConfigMap changes
-    log_info "Restarting EPP deployment..."
-    kubectl rollout restart deployment gaie-$WELL_LIT_PATH_NAME-epp -n $LLMD_NS 2>/dev/null || \
-        log_warning "Could not restart EPP deployment"
-
-    if [ "$DEPLOY_INFERENCE_MODEL" == "true" ]; then
-      log_info "Creating InferenceModel for vLLM emulator..."
-      kubectl apply -f - <<EOF
+apply_inference_model() {
+    log_info "Creating InferenceModel..."
+    kubectl apply -f - <<EOF
 apiVersion: inference.networking.x-k8s.io/v1alpha2
 kind: InferenceModel
 metadata:
-  name: $VLLM_EMULATOR_NAME
+  name: $LLM_D_MODELSERVICE_NAME
   namespace: $LLMD_NS
 spec:
   modelName: $MODEL_ID
@@ -522,125 +493,6 @@ spec:
       weight: 100
 EOF
     log_success "InferenceModel created successfully"
-
-    else
-        log_info "Skipping InferenceModel creation (DEPLOY_INFERENCE_MODEL=false)"
-    fi
-    
-    log_success "vLLM emulator integration fixes applied"
-}
-
-deploy_vllm_emulator() {
-    log_info "Deploying vLLM Metrics Emulator (No GPU required)..."
-    
-    # Create vLLM emulator deployment
-    log_info "Creating vLLM emulator deployment..."
-    kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: $VLLM_EMULATOR_NAME-decode
-  namespace: $LLMD_NS
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: $VLLM_EMULATOR_NAME
-      llm-d.ai/inferenceServing: "true"
-      llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
-  template:
-    metadata:
-      labels:
-        app: $VLLM_EMULATOR_NAME
-        llm-d.ai/inferenceServing: "true"
-        llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
-    spec:
-      containers:
-      - name: $VLLM_EMULATOR_NAME
-        image: quay.io/infernoautoscaler/vllme:0.2.3-multi-arch
-        imagePullPolicy: Always
-        env: 
-        - name: MODEL_NAME
-          value: "$MODEL_ID"
-        - name: DECODE_TIME
-          value: "20"        # In milliseconds, e.g., 20ms per token decode
-        - name: PREFILL_TIME
-          value: "20"        # In milliseconds, e.g., 20ms for prefill
-        - name: MODEL_SIZE
-          value: "25000"     # In MB, e.g., 25GB model size
-        - name: KVC_PER_TOKEN
-          value: "2"         # In MB, e.g., 2MB per token for KV cache
-        - name: MAX_SEQ_LEN
-          value: "2048"      # Max sequence length
-        - name: MEM_SIZE
-          value: "80000"     # Total device memory in MB, e.g., 80GB
-        - name: AVG_TOKENS
-          value: "128"       # Average generated tokens
-        - name: TOKENS_DISTRIBUTION
-          value: "deterministic"   # "uniform", "normal", "deterministic"
-        - name: MAX_BATCH_SIZE
-          value: "8"         # Max concurrent requests in a batch 
-        - name: REALTIME
-          value: "True"      # Boolean: "True" or "False"
-        - name: MUTE_PRINT
-          value: "False"     # Boolean: "True" or "False"
-        ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 500m
-            memory: 1Gi
-            nvidia.com/gpu: "1"  # Limit to 1 GPU (emulated)
-          requests:
-            cpu: 100m
-            memory: 500Mi
-            nvidia.com/gpu: "1"  # Request 1 GPU (emulated)
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: $VLLM_EMULATOR_NAME-service
-  namespace: $LLMD_NS
-  labels:
-    app: $VLLM_EMULATOR_NAME
-    llm-d.ai/inferenceServing: "true"
-spec:
-  selector:
-    app: $VLLM_EMULATOR_NAME
-    llm-d.ai/inferenceServing: "true"
-  ports:
-    - name: $VLLM_EMULATOR_NAME
-      port: 80
-      protocol: TCP
-      targetPort: 80
-  type: ClusterIP
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: $VLLM_EMULATOR_NAME-servicemonitor
-  namespace: $MONITORING_NAMESPACE
-  labels:
-    app: $VLLM_EMULATOR_NAME
-    release: kube-prometheus-stack
-spec:
-  selector:
-    matchLabels:
-      app: $VLLM_EMULATOR_NAME
-  endpoints:
-  - port: $VLLM_EMULATOR_NAME
-    path: /metrics
-    interval: 15s
-  namespaceSelector:
-    matchNames:
-    - $LLMD_NS
-EOF
-    
-    log_info "Waiting for vLLM emulator to be ready..."
-    kubectl wait --for=condition=available deployment/ms-inference-scheduling-llm-d-modelservice-decode -n "$LLMD_NS" --timeout=120s || \
-        log_warning "vLLM emulator deployment may still be starting"
-    
-    log_success "vLLM Emulator deployment complete"
 }
 
 deploy_prometheus_adapter() {
@@ -650,15 +502,6 @@ deploy_prometheus_adapter() {
     log_info "Adding Prometheus community helm repo"
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
     helm repo update
-    
-    # Extract Prometheus CA certificate and create ConfigMap
-    log_info "Creating prometheus-ca ConfigMap for TLS verification"
-    kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
-    
-    # Create or update prometheus-ca ConfigMap
-    kubectl create configmap prometheus-ca --from-file=ca.crt=$PROM_CA_CERT_PATH -n $MONITORING_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-    
-    log_success "prometheus-ca ConfigMap created/updated"
     
     # Create prometheus-adapter values
     cat > /tmp/prometheus-adapter-values-kind.yaml <<YAML
@@ -870,9 +713,8 @@ print_summary() {
     echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-prometheus 9090:9090"
     echo "  # Then visit https://localhost:9090 and query: vllm:request_success_total"
     echo ""
-    echo "• Delete and recreate cluster:"
-    echo "  kind delete cluster"
-    echo "  $0"
+    echo "• Delete the cluster with the following command and recreate it afterwards:"
+    echo "  kind delete cluster --name $CLUSTER_NAME"
     echo ""
     echo "=========================================="
 }
@@ -889,16 +731,6 @@ undeploy_prometheus_adapter() {
     log_success "Prometheus Adapter uninstalled"
 }
 
-undeploy_vllm_emulator() {
-    log_info "Removing vLLM Emulator..."
-
-    kubectl delete servicemonitor $VLLM_EMULATOR_NAME-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
-    kubectl delete service $VLLM_EMULATOR_NAME-service -n $LLMD_NS --ignore-not-found
-    kubectl delete deployment $VLLM_EMULATOR_NAME -n $LLMD_NS --ignore-not-found
-
-    log_success "vLLM Emulator removed"
-}
-
 undeploy_llm_d_infrastructure() {
     log_info "Undeploying the llm-d infrastructure..."
     
@@ -909,11 +741,11 @@ undeploy_llm_d_infrastructure() {
         
         log_info "Removing llm-d core components..."
 
-        helm uninstall infra-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall infra-$NAMESPACE_SUFFIX -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d infra components not found or already uninstalled"
-        helm uninstall gaie-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall gaie-$NAMESPACE_SUFFIX -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d inference-scheduler components not found or already uninstalled"
-        helm uninstall ms-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall ms-$NAMESPACE_SUFFIX -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d ModelService components not found or already uninstalled"
 
         cd "$WVA_PROJECT"
@@ -993,10 +825,6 @@ undeploy_all() {
         undeploy_prometheus_adapter
     fi
     
-    if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-        undeploy_vllm_emulator
-    fi
-    
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         undeploy_llm_d_infrastructure
     fi
@@ -1033,7 +861,6 @@ undeploy_all() {
     echo ""
     echo "Removed components:"
     [ "$DEPLOY_PROMETHEUS_ADAPTER" = "true" ] && echo "✓ Prometheus Adapter"
-    [ "$DEPLOY_VLLM_EMULATOR" = "true" ] && echo "✓ vLLM Emulator"
     [ "$DEPLOY_LLM_D" = "true" ] && echo "✓ llm-d Infrastructure"
     [ "$DEPLOY_WVA" = "true" ] && echo "✓ WVA Controller"
     [ "$DEPLOY_PROMETHEUS" = "true" ] && echo "✓ Prometheus Stack"
@@ -1079,9 +906,10 @@ main() {
     if [ "$CREATE_CLUSTER" = "true" ]; then
         # Check if the specific cluster exists
         if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-            log_info "KIND cluster '${CLUSTER_NAME}' already exists, tearing it down and recreating..."
-            kind delete cluster --name "${CLUSTER_NAME}"
-            create_kind_cluster
+            # log_info "KIND cluster '${CLUSTER_NAME}' already exists, tearing it down and recreating..."
+            # kind delete cluster --name "${CLUSTER_NAME}"
+            # create_kind_cluster
+            log_info "KIND cluster '${CLUSTER_NAME}' already exists, using it..."
             # Set kubectl context to this cluster
             kubectl config use-context "kind-${CLUSTER_NAME}" &> /dev/null
         else
@@ -1145,23 +973,6 @@ main() {
     # Deploy llm-d
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         deploy_llm_d_infrastructure
-        
-        # Deploy vLLM emulator pods
-        if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-            log_info "vLLM Emulator deployment enabled (DEPLOY_VLLM_EMULATOR=true)"
-            deploy_vllm_emulator
-        else
-            log_info "vLLM Emulator deployment disabled (DEPLOY_VLLM_EMULATOR=false), skipping"
-        fi
-        
-        if [ "$APPLY_VLLM_EMULATOR_FIXES" = "true" ]; then
-            log_info "Applying vLLM emulator integration fixes (APPLY_VLLM_EMULATOR_FIXES=true)"
-            
-            # Apply vLLM emulator-specific fixes
-            apply_vllm_emulator_fixes
-        else
-            log_info "Skipping vLLM emulator integration fixes (APPLY_VLLM_EMULATOR_FIXES=false)"
-        fi
 
     else
         log_info "Skipping llm-d deployment (DEPLOY_LLM_D=false)"

@@ -114,6 +114,20 @@ undeploy_prometheus_stack() {
     log_success "Prometheus stack uninstalled"
 }
 
+delete_namespaces() {
+    log_info "Deleting namespaces..."
+    
+    for ns in $LLMD_NS $WVA_NS $MONITORING_NAMESPACE; do
+        if kubectl get namespace $ns &> /dev/null; then
+            log_info "Deleting namespace $ns..."
+            kubectl delete namespace $ns 2>/dev/null || \
+                log_warning "Failed to delete namespace $ns"
+        fi
+    done
+    
+    log_success "Namespaces deleted"
+}
+
 # Environment-specific functions are now sourced by the main install.sh script
 # Do not call functions directly when sourced
 

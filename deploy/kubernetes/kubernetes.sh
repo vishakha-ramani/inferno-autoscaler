@@ -13,8 +13,8 @@ set -o pipefail  # Exit on pipe failure
 # Kubernetes-specific Prometheus Configuration
 # Note: overriding defaults from common script
 #
-PROMETHEUS_BASE_URL=${PROMETHEUS_BASE_URL:-"https://kube-prometheus-stack-prometheus.$MONITORING_NAMESPACE.svc.cluster.local"}
-PROMETHEUS_PORT=${PROMETHEUS_PORT:-"9090"}
+PROMETHEUS_BASE_URL="https://kube-prometheus-stack-prometheus.$MONITORING_NAMESPACE.svc.cluster.local"
+PROMETHEUS_PORT="9090"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
 DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-true}
 

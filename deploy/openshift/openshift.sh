@@ -13,10 +13,10 @@ set -o pipefail  # Exit on pipe failure
 # OpenShift-specific Prometheus Configuration
 # Note: overriding defaults from common script
 #
-PROMETHEUS_BASE_URL=${PROMETHEUS_BASE_URL:-"https://thanos-querier.openshift-monitoring.svc.cluster.local"}
-PROMETHEUS_PORT=${PROMETHEUS_PORT:-"9091"}
+PROMETHEUS_BASE_URL="https://thanos-querier.openshift-monitoring.svc.cluster.local"
+PROMETHEUS_PORT="9091"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
-DEPLOY_PROMETHEUS=false  # OpenShift has built-in monitoring
+DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
 
 check_specific_prerequisites() {
     log_info "Checking OpenShift-specific prerequisites..."

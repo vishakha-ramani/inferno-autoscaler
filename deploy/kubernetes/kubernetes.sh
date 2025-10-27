@@ -3,7 +3,7 @@
 # Workload-Variant-Autoscaler Kubernetes Environment-Specific Configuration
 # This script provides Kubernetes-specific functions and variable overrides
 # It is sourced by the main install.sh script
-# Note: it is not meant to be executed directly
+# Note: it is NOT meant to be executed directly
 #
 
 set -e  # Exit on error
@@ -119,9 +119,13 @@ delete_namespaces() {
     
     for ns in $LLMD_NS $WVA_NS $MONITORING_NAMESPACE; do
         if kubectl get namespace $ns &> /dev/null; then
-            log_info "Deleting namespace $ns..."
-            kubectl delete namespace $ns 2>/dev/null || \
-                log_warning "Failed to delete namespace $ns"
+            if [[ "$ns" == "$LLMD_NS" && "$DEPLOY_LLM_D" == "false" ]] || [[ "$ns" == "$WVA_NS" && "$DEPLOY_WVA" == "false" ]] || [[ "$ns" == "$MONITORING_NAMESPACE" && "$DEPLOY_PROMETHEUS" == "false" ]] ; then
+                log_info "Skipping deletion of namespace $ns as it was not deployed"
+            else 
+                log_info "Deleting namespace $ns..."
+                kubectl delete namespace $ns 2>/dev/null || \
+                    log_warning "Failed to delete namespace $ns"
+            fi
         fi
     done
     

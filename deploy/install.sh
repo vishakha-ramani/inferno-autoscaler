@@ -78,7 +78,7 @@ SKIP_CHECKS=${SKIP_CHECKS:-false}
 # Script directories
 SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 ENVIRONMENT=${ENVIRONMENT:-"kubernetes"}
-COMPATIBLE_ENV_LIST=("kubernetes" "openshift" "kind-emulated")
+COMPATIBLE_ENV_LIST=("kubernetes" "openshift" "kind-emulator")
 NON_EMULATED_ENV_LIST=("kubernetes" "openshift")
 
 # Undeployment flags

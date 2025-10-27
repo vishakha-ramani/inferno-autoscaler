@@ -88,6 +88,7 @@ SKIP_CHECKS=${SKIP_CHECKS:-false}
 
 # Undeployment flags
 UNDEPLOY_ALL=${UNDEPLOY_ALL:-false}
+DELETE_NAMESPACES=${DELETE_NAMESPACES:-false}
 DELETE_CLUSTER=${DELETE_CLUSTER:-false}
 
 # Helper functions
@@ -795,9 +796,13 @@ delete_namespaces() {
     
     for ns in $LLMD_NS $WVA_NS $MONITORING_NAMESPACE; do
         if kubectl get namespace $ns &> /dev/null; then
-            log_info "Deleting namespace $ns..."
-            kubectl delete namespace $ns 2>/dev/null || \
-                log_warning "Failed to delete namespace $ns"
+            if [[ "$ns" == "$LLMD_NS" && "$DEPLOY_LLM_D" == "false" ]] || [[ "$ns" == "$WVA_NS" && "$DEPLOY_WVA" == "false" ]] || [[ "$ns" == "$MONITORING_NAMESPACE" && "$DEPLOY_PROMETHEUS" == "false" ]] ; then
+                log_info "Skipping deletion of namespace $ns as it was not deployed"
+            else 
+                log_info "Deleting namespace $ns..."
+                kubectl delete namespace $ns 2>/dev/null || \
+                    log_warning "Failed to delete namespace $ns"
+            fi
         fi
     done
     
@@ -837,8 +842,12 @@ undeploy_all() {
         undeploy_prometheus_stack
     fi
     
-    # Delete namespaces
-    delete_namespaces
+    if [ "$DELETE_NAMESPACES" = "true" ]; then
+        log_info "Deleting namespaces as per configuration (DELETE_NAMESPACES=true)"
+        delete_namespaces
+    else
+        log_info "Skipping namespace deletion (DELETE_NAMESPACES=false)"
+    fi
     
     # Delete cluster if requested
     if [ "$DELETE_CLUSTER" = "true" ]; then

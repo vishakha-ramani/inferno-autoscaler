@@ -1,3 +1,6 @@
+# Development values for workload-variant-autoscaler
+# This file contains development-specific configurations with relaxed security settings
+
 wva:
   enabled: true
   baseName: inference-scheduling
@@ -13,17 +16,22 @@ wva:
     enabled: true
     port: 8443
     secure: true
+  
+  # Development logging configuration
+  logging:
+    level: debug  # Development: debug, Production: info
   prometheus:
     monitoringNamespace: openshift-user-workload-monitoring
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-    # Security configuration
+    # Development security configuration (relaxed for easier development)
     tls:
-      insecureSkipVerify: false  # Production: false, Development: true
+      insecureSkipVerify: true   # Development: true, Production: false
       caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
     # caCert: |  # Uncomment and provide your CA certificate
     #   -----BEGIN CERTIFICATE-----
     #   YOUR_CA_CERTIFICATE_HERE
     #   -----END CERTIFICATE-----
+
 llmd:
   namespace: llm-d-inference-scheduling
   modelName: ms-inference-scheduling-llm-d-modelservice

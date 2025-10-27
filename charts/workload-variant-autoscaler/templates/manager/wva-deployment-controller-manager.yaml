@@ -61,7 +61,7 @@ spec:
         imagePullPolicy: "{{ .Values.wva.imagePullPolicy }}"
         env:
           - name: LOG_LEVEL
-            value: "debug"  # or "info", "warn", "error"
+            value: {{ if .Values.wva.logging }}{{ .Values.wva.logging.level | default "info" | quote }}{{ else }}"info"{{ end }}
           - name: PROMETHEUS_BASE_URL
             valueFrom:
               configMapKeyRef:
@@ -116,20 +116,14 @@ spec:
             cpu: 10m
             memory: 64Mi
         volumeMounts:
-        - name: prometheus-client-certs
-          mountPath: /etc/prometheus-certs
+        - name: prometheus-ca-cert
+          mountPath: /etc/ssl/certs/prometheus-ca.crt
+          subPath: ca.crt
           readOnly: true
       volumes:
-      - name: prometheus-client-certs
-        secret:
-          secretName: prometheus-client-cert
+      - name: prometheus-ca-cert
+        configMap:
+          name: prometheus-ca
           optional: true
-          items:
-          - key: ca.crt
-            path: ca.crt
-          - key: tls.crt
-            path: tls.crt
-          - key: tls.key
-            path: tls.key
       serviceAccountName: workload-variant-autoscaler-controller-manager
       terminationGracePeriodSeconds: 10

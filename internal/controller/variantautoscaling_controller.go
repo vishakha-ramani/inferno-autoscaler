@@ -384,7 +384,7 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
 			logger.Log.Error(err, "failed to emit optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
 		} else {
-			logger.Log.Debug("Successfully emitted optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
+			logger.Log.Info("Successfully emitted optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
 			updateVa.Status.Actuation.Applied = true // Signals emitted successfully
 		}
 

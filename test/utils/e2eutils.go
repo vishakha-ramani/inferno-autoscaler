@@ -729,8 +729,8 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 	return nil
 }
 
-// creates a vllme deployment with the specified configuration
-func CreateVllmeDeployment(namespace, deployName, modelName, appLabel string) *appsv1.Deployment {
+// creates a llm-d-sim deployment with the specified configuration
+func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
@@ -756,8 +756,8 @@ func CreateVllmeDeployment(namespace, deployName, modelName, appLabel string) *a
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            "vllme",
-							Image:           "quay.io/infernoautoscaler/vllme:0.2.3-multi-arch",
+							Name:            "llm-d-sim",
+							Image:           "ghcr.io/llm-d-ai/llm-d-inference-sim:v0.5.2",
 							ImagePullPolicy: corev1.PullAlways,
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 80},
@@ -797,8 +797,8 @@ func CreateVllmeDeployment(namespace, deployName, modelName, appLabel string) *a
 	}
 }
 
-// creates a service for the vllme deployment
-func CreateVllmeService(namespace, serviceName, appLabel string, nodePort int) *corev1.Service {
+// creates a service for the llm-d-sim deployment
+func CreateLlmdSimService(namespace, serviceName, appLabel string, nodePort int) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -878,8 +878,8 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 	}
 }
 
-// creates a ServiceMonitor for vllme metrics collection
-func CreateVllmeServiceMonitor(name, namespace, appLabel string) *unstructured.Unstructured {
+// creates a ServiceMonitor for llm-d-sim metrics collection
+func CreateLlmdSimServiceMonitor(name, namespace, appLabel string) *unstructured.Unstructured {
 	serviceMonitor := &unstructured.Unstructured{}
 	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "monitoring.coreos.com",
@@ -913,35 +913,6 @@ func CreateVllmeServiceMonitor(name, namespace, appLabel string) *unstructured.U
 	serviceMonitor.Object["spec"] = spec
 
 	return serviceMonitor
-}
-
-// creates an InferenceModel resource for the specified model
-func CreateInferenceModel(name, namespace, modelName string) *unstructured.Unstructured {
-	inferenceModel := &unstructured.Unstructured{}
-	inferenceModel.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "inference.networking.x-k8s.io",
-		Version: "v1alpha2",
-		Kind:    "InferenceModel",
-	})
-	inferenceModel.SetName(name)
-	inferenceModel.SetNamespace(namespace)
-
-	spec := map[string]any{
-		"modelName":   modelName,
-		"criticality": "Critical",
-		"poolRef": map[string]any{
-			"name": "gaie-sim",
-		},
-		"targetModels": []any{
-			map[string]any{
-				"name":   modelName,
-				"weight": 100,
-			},
-		},
-	}
-	inferenceModel.Object["spec"] = spec
-
-	return inferenceModel
 }
 
 // PrometheusQueryResult represents the response from Prometheus API
@@ -1129,14 +1100,12 @@ func SetupTestEnvironment(image string, numNodes, gpusPerNode int, gpuTypes stri
 	gom.Expect(os.Setenv("DEPLOY_LLM_D", "true")).To(gom.Succeed())
 	gom.Expect(os.Setenv("DEPLOY_WVA", "true")).To(gom.Succeed())
 	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS", "true")).To(gom.Succeed())
-	gom.Expect(os.Setenv("APPLY_VLLM_EMULATOR_FIXES", "true")).To(gom.Succeed())
 
 	// Disable components not needed to be deployed by the script
-	// Tests create their own vLLM deployments, but script still patches InferencePool
-	gom.Expect(os.Setenv("DEPLOY_VLLM_EMULATOR", "false")).To(gom.Succeed())      // we deploy our own vLLM deployments in the tests
-	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed())                 // we create our own VariantAutoscaling resources in the tests
-	gom.Expect(os.Setenv("DEPLOY_HPA", "false")).To(gom.Succeed())                // HPA is not needed for these tests
-	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS_ADAPTER", "false")).To(gom.Succeed()) // Prometheus Adapter is not needed for these tests
-	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed())          // we deploy our own Service in the tests
-	gom.Expect(os.Setenv("DEPLOY_INFERENCE_MODEL", "false")).To(gom.Succeed())    // we create our own InferenceModel resources in the tests
+	// Tests create their own llm-d-sim deployments
+	gom.Expect(os.Setenv("DEPLOY_LLM_D_INFERENCE_SIM", "false")).To(gom.Succeed()) // we create our own llm-d-sim deployments in the tests
+	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed())                  // we create our own VariantAutoscaling resources in the tests
+	gom.Expect(os.Setenv("DEPLOY_HPA", "false")).To(gom.Succeed())                 // HPA is not needed for these tests
+	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS_ADAPTER", "false")).To(gom.Succeed())  // Prometheus Adapter is not needed for these tests
+	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed())           // we deploy our own Service in the tests
 }

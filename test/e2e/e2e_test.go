@@ -52,10 +52,9 @@ const (
 )
 
 const (
-	defaultModelId = "default/default"
+	defaultModelId = "random"
 	llamaModelId   = "meta/llama0-70b"
 	a100Acc        = "A100"
-	// mi300xAcc            = "MI300X"
 )
 
 var (
@@ -141,6 +140,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 var _ = Describe("Test workload-variant-autoscaler with vllme deployment - single VA - critical requests", Ordered, func() {
 	var (
+		name           string
 		namespace      string
 		deployName     string
 		serviceName    string
@@ -163,11 +163,12 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 		initializeK8sClient()
 
 		ctx = context.Background()
+		name = "llm-d-sim"
 		namespace = llmDNamespace
-		deployName = "vllme-deployment"
-		serviceName = "vllme-service"
-		serviceMonName = "vllme-servicemonitor"
-		appLabel = "vllme"
+		deployName = name + "-deployment"
+		serviceName = name + "-service"
+		serviceMonName = name + "-servicemonitor"
+		appLabel = name
 		port = 8000
 		loadRate = 30
 		modelName = defaultModelId
@@ -176,18 +177,18 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 		utils.ValidateAppLabelUniqueness(namespace, appLabel, k8sClient, crClient)
 		utils.ValidateVariantAutoscalingUniqueness(namespace, defaultModelId, a100Acc, crClient)
 
-		By("creating vllme deployment")
-		deployment := utils.CreateVllmeDeployment(namespace, deployName, modelName, appLabel)
+		By("creating llm-d-sim deployment")
+		deployment := utils.CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Deployment: %s", deployName))
 
-		By("creating vllme service")
-		service := utils.CreateVllmeService(namespace, serviceName, appLabel, 30000)
+		By("creating service to expose llm-d-sim deployment")
+		service := utils.CreateLlmdSimService(namespace, serviceName, appLabel, 30000)
 		_, err = k8sClient.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Service: %s", serviceName))
 
-		By("creating ServiceMonitor for vllme metrics")
-		serviceMonitor := utils.CreateVllmeServiceMonitor(serviceMonName, controllerMonitoringNamespace, appLabel)
+		By("creating ServiceMonitor for vLLM metrics")
+		serviceMonitor := utils.CreateLlmdSimServiceMonitor(serviceMonName, controllerMonitoringNamespace, appLabel)
 		err = crClient.Create(ctx, serviceMonitor)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create ServiceMonitor: %s", serviceMonName))
 
@@ -195,11 +196,6 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, deployName, modelName, a100Acc)
 		err = crClient.Create(ctx, variantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployName))
-
-		By("adding an InferenceModel for the deployment")
-		inferenceModel = utils.CreateInferenceModel(deployName, namespace, modelName)
-		err = crClient.Create(ctx, inferenceModel)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create InferenceModel: %s", modelName))
 
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	})
@@ -700,6 +696,8 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - singl
 
 var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multiple VAs - critical requests", Ordered, func() {
 	var (
+		firstName                string
+		secondName               string
 		namespace                string
 		firstDeployName          string
 		secondDeployName         string
@@ -711,10 +709,7 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		secondServiceMonitorName string
 		firstModelName           string
 		secondModelName          string
-		firstInferenceModel      *unstructured.Unstructured
-		secondInferenceModel     *unstructured.Unstructured
-
-		ctx context.Context
+		ctx                      context.Context
 	)
 
 	BeforeAll(func() {
@@ -725,15 +720,17 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		initializeK8sClient()
 
 		ctx = context.Background()
+		firstName = "llm-d-sim-1"
 		namespace = llmDNamespace
-		firstDeployName = "vllme-deployment-1"
-		firstAppLabel = "vllme-1"
-		firstServiceName = "vllme-service-1"
-		firstServiceMonitorName = "vllme-servicemonitor-1"
-		secondDeployName = "vllme-deployment-2"
-		secondServiceName = "vllme-service-2"
-		secondServiceMonitorName = "vllme-servicemonitor-2"
-		secondAppLabel = "vllme-2"
+		firstDeployName = firstName + "-deployment"
+		firstAppLabel = firstName
+		firstServiceName = firstName + "-service"
+		firstServiceMonitorName = firstName + "-servicemonitor"
+		secondName = "llm-d-sim-2"
+		secondDeployName = secondName + "-deployment"
+		secondServiceName = secondName + "-service"
+		secondServiceMonitorName = secondName + "-servicemonitor"
+		secondAppLabel = secondName
 		firstModelName = defaultModelId
 		secondModelName = llamaModelId
 
@@ -744,15 +741,15 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		utils.ValidateVariantAutoscalingUniqueness(namespace, llamaModelId, a100Acc, crClient)
 
 		By("creating resources for the first deployment")
-		firstDeployment := utils.CreateVllmeDeployment(namespace, firstDeployName, firstModelName, firstAppLabel)
+		firstDeployment := utils.CreateLlmdSimDeployment(namespace, firstDeployName, firstModelName, firstAppLabel)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, firstDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first Deployment: %s", firstDeployName))
 
-		firstService := utils.CreateVllmeService(namespace, firstServiceName, firstAppLabel, 30000)
+		firstService := utils.CreateLlmdSimService(namespace, firstServiceName, firstAppLabel, 30000)
 		_, err = k8sClient.CoreV1().Services(namespace).Create(ctx, firstService, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first Service: %s", firstServiceName))
 
-		firstServiceMonitor := utils.CreateVllmeServiceMonitor(firstServiceMonitorName, controllerMonitoringNamespace, firstAppLabel)
+		firstServiceMonitor := utils.CreateLlmdSimServiceMonitor(firstServiceMonitorName, controllerMonitoringNamespace, firstAppLabel)
 		err = crClient.Create(ctx, firstServiceMonitor)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first ServiceMonitor: %s", firstServiceMonitorName))
 
@@ -760,13 +757,8 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		err = crClient.Create(ctx, variantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first VariantAutoscaling for: %s", firstDeployName))
 
-		By("adding an InferenceModel for the first deployment")
-		firstInferenceModel = utils.CreateInferenceModel(firstDeployName, namespace, firstModelName)
-		err = crClient.Create(ctx, firstInferenceModel)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first InferenceModel: %s", firstModelName))
-
 		By("creating resources for the second deployment")
-		secondDeployment := utils.CreateVllmeDeployment(namespace, secondDeployName, secondModelName, secondAppLabel)
+		secondDeployment := utils.CreateLlmdSimDeployment(namespace, secondDeployName, secondModelName, secondAppLabel)
 		_, err = k8sClient.AppsV1().Deployments(namespace).Create(ctx, secondDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second Deployment: %s", secondDeployName))
 
@@ -774,18 +766,13 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		err = crClient.Create(ctx, secondVariantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second VariantAutoscaling for: %s", secondDeployName))
 
-		secondService := utils.CreateVllmeService(namespace, secondServiceName, secondAppLabel, 30001)
+		secondService := utils.CreateLlmdSimService(namespace, secondServiceName, secondAppLabel, 30001)
 		_, err = k8sClient.CoreV1().Services(namespace).Create(ctx, secondService, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second Service: %s", secondServiceName))
 
-		secondServiceMonitor := utils.CreateVllmeServiceMonitor(secondServiceMonitorName, controllerMonitoringNamespace, secondAppLabel)
+		secondServiceMonitor := utils.CreateLlmdSimServiceMonitor(secondServiceMonitorName, controllerMonitoringNamespace, secondAppLabel)
 		err = crClient.Create(ctx, secondServiceMonitor)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second ServiceMonitor: %s", secondServiceMonitorName))
-
-		By("adding an InferenceModel for the second deployment")
-		secondInferenceModel = utils.CreateInferenceModel(secondDeployName, namespace, secondModelName)
-		err = crClient.Create(ctx, secondInferenceModel)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second InferenceModel: %s", secondModelName))
 
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	})
@@ -1160,10 +1147,6 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", firstDeployName))
 
-		err = crClient.Delete(ctx, firstInferenceModel)
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete InferenceModel: %s", firstModelName))
-
 		Eventually(func(g Gomega) {
 			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + firstAppLabel})
 			if err != nil {
@@ -1202,10 +1185,6 @@ var _ = Describe("Test workload-variant-autoscaler with vllme deployment - multi
 		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, secondDeployName, metav1.DeleteOptions{})
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", secondDeployName))
-
-		err = crClient.Delete(ctx, secondInferenceModel)
-		err = client.IgnoreNotFound(err)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete InferenceModel: %s", secondModelName))
 
 		Eventually(func(g Gomega) {
 			podList, err := k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + secondAppLabel})

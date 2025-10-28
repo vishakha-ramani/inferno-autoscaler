@@ -3,7 +3,7 @@
 # Workload-Variant-Autoscaler OpenShift Environment-Specific Configuration
 # This script provides OpenShift-specific functions and variable overrides
 # It is sourced by the main install.sh script
-# Note: it is not meant to be executed directly
+# Note: it is NOT meant to be executed directly
 #
 
 set -e  # Exit on error
@@ -61,7 +61,6 @@ find_thanos_url() {
         log_success "Found Thanos querier: $PROMETHEUS_URL"
     else
         log_error "Thanos querier service not found in openshift-monitoring namespace"
-        exit 1
     fi
     
     export PROMETHEUS_URL

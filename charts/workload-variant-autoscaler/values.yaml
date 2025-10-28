@@ -1,5 +1,6 @@
 wva:
   enabled: true
+
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
     tag: v0.0.2
@@ -9,23 +10,28 @@ wva:
     enabled: true
     port: 8443
     secure: true
+    
   prometheus:
     monitoringNamespace: openshift-user-workload-monitoring
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     caCert: BASE64_CERT_PLACEHOLDER
+
 llmd:
   namespace: llm-d-inference-scheduler
   modelName: ms-inference-scheduling-llm-d-modelservice
   modelID: "unsloth/Meta-Llama-3.1-8B"
+
 va:
   enabled: true
   accelerator: H100
   sloTpot: 10
   sloTtft: 1000
+
 hpa:
   enabled: true
   maxReplicas: 10
   targetAverageValue: "1"
+
 vllmService:
   enabled: true
   nodePort: 30000

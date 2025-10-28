@@ -475,27 +475,6 @@ deploy_llm_d_infrastructure() {
     log_success "llm-d infrastructure deployment complete"
 }
 
-# TODO: remove once we move to llm-d-inference-simulator
-apply_inference_model() {
-    log_info "Creating InferenceModel..."
-    kubectl apply -f - <<EOF
-apiVersion: inference.networking.x-k8s.io/v1alpha2
-kind: InferenceModel
-metadata:
-  name: $LLM_D_MODELSERVICE_NAME
-  namespace: $LLMD_NS
-spec:
-  modelName: $MODEL_ID
-  criticality: Critical  
-  poolRef:
-    name: gaie-$WELL_LIT_PATH_NAME
-  targetModels:
-    - name: $MODEL_ID
-      weight: 100
-EOF
-    log_success "InferenceModel created successfully"
-}
-
 deploy_prometheus_adapter() {
     log_info "Deploying Prometheus Adapter..."
     

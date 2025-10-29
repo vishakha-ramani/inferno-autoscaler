@@ -107,7 +107,7 @@ deploy-emulated: deploy
 .PHONY: deploy-llm-d-wva-emulated-on-kind
 deploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
-	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false \
+	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=true \
 		deploy/kind-emulator/kind-emulator.sh $(KIND_ARGS)
 
 ## Deploy WVA to OpenShift cluster with specified image.
@@ -128,7 +128,7 @@ deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the spec
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
 undeploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kind cluster"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) DELETE_NAMESPACES=true && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=true DELETE_NAMESPACES=true && \
 		deploy/kind-emulator/kind-emulator.sh --undeploy
 
 .PHONY: undeploy-wva-on-kind

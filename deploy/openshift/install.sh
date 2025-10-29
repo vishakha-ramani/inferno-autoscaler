@@ -189,9 +189,17 @@ deploy_wva_controller() {
         IFS=':' read -r WVA_IMAGE_REPO WVA_IMAGE_TAG <<< "$IMG"
     fi
 
-    # Extract Thanos TLS certificate
-    log_info "Extracting Thanos TLS certificate"
-    kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
+    # Extract OpenShift Service CA certificate (not the server cert - we need the CA that signed it)
+    log_info "Extracting OpenShift Service CA certificate for Thanos verification"
+    kubectl get configmap openshift-service-ca.crt -n openshift-monitoring -o jsonpath='{.data.service-ca\.crt}' > $PROM_CA_CERT_PATH
+    if [ ! -s "$PROM_CA_CERT_PATH" ]; then
+        log_warning "Failed to extract service CA from openshift-service-ca.crt, trying openshift-config..."
+        kubectl get configmap openshift-service-ca -n openshift-config -o jsonpath='{.data.service-ca\.crt}' > $PROM_CA_CERT_PATH
+    fi
+    if [ ! -s "$PROM_CA_CERT_PATH" ]; then
+        log_error "Failed to extract OpenShift Service CA certificate"
+        exit 1
+    fi
 
     # Update Prometheus URL in configmap
     log_info "Updating Prometheus URL in config/manager/configmap.yaml"
@@ -213,7 +221,9 @@ deploy_wva_controller() {
     --set va.sloTpot=$SLO_TPOT \
     --set va.sloTtft=$SLO_TTFT \
     --set vllmService.enabled=$VLLM_SVC_ENABLED \
-    --set vllmService.nodePort=$VLLM_SVC_NODEPORT
+    --set vllmService.nodePort=$VLLM_SVC_NODEPORT \
+    --set wva.prometheus.tls.insecureSkipVerify=false \
+    --set wva.logging.level=info
 
     cd $WVA_PROJECT
     

@@ -81,6 +81,10 @@ SKIP_CHECKS=${SKIP_CHECKS:-false}
 UNDEPLOY=${UNDEPLOY:-false}
 DELETE_NAMESPACES=${DELETE_NAMESPACES:-false}
 
+# Environment detection flags
+CLUSTER_TYPE=${CLUSTER_TYPE:-"auto"}  # auto, kind, production
+SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"auto"}  # auto, true, false
+
 # Helper functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -124,6 +128,8 @@ Environment Variables:
   DEPLOY_VA                    Deploy VariantAutoscaling (default: true)
   DEPLOY_HPA                   Deploy HPA (default: true)
   DEPLOY_VLLM_EMULATOR            Use vLLM emulator instead of real vLLM (default: false)
+  CLUSTER_TYPE                 Cluster type: auto, kind, production (default: auto)
+  SKIP_TLS_VERIFY              Skip TLS verification: auto, true, false (default: auto)
   UNDEPLOY                     Undeploy mode (default: false)
   DELETE_NAMESPACES            Delete namespaces after undeploy (default: false)
 
@@ -139,6 +145,15 @@ Examples:
   
   # Deploy with vLLM emulator (no GPU required)
   DEPLOY_VLLM_EMULATOR=true $(basename "$0")
+  
+  # Force Kind cluster mode (skip TLS verification)
+  CLUSTER_TYPE=kind $(basename "$0")
+  
+  # Force production mode (strict TLS verification)
+  CLUSTER_TYPE=production $(basename "$0")
+  
+  # Manually skip TLS verification
+  SKIP_TLS_VERIFY=true $(basename "$0")
   
   # Undeploy all components (keep namespaces)
   $(basename "$0") --undeploy
@@ -208,6 +223,62 @@ check_prerequisites() {
     
     log_success "All prerequisites met"
     log_info "Connected to Kubernetes cluster"
+}
+
+detect_cluster_environment() {
+    log_info "Detecting cluster environment..."
+    
+    # Auto-detect cluster type if not specified
+    if [ "$CLUSTER_TYPE" = "auto" ]; then
+        # Check if this is a Kind cluster
+        if kubectl config current-context | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster"
+        elif kubectl get nodes -o json | jq -r '.items[].metadata.labels["kubernetes.io/hostname"]' | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster (by node hostname)"
+        else
+            CLUSTER_TYPE="production"
+            log_info "Detected production cluster"
+        fi
+    fi
+    
+    # Auto-detect TLS verification setting if not specified
+    if [ "$SKIP_TLS_VERIFY" = "auto" ]; then
+        case "$CLUSTER_TYPE" in
+            "kind")
+                SKIP_TLS_VERIFY="true"
+                log_info "Kind cluster detected - enabling TLS skip verification for self-signed certificates"
+                ;;
+            "production")
+                SKIP_TLS_VERIFY="false"
+                log_info "Production cluster detected - enabling strict TLS verification"
+                ;;
+            *)
+                SKIP_TLS_VERIFY="false"
+                log_warning "Unknown cluster type - defaulting to strict TLS verification"
+                ;;
+        esac
+    fi
+    
+    # Set logging level based on environment
+    if [ "$CLUSTER_TYPE" = "kind" ]; then
+        WVA_LOG_LEVEL="debug"
+        log_info "Development environment - using debug logging"
+    else
+        WVA_LOG_LEVEL="info"
+        log_info "Production environment - using info logging"
+    fi
+    
+    export CLUSTER_TYPE
+    export SKIP_TLS_VERIFY
+    export WVA_LOG_LEVEL
+    
+    log_success "Environment detection complete:"
+    echo "    Cluster Type:        $CLUSTER_TYPE"
+    echo "    Skip TLS Verify:     $SKIP_TLS_VERIFY"
+    echo "    Log Level:           $WVA_LOG_LEVEL"
+    echo ""
 }
 
 detect_gpu_type() {
@@ -326,6 +397,7 @@ deploy_prometheus_stack() {
 deploy_wva_controller() {
     log_info "Deploying Workload-Variant-Autoscaler..."
     log_info "Using image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
+    log_info "Environment: $CLUSTER_TYPE (TLS skip verify: $SKIP_TLS_VERIFY, Log level: $WVA_LOG_LEVEL)"
     
     # Extract Prometheus CA certificate
     log_info "Extracting Prometheus TLS certificate"
@@ -343,6 +415,8 @@ deploy_wva_controller() {
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
         --set wva.baseName=$WELL_LIT_PATH_NAME \
         --set wva.modelName=$LLM_D_MODELSERVICE_NAME \
+        --set wva.logging.level=$WVA_LOG_LEVEL \
+        --set wva.prometheus.tls.insecureSkipVerify=$SKIP_TLS_VERIFY \
         --set va.enabled=$DEPLOY_VA \
         --set va.accelerator=$ACCELERATOR_TYPE \
         --set llmd.modelID=$MODEL_ID \
@@ -1089,6 +1163,9 @@ main() {
         check_prerequisites
     fi
     
+    # Detect cluster environment
+    detect_cluster_environment
+    
     # Detect GPU type
     detect_gpu_type
     
@@ -1101,6 +1178,9 @@ main() {
     echo "    Model:                $MODEL_ID"
     echo "    Accelerator:          $ACCELERATOR_TYPE"
     echo "    Emulator Mode:        $DEPLOY_VLLM_EMULATOR"
+    echo "    Cluster Type:         $CLUSTER_TYPE"
+    echo "    Skip TLS Verify:      $SKIP_TLS_VERIFY"
+    echo "    Log Level:            $WVA_LOG_LEVEL"
     echo ""
     
     # Create namespaces

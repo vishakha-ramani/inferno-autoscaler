@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/analyzer"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	kalman "github.com/llm-inferno/kalman-filter/pkg/core"
-	"github.com/llm-inferno/queue-analysis/pkg/queue"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -14,9 +15,6 @@ type Tuner struct {
 	filter       *kalman.ExtendedKalmanFilter
 	env          *Environment
 }
-
-// var env *Environment
-// var mutex sync.Mutex
 
 func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
 	var c *Configurator
@@ -77,40 +75,6 @@ func (t *Tuner) Run() error {
 	return nil
 }
 
-// makeObservationFunc creates a closure that captures the tuner's environment
-func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
-	return func(x *mat.VecDense) *mat.VecDense {
-		if !t.env.Valid() || x.Len() != 2 {
-			return mat.NewVecDense(2, nil)
-		}
-		maxBatchSize := t.env.MaxBatchSize
-		avgNumTokens := t.env.AvgOutputToks
-		alpha := float32(x.AtVec(0))
-		beta := float32(x.AtVec(1))
-
-		// calculate state-dependent service rate
-		servRate := make([]float32, maxBatchSize)
-		for n := 1; n <= maxBatchSize; n++ {
-			servRate[n-1] = float32(n) / (alpha + beta*float32(n)) / float32(avgNumTokens)
-		}
-		// fmt.Println("servRate:", servRate)
-
-		// create queueing model
-		maxQueueSize := 100 * maxBatchSize
-		queue := queue.NewMM1ModelStateDependent(maxQueueSize, servRate)
-
-		// request per msec
-		rpm := t.env.Lambda
-		lambda := (rpm / 1000 / 60)
-		queue.Solve(lambda, 1)
-
-		avgWaitTime := float64(queue.GetAvgWaitTime())
-		avgTokenTime := float64(queue.GetAvgServTime() / float32(avgNumTokens))
-
-		return mat.NewVecDense(2, []float64{avgWaitTime, avgTokenTime})
-	}
-}
-
 func (t *Tuner) X() *mat.VecDense {
 	return t.filter.State()
 }
@@ -135,7 +99,57 @@ func (t *Tuner) UpdateEnvironment(envt *Environment) {
 	t.env = envt
 }
 
-func (t *Tuner) GetParams() *mat.VecDense {
+func (t *Tuner) GetParms() *mat.VecDense {
 	// TODO: intelligent state return
 	return t.X()
+}
+
+func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
+	return func(x *mat.VecDense) *mat.VecDense {
+		// TODO: write for the case where max batch size is not available.
+		// See for example:
+		// 	var N int
+		// if server.maxBatchSize > 0 {
+		// 	N = server.maxBatchSize
+		// } else {
+		// 	N = max(perf.MaxBatchSize*perf.AtTokens/K, 1)
+		// }
+		N := t.env.MaxBatchSize
+		maxQueue := N * config.MaxQueueToBatchRatio
+		qConfig := &analyzer.Configuration{
+			MaxBatchSize: N,
+			MaxQueueSize: maxQueue,
+			ServiceParms: &analyzer.ServiceParms{
+				Prefill: &analyzer.PrefillParms{
+					Gamma: float32(x.AtVec(3)),
+					Delta: float32(x.AtVec(2)),
+				},
+				Decode: &analyzer.DecodeParms{
+					Alpha: float32(x.AtVec(0)),
+					Beta:  float32(x.AtVec(1)),
+				},
+			},
+		}
+		requestData := &analyzer.RequestSize{
+			AvgInputTokens:  t.env.AvgInputToks,
+			AvgOutputTokens: t.env.AvgOutputToks,
+		}
+
+		qa, err := analyzer.NewQueueAnalyzer(qConfig, requestData)
+		if err != nil {
+			fmt.Println(err)
+			return mat.NewVecDense(t.configurator.nX, nil)
+		}
+
+		lambda := t.env.Lambda / 60 // convert to req per sec
+		metrics, err := qa.Analyze(lambda)
+		if err != nil {
+			fmt.Println(err)
+			return mat.NewVecDense(t.configurator.nX, nil)
+		}
+		itl := float64(metrics.AvgTokenTime)
+		ttft := float64(metrics.AvgWaitTime + metrics.AvgPrefillTime)
+
+		return mat.NewVecDense(2, []float64{itl, ttft})
+	}
 }

@@ -10,10 +10,8 @@ import (
 
 func BuildTunerConfig(
 	initState []float64,
-	sloTTFT, sloITL float64,
+	slos []float64,
 ) (*tune.TunerConfigData, error) {
-
-	expectedObs := []float64{sloTTFT, sloITL}
 
 	// build config data from defaults, init state and slos
 	return &tune.TunerConfigData{
@@ -24,7 +22,7 @@ func BuildTunerConfig(
 			BoundedState:         true,
 			MinState:             getFactoredState(initState, constants.DefaultMinStateFactor),
 			MaxState:             getFactoredState(initState, constants.DefaultMaxStateFactor),
-			ExpectedObservations: expectedObs,
+			ExpectedObservations: slos,
 		},
 	}, nil
 }
@@ -58,12 +56,15 @@ func getFactoredState(initState []float64, multiplier float64) []float64 {
 // ConvertAllocToEnvironment converts WVA CurrentAlloc to model-tuner Environment.
 // This is the adapter between the WVA collector and the Kalman filter tuner.
 func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environment {
+	// first get the request rate per min per replica
+	ratePerReplica := alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
 	return &tune.Environment{
-		Lambda:        alloc.Load.ArrivalRate,
+		Lambda:        ratePerReplica,
+		AvgOutputToks: alloc.Load.AvgOutTokens,
+		AvgInputToks:  alloc.Load.AvgInTokens,
 		MaxBatchSize:  alloc.MaxBatch,
-		AvgOutputToks: float32(alloc.Load.AvgOutTokens),
-		AvgQueueTime:  alloc.TTFTAverage,
-		AvgTokenTime:  alloc.ITLAverage,
+		AvgTTFT:       alloc.TTFTAverage,
+		AvgITL:        alloc.ITLAverage,
 	}
 }
 
@@ -96,7 +97,7 @@ func findSLOInSystemData(
 	systemData *infernoConfig.SystemData,
 	modelName string,
 	serviceClassName string,
-) (sloTTFT, sloITL float64, err error) {
+) ([]float64, error) {
 	var svcSpecs *infernoConfig.ServiceClassSpec
 	for i := range systemData.Spec.ServiceClasses.Spec {
 		if systemData.Spec.ServiceClasses.Spec[i].Name == serviceClassName {
@@ -106,7 +107,7 @@ func findSLOInSystemData(
 	}
 
 	if svcSpecs == nil {
-		return 0, 0, fmt.Errorf("service class %q not found in system data", serviceClassName)
+		return nil, fmt.Errorf("service class %q not found in system data", serviceClassName)
 	}
 
 	for _, modelTarget := range svcSpecs.ModelTargets {
@@ -116,14 +117,14 @@ func findSLOInSystemData(
 
 			// Validate SLOs are positive
 			if sloTTFT <= 0 || sloITL <= 0 {
-				return 0, 0, fmt.Errorf("invalid SLOs for model %q: TTFT=%f, ITL=%f (must be positive)",
+				return nil, fmt.Errorf("invalid SLOs for model %q: TTFT=%f, ITL=%f (must be positive)",
 					modelName, sloTTFT, sloITL)
 			}
 
-			return sloTTFT, sloITL, nil
+			return []float64{sloTTFT, sloITL}, nil
 		}
 	}
-	return 0, 0, fmt.Errorf("model %q not found in service class %q", modelName, serviceClassName)
+	return nil, fmt.Errorf("model %q not found in service class %q", modelName, serviceClassName)
 }
 
 func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, modelName, accName string, tunedResults *TunedResults) error {

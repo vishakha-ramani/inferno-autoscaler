@@ -9,26 +9,28 @@ import (
 
 type Environment struct {
 	Lambda        float32 // request arrival rate (per minute)
-	AvgOutputToks float32 // average number of output tokens per request
-	// TODO: add avg input toks
-	MaxBatchSize int     // maximum batch size
-	BatchSize    float32 // batch size
-	AvgQueueTime float32 // average request queueing time (msec)
-	AvgTokenTime float32 // average inter token latency (msec)
+	AvgInputToks  int     // average number of prompt (input) tokens per request
+	AvgOutputToks int     // average number of output tokens per request
+	MaxBatchSize  int     // maximum batch size
+	AvgTTFT       float32 // average request queueing time (msec)
+	AvgITL        float32 // average inter token latency (msec)
 }
 
 func (e *Environment) Valid() bool {
-	return e.Lambda > 0 && e.AvgOutputToks > 0 && e.MaxBatchSize > 0
+	return e.Lambda > 0 &&
+		e.AvgInputToks > 0 &&
+		e.AvgOutputToks > 0 &&
+		e.MaxBatchSize > 0
 }
 
 func (e *Environment) GetObservations() *mat.VecDense {
-	return mat.NewVecDense(2, []float64{float64(e.AvgQueueTime), float64(e.AvgTokenTime)})
+	return mat.NewVecDense(2, []float64{float64(e.AvgTTFT), float64(e.AvgITL)})
 }
 
 func (e *Environment) String() string {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "Environment: ")
-	fmt.Fprintf(&b, "rpm=%5.2f; avgTokens=%6.2f; maxBatch=%d; batchSize=%6.2f; avgWait=%10.6f; avgITL=%10.6f",
-		e.Lambda, e.AvgOutputToks, e.MaxBatchSize, e.BatchSize, e.AvgQueueTime, e.AvgTokenTime)
+	fmt.Fprintf(&b, "rpm=%5.2f; avgInputToks=%d; avgOutputToks=%d; maxBatch=%d; avgTTFT=%10.6f; avgITL=%10.6f",
+		e.Lambda, e.AvgInputToks, e.AvgOutputToks, e.MaxBatchSize, e.AvgTTFT, e.AvgITL)
 	return b.String()
 }

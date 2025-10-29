@@ -47,7 +47,6 @@ func (tm *TunerManager) Disable() {
 }
 
 // TuneModelPerfParams tunes performance model parameters for all servers in SystemData.
-// It updates ModelAcceleratorPerfData with tuned DecodeParms and PrefillParms.
 func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData) error {
 	// tune model tuner for each server
 	for i := range systemData.Spec.Servers.Spec {
@@ -137,15 +136,15 @@ func (tm *TunerManager) getOrCreateTuner(
 	*/
 
 	// extract initial parameters from system data
-
 	initState, err := findInitStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find init state for model accelerator pair %s, %s: %w",
 			server.Model, server.CurrentAlloc.Accelerator,
 			err)
 	}
+
 	// Find SLO targets from system data
-	sloTTFT, sloITL, err := findSLOInSystemData(systemData, server.Model, server.Class)
+	slos, err := findSLOInSystemData(systemData, server.Model, server.Class)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find SLO for model class pair %s, %s: %w",
 			server.Model, server.Class,
@@ -153,14 +152,13 @@ func (tm *TunerManager) getOrCreateTuner(
 	}
 
 	// build tuner config from initial state and slo
-	configData, err := BuildTunerConfig(initState, sloTTFT, sloITL)
+	configData, err := BuildTunerConfig(initState, slos)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config: %w", err)
 	}
 
 	env := ConvertAllocToEnvironment(server.CurrentAlloc)
 
-	// Discuss: Can we initialize the tuner with a nil env?
 	tuner, err = tune.NewTuner(configData, env)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tuner: %w", err)
@@ -171,8 +169,7 @@ func (tm *TunerManager) getOrCreateTuner(
 	logger.Log.Info("Created new tuner",
 		"server", server.Name,
 		"initState", initState,
-		"sloTTFT", sloTTFT,
-		"sloITL", sloITL)
+		"expected observations", slos)
 
 	return tuner, nil
 }

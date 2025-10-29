@@ -66,15 +66,19 @@ func (a *Actuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv
 			int32(VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas), // Inferno's optimization target
 			VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator,
 		); err != nil {
-			logger.Log.Error(err, "Failed to emit optimization signals for variantAutoscaling - ",
-				"variantAutoscaling-name: ", VariantAutoscaling.Name)
+			logger.Log.Error(err, "Failed to emit optimization signals for variantAutoscaling",
+				"variantAutoscaling-name", VariantAutoscaling.Name)
 			// Don't fail the reconciliation for metric emission errors
 			// Metrics are critical for HPA, but emission failures shouldn't break core functionality
 			return nil
 		}
-		logger.Log.Info("EmitReplicaMetrics completed for ", "variantAutoscaling-name: ", VariantAutoscaling.Name, ", current-replicas: ", VariantAutoscaling.Status.CurrentAlloc.NumReplicas, ", desired-replicas: ", VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas, ", accelerator: ", VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator)
+		logger.Log.Info(fmt.Sprintf("EmitReplicaMetrics completed - variant: %s, current-replicas: %d, desired-replicas: %d, accelerator: %s",
+			VariantAutoscaling.Name,
+			VariantAutoscaling.Status.CurrentAlloc.NumReplicas,
+			VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas,
+			VariantAutoscaling.Status.DesiredOptimizedAlloc.Accelerator))
 		return nil
 	}
-	logger.Log.Info("Skipping EmitReplicaMetrics for variantAutoscaling - ", "variantAutoscaling-name: ", VariantAutoscaling.Name, " - NumReplicas is 0")
+	logger.Log.Info(fmt.Sprintf("Skipping EmitReplicaMetrics for variantAutoscaling: %s - NumReplicas is 0", VariantAutoscaling.Name))
 	return nil
 }

@@ -20,7 +20,7 @@ data:
   # PROMETHEUS_CLIENT_CERT_PATH: "/path/to/client.crt"  # Client certificate for mutual TLS
   # PROMETHEUS_CLIENT_KEY_PATH: "/path/to/client.key"   # Client private key for mutual TLS
   # PROMETHEUS_SERVER_NAME: "prometheus.example.com"    # Expected server name for SNI
-  PROMETHEUS_TLS_INSECURE_SKIP_VERIFY: {{ if .Values.wva.prometheus.tls }}{{ .Values.wva.prometheus.tls.insecureSkipVerify | default true | quote }}{{ else }}"true"{{ end }}
+  PROMETHEUS_TLS_INSECURE_SKIP_VERIFY: {{ if and .Values.wva.prometheus.tls (hasKey .Values.wva.prometheus.tls "insecureSkipVerify") }}{{ .Values.wva.prometheus.tls.insecureSkipVerify | quote }}{{ else }}"true"{{ end }}
   
   # Authentication Configuration (BearerToken takes precedence over TokenPath)
   # PROMETHEUS_BEARER_TOKEN: "your-token-here"           # Direct bearer token (development/testing)

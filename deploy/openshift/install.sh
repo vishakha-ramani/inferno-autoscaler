@@ -213,7 +213,9 @@ deploy_wva_controller() {
     --set va.sloTpot=$SLO_TPOT \
     --set va.sloTtft=$SLO_TTFT \
     --set vllmService.enabled=$VLLM_SVC_ENABLED \
-    --set vllmService.nodePort=$VLLM_SVC_NODEPORT
+    --set vllmService.nodePort=$VLLM_SVC_NODEPORT \
+    --set wva.prometheus.tls.insecureSkipVerify=false \
+    --set wva.logging.level=info
 
     cd $WVA_PROJECT
     

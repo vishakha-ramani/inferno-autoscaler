@@ -43,7 +43,7 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "quay.io/infernoautoscaler/inferno-controller:0.0.1-test"
+	projectImage = "ghcr.io/llm-d/workload-variant-autoscaler:0.0.1-test"
 
 	MinimumReplicas = 1
 )

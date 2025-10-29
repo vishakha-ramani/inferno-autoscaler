@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -38,8 +39,8 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -484,30 +485,74 @@ func startPortForwarding(service *corev1.Service, namespace string, localPort, s
 	return portForwardCmd
 }
 
-// StartLoadGenerator sets up and launches a load generator with rate and content specified, targeting the specified model, to the specified port
-func StartLoadGenerator(rate, contentLength int, port int, modelName string) *exec.Cmd {
-	// Install the load generator requirements
-	requirementsCmd := exec.Command("pip", "install", "-r", "tools/vllm-emulator/requirements.txt")
-	_, err := Run(requirementsCmd)
-	gom.Expect(err).NotTo(gom.HaveOccurred(), "Failed to install loadgen requirements")
-	loadGenCmd := exec.Command("python",
-		"tools/vllm-emulator/loadgen.py",
-		"--url", fmt.Sprintf("http://localhost:%d/v1", port),
-		"--rate", fmt.Sprintf("%d", rate),
-		"--content", fmt.Sprintf("%d", contentLength),
-		"--model", modelName)
-	err = loadGenCmd.Start()
-	gom.Expect(err).NotTo(gom.HaveOccurred(), fmt.Sprintf("Failed to start load generator sending requests to model: %s, at \"http://localhost:%d/v1\"", modelName, port))
+// CreateLoadGeneratorJob creates and launches a Kubernetes Job for load generation using GuideLLM with the specified parameters
+func CreateLoadGeneratorJob(namespace, targetURL, modelName string, rate, maxSeconds, inputTokens, outputTokens int, k8sClient *kubernetes.Clientset, ctx context.Context) (*batchv1.Job, error) {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("guidellm-job-%d", rand.Intn(1000)),
+			Namespace: namespace,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "guidellm-e2e-container",
+							// TODO: Update to the guidellm image once they support multiple architectures
+							Image:           "quay.io/tomsgre/guidellm:latest",
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Env: []corev1.EnvVar{
+								{
+									Name:  "HF_HOME",
+									Value: "/tmp",
+								},
+							},
+							Command: []string{"guidellm"},
+							Args: []string{
+								"benchmark",
+								"--target", targetURL,
+								"--rate-type", "constant",
+								"--rate", fmt.Sprintf("%d", rate),
+								"--max-seconds", fmt.Sprintf("%d", maxSeconds),
+								"--model", modelName,
+								"--data", fmt.Sprintf("prompt_tokens=%d,output_tokens=%d", inputTokens, outputTokens),
+								"--output-path", "/tmp/benchmarks.json",
+							},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+			BackoffLimit: ptr.To(int32(4)),
+		},
+	}
 
-	// Check if the loadgen process is still running
-	gom.Eventually(func() error {
-		if loadGenCmd.ProcessState != nil && loadGenCmd.ProcessState.Exited() {
-			return fmt.Errorf("load generator exited unexpectedly with code: %d", loadGenCmd.ProcessState.ExitCode())
-		}
-		return nil
-	}, 10*time.Second, 1*time.Second).Should(gom.Succeed(), fmt.Sprintf("Load generator sending requests to model: %s at \"http://localhost:%d/v1\" should keep running", modelName, port))
+	// Create the Job
+	_, err := k8sClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 
-	return loadGenCmd
+	if err != nil {
+		return nil, fmt.Errorf("failed to create load generator Job: %v", err)
+	}
+
+	return job, nil
+}
+
+// StopJob deletes a Kubernetes Job
+func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset, ctx context.Context) error {
+	if err := k8sClient.BatchV1().Jobs(namespace).Delete(ctx, job.Name, metav1.DeleteOptions{
+		PropagationPolicy: func() *metav1.DeletionPropagation {
+			policy := metav1.DeletePropagationBackground
+			return &policy
+		}(),
+	}); err != nil {
+		return fmt.Errorf("failed to delete load generator Job: %w", err)
+	}
+
+	// Job should not be found after deletion
+	if _, err := k8sClient.BatchV1().Jobs(namespace).Get(ctx, job.Name, metav1.GetOptions{}); err == nil {
+		return fmt.Errorf("job should be deleted: %w", err)
+	}
+	return nil
 }
 
 func StopCmd(cmd *exec.Cmd) error {
@@ -717,10 +762,13 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Input Tokens: %s, Avg Output Tokens: %s\n",
+	fmt.Printf("Load Profile for VA: %s - Arrival Rate: %s, Avg Input Tokens: %s, Avg Output Tokens: %s, Avg ITL: %s, Avg TTFT: %s\n",
 		variantAutoscaling.Name,
 		variantAutoscaling.Status.CurrentAlloc.Load.ArrivalRate,
-		variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens, variantAutoscaling.Status.CurrentAlloc.Load.AvgOutputTokens)
+		variantAutoscaling.Status.CurrentAlloc.Load.AvgInputTokens,
+		variantAutoscaling.Status.CurrentAlloc.Load.AvgOutputTokens,
+		variantAutoscaling.Status.CurrentAlloc.ITLAverage,
+		variantAutoscaling.Status.CurrentAlloc.TTFTAverage)
 
 	fmt.Printf("Desired Optimized Allocation for VA: %s - Replicas: %d, Accelerator: %s\n",
 		variantAutoscaling.Name,
@@ -730,7 +778,7 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 }
 
 // creates a llm-d-sim deployment with the specified configuration
-func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel string) *appsv1.Deployment {
+func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
@@ -756,37 +804,31 @@ func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel string) 
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            "llm-d-sim",
-							Image:           "ghcr.io/llm-d-ai/llm-d-inference-sim:v0.5.2",
+							Name:            appLabel,
+							Image:           "ghcr.io/llm-d/llm-d-inference-sim:latest",
 							ImagePullPolicy: corev1.PullAlways,
-							Ports: []corev1.ContainerPort{
-								{ContainerPort: 80},
+							Args: []string{
+								"--model",
+								modelName,
+								"--port",
+								port,
 							},
 							Env: []corev1.EnvVar{
-								{Name: "MODEL_NAME", Value: modelName},
-								{Name: "DECODE_TIME", Value: "20"},
-								{Name: "PREFILL_TIME", Value: "20"},
-								{Name: "MODEL_SIZE", Value: "25000"},
-								{Name: "KVC_PER_TOKEN", Value: "2"},
-								{Name: "MAX_SEQ_LEN", Value: "2048"},
-								{Name: "MEM_SIZE", Value: "80000"},
-								{Name: "AVG_TOKENS", Value: "128"},
-								{Name: "TOKENS_DISTRIBUTION", Value: "deterministic"},
-								{Name: "MAX_BATCH_SIZE", Value: "8"},
-								{Name: "REALTIME", Value: "True"},
-								{Name: "MUTE_PRINT", Value: "False"},
+								{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										APIVersion: "v1",
+										FieldPath:  "metadata.name",
+									},
+								}},
+								{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										APIVersion: "v1",
+										FieldPath:  "metadata.namespace",
+									},
+								}},
 							},
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:                    resource.MustParse("500m"),
-									corev1.ResourceMemory:                 resource.MustParse("1Gi"),
-									corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
-								},
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:                    resource.MustParse("100m"),
-									corev1.ResourceMemory:                 resource.MustParse("500Mi"),
-									corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
-								},
+							Ports: []corev1.ContainerPort{
+								{ContainerPort: 8000, Name: appLabel, Protocol: corev1.ProtocolTCP},
 							},
 						},
 					},
@@ -798,7 +840,7 @@ func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel string) 
 }
 
 // creates a service for the llm-d-sim deployment
-func CreateLlmdSimService(namespace, serviceName, appLabel string, nodePort int) *corev1.Service {
+func CreateLlmdSimService(namespace, serviceName, appLabel string, nodePort, port int) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -816,9 +858,9 @@ func CreateLlmdSimService(namespace, serviceName, appLabel string, nodePort int)
 			Ports: []corev1.ServicePort{
 				{
 					Name:       appLabel,
-					Port:       80,
+					Port:       int32(port),
 					Protocol:   corev1.ProtocolTCP,
-					TargetPort: intstr.FromInt(80),
+					TargetPort: intstr.FromInt32(int32(port)),
 					NodePort:   int32(nodePort),
 				},
 			},
@@ -855,6 +897,15 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 						MaxBatchSize: 4,
 					},
 					{
+						Acc:      "H100",
+						AccCount: 1,
+						PerfParms: v1alpha1.PerfParms{
+							DecodeParms:  map[string]string{"alpha": "20.58", "beta": "0.41"},
+							PrefillParms: map[string]string{"gamma": "20.58", "delta": "0.041"},
+						},
+						MaxBatchSize: 4,
+					},
+					{
 						Acc:      "MI300X",
 						AccCount: 1,
 						PerfParms: v1alpha1.PerfParms{
@@ -879,7 +930,7 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 }
 
 // creates a ServiceMonitor for llm-d-sim metrics collection
-func CreateLlmdSimServiceMonitor(name, namespace, appLabel string) *unstructured.Unstructured {
+func CreateLlmdSimServiceMonitor(name, namespace, targetNamespace, appLabel string) *unstructured.Unstructured {
 	serviceMonitor := &unstructured.Unstructured{}
 	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "monitoring.coreos.com",
@@ -907,7 +958,7 @@ func CreateLlmdSimServiceMonitor(name, namespace, appLabel string) *unstructured
 			},
 		},
 		"namespaceSelector": map[string]any{
-			"any": true,
+			"matchNames": []string{targetNamespace},
 		},
 	}
 	serviceMonitor.Object["spec"] = spec
@@ -1100,6 +1151,8 @@ func SetupTestEnvironment(image string, numNodes, gpusPerNode int, gpuTypes stri
 	gom.Expect(os.Setenv("DEPLOY_LLM_D", "true")).To(gom.Succeed())
 	gom.Expect(os.Setenv("DEPLOY_WVA", "true")).To(gom.Succeed())
 	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS", "true")).To(gom.Succeed())
+	gom.Expect(os.Setenv("E2E_TESTS_ENABLED", "true")).To(gom.Succeed())
+	gom.Expect(os.Setenv("WVA_RECONCILE_INTERVAL", "30s")).To(gom.Succeed())
 
 	// Disable components not needed to be deployed by the script
 	// Tests create their own llm-d-sim deployments

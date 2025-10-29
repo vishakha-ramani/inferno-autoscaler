@@ -3,13 +3,15 @@ wva:
 
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
-    tag: v0.0.2
+    tag: latest
   imagePullPolicy: Always
 
   metrics:
     enabled: true
     port: 8443
     secure: true
+  
+  reconcileInterval: 60s
     
   prometheus:
     monitoringNamespace: openshift-user-workload-monitoring

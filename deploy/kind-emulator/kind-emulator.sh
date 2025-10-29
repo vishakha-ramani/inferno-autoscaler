@@ -34,8 +34,9 @@ WVA_NS=${WVA_NS:-"workload-variant-autoscaler-system"}
 
 # WVA Configuration
 WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
-WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"v0.0.2"}
+WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"latest"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
+WVA_RECONCILE_INTERVAL=${WVA_RECONCILE_INTERVAL:-"60s"}
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -47,17 +48,16 @@ CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prere
 GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/gateway-provider"}
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
 LLM_D_INFERENCE_SIM_IMG_REPO=${LLM_D_INFERENCE_SIM_IMG_REPO:-"ghcr.io/llm-d/llm-d-inference-sim"}
-LLM_D_INFERENCE_SIM_IMG_TAG=${LLM_D_INFERENCE_SIM_IMG_TAG:-"v0.5.2"}
+LLM_D_INFERENCE_SIM_IMG_TAG=${LLM_D_INFERENCE_SIM_IMG_TAG:-"latest"}
 
 # Model and SLO Configuration
-MODEL_ID=${MODEL_ID:-"random"}
+MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
 ACCELERATOR_TYPE=${ACCELERATOR_TYPE:-"A100"}
 SLO_TPOT=${SLO_TPOT:-24}  # Target time-per-output-token SLO (in ms)
 SLO_TTFT=${SLO_TTFT:-500}  # Target time-to-first-token SLO (in ms)
 
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
-BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmarking mode
 INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"true"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
 
 # Prometheus Configuration
@@ -85,6 +85,7 @@ DEPLOY_HPA=${DEPLOY_HPA:-true}
 DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
 DEPLOY_LLM_D_INFERENCE_SIM=${DEPLOY_LLM_D_INFERENCE_SIM:-true}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
+E2E_TESTS_ENABLED=${E2E_TESTS_ENABLED:-false}
 
 # Undeployment flags
 UNDEPLOY_ALL=${UNDEPLOY_ALL:-false}
@@ -373,6 +374,7 @@ deploy_wva_controller() {
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \
         --set wva.imagePullPolicy=$WVA_IMAGE_PULL_POLICY \
+        --set wva.reconcileInterval=$WVA_RECONCILE_INTERVAL \
         --set va.enabled=$DEPLOY_VA \
         --set va.accelerator=$ACCELERATOR_TYPE \
         --set llmd.modelID=$MODEL_ID \
@@ -427,12 +429,6 @@ deploy_llm_d_infrastructure() {
         log_info "Skipping Gateway control plane installation (INSTALL_GATEWAY_CTRLPLANE=false)"
     fi
 
-    # Configure benchmark mode for Istio if enabled
-    if [[ "$BENCHMARK_MODE" == "true" ]]; then
-      log_info "Benchmark mode enabled - using benchmark configuration for Istio"
-      GATEWAY_PROVIDER="istioBench"
-    fi
-
     # Configure llm-d-inference-simulator if needed
     if [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "true" ]; then
       log_info "Deploying llm-d-inference-simulator..."
@@ -466,9 +462,16 @@ deploy_llm_d_infrastructure() {
     kubectl delete deployments.apps \
         $LLM_D_MODELSERVICE_NAME-prefill \
         --ignore-not-found -n "$LLMD_NS"
+        
+    if [ "$E2E_TESTS_ENABLED" = "true" ]; then
+        log_info "Deleting decode deployments for tests..."
+        kubectl delete deployments.apps \
+            $LLM_D_MODELSERVICE_NAME-decode \
+            --ignore-not-found -n "$LLMD_NS"
+    fi
     
     log_info "Waiting for llm-d components to initialize..."
-    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=60s || \
+    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=30s || \
         log_warning "llm-d components are not ready yet - check 'kubectl get pods -n $LLMD_NS'"
     
     cd "$WVA_PROJECT"

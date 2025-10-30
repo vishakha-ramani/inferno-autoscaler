@@ -20,6 +20,7 @@ MONITORING_NAMESPACE="openshift-user-workload-monitoring"
 PROMETHEUS_SECRET_NAME="thanos-querier-tls"
 PROMETHEUS_SECRET_NS="openshift-monitoring"
 DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
+SKIP_TLS_VERIFY=false
 
 check_specific_prerequisites() {
     log_info "Checking OpenShift-specific prerequisites..."
@@ -53,7 +54,7 @@ check_specific_prerequisites() {
 find_thanos_url() {
     log_info "Finding Thanos querier URL..."
     
-    local thanos_svc=$(kubectl get svc -n openshift-monitoring thanos-querier -o jsonpath='{.metadata.name}' 2>/dev/null || echo "")
+    local thanos_svc=$(kubectl get svc -n $PROMETHEUS_SECRET_NS thanos-querier -o jsonpath='{.metadata.name}' 2>/dev/null || echo "")
     
     # Set PROMETHEUS_URL if Thanos service is found
     if [ -n "$thanos_svc" ]; then
@@ -76,11 +77,18 @@ deploy_prometheus_stack() {
 deploy_wva_prerequisites() {
     log_info "Deploying Workload-Variant-Autoscaler..."
 
-    # Extract Thanos TLS certificate
-    log_info "Extracting Thanos TLS certificate"
-    kubectl get secret $PROMETHEUS_SECRET_NAME -n $PROMETHEUS_SECRET_NS -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH || {
-        log_error "Failed to extract Thanos TLS certificate from secret $PROMETHEUS_SECRET_NAME in namespace $PROMETHEUS_SECRET_NS"
-    }
+    # Extract OpenShift Service CA certificate (not the server cert - we need the CA that signed it)
+    log_info "Extracting OpenShift Service CA certificate for Thanos verification"
+    kubectl get configmap openshift-service-ca.crt -n $PROMETHEUS_SECRET_NS -o jsonpath='{.data.service-ca\.crt}' > $PROM_CA_CERT_PATH
+    if [ ! -s "$PROM_CA_CERT_PATH" ]; then
+        log_warning "Failed to extract service CA from openshift-service-ca.crt, trying openshift-config..."
+        kubectl get configmap openshift-service-ca -n openshift-config -o jsonpath='{.data.service-ca\.crt}' > $PROM_CA_CERT_PATH
+    fi
+    if [ ! -s "$PROM_CA_CERT_PATH" ]; then
+        log_error "Failed to extract OpenShift Service CA certificate"
+        exit 1
+    fi
+
 
     # Update Prometheus URL in configmap
     log_info "Updating Prometheus URL in config/manager/configmap.yaml"

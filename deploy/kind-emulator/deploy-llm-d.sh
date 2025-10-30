@@ -37,6 +37,7 @@ WVA_IMAGE_REPO=${WVA_IMAGE_REPO:-"ghcr.io/llm-d/workload-variant-autoscaler"}
 WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"latest"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
 WVA_RECONCILE_INTERVAL=${WVA_RECONCILE_INTERVAL:-"60s"}
+SKIP_TLS_VERIFY=true
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -370,14 +371,14 @@ deploy_wva_controller() {
     
     # Check if values-dev.yaml exists, if not use values.yaml
     if [ -f "./workload-variant-autoscaler/values-dev.yaml" ]; then
-        VALUES_FILE="./workload-variant-autoscaler/values-dev.yaml"
+        VALUES_FILE="${WVA_PROJECT}/workload-variant-autoscaler/values-dev.yaml"
         log_info "Using development values file: $VALUES_FILE"
     else
-        VALUES_FILE="./workload-variant-autoscaler/values.yaml"
+        VALUES_FILE="${WVA_PROJECT}/workload-variant-autoscaler/values.yaml"
         log_info "Using production values file: $VALUES_FILE"
     fi
     
-    helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
+    helm upgrade -i workload-variant-autoscaler ${WVA_PROJECT}/workload-variant-autoscaler \
         -n $WVA_NS \
         --values $VALUES_FILE \
         --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
@@ -877,7 +878,6 @@ undeploy_all() {
     echo ""
     echo "=========================================="
 }
-
 
 # Main deployment flow
 main() {

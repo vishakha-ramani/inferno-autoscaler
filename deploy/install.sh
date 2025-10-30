@@ -37,6 +37,8 @@ WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
 VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-true}
 VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}
 GAIE_IMAGE_ARM64=${GAIE_IMAGE_ARM64:-"quay.io/infernoautoscaler/llm-d-inference-scheduler:v0.2.1-arm64"}
+SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
+WVA_LOG_LEVEL=${WVA_LOG_LEVEL:-"info"}
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -71,8 +73,6 @@ DEPLOY_LLM_D=${DEPLOY_LLM_D:-true}
 DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
 DEPLOY_VA=${DEPLOY_VA:-true}
 DEPLOY_HPA=${DEPLOY_HPA:-true}
-DEPLOY_VLLM_EMULATOR=${DEPLOY_VLLM_EMULATOR:-false}  # Set to true if no GPUs available
-APPLY_VLLM_EMULATOR_FIXES=${APPLY_VLLM_EMULATOR_FIXES:-false}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
 
 # Script directories
@@ -229,6 +229,7 @@ check_prerequisites() {
     log_info "Connected to Kubernetes cluster"
 }
 
+
 detect_gpu_type() {
     log_info "Detecting GPU type in cluster..."
     
@@ -246,8 +247,8 @@ detect_gpu_type() {
             log_warning "Install NVIDIA GPU Operator or set DEPLOY_VLLM_EMULATOR=true for demo"
         else
             log_warning "No GPUs detected on host either"
-            log_info "Setting DEPLOY_VLLM_EMULATOR=true for demo mode"
-            DEPLOY_VLLM_EMULATOR=true
+            log_info "Setting DEPLOY_LLM_D_INFERENCE_SIM=true for demo mode"
+            DEPLOY_LLM_D_INFERENCE_SIM=true
         fi
     else
         log_success "GPUs visible: $gpu_count GPU(s) per node"
@@ -277,9 +278,65 @@ detect_gpu_type() {
     fi
     
     export ACCELERATOR_TYPE
-    export DEPLOY_VLLM_EMULATOR
+    export DEPLOY_LLM_D_INFERENCE_SIM
     log_info "Using detected accelerator type: $ACCELERATOR_TYPE"
-    log_info "Emulator mode: $DEPLOY_VLLM_EMULATOR"
+    log_info "Emulator mode: $DEPLOY_LLM_D_INFERENCE_SIM"
+}
+
+detect_cluster_environment() {
+    log_info "Detecting cluster environment..."
+    
+    # Auto-detect cluster type if not specified
+    if [ "$CLUSTER_TYPE" = "auto" ]; then
+        # Check if this is a Kind cluster
+        if kubectl config current-context | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster"
+        elif kubectl get nodes -o json | jq -r '.items[].metadata.labels["kubernetes.io/hostname"]' | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster (by node hostname)"
+        else
+            CLUSTER_TYPE="production"
+            log_info "Detected production cluster"
+        fi
+    fi
+    
+    # Auto-detect TLS verification setting if not specified
+    if [ "$SKIP_TLS_VERIFY" = "auto" ]; then
+        case "$CLUSTER_TYPE" in
+            "kind")
+                SKIP_TLS_VERIFY="true"
+                log_info "Kind cluster detected - enabling TLS skip verification for self-signed certificates"
+                ;;
+            "production")
+                SKIP_TLS_VERIFY="false"
+                log_info "Production cluster detected - enabling strict TLS verification"
+                ;;
+            *)
+                SKIP_TLS_VERIFY="false"
+                log_warning "Unknown cluster type - defaulting to strict TLS verification"
+                ;;
+        esac
+    fi
+    
+    # Set logging level based on environment
+    if [ "$CLUSTER_TYPE" = "kind" ]; then
+        WVA_LOG_LEVEL="debug"
+        log_info "Development environment - using debug logging"
+    else
+        WVA_LOG_LEVEL="info"
+        log_info "Production environment - using info logging"
+    fi
+    
+    export CLUSTER_TYPE
+    export SKIP_TLS_VERIFY
+    export WVA_LOG_LEVEL
+    
+    log_success "Environment detection complete:"
+    echo "    Cluster Type:        $CLUSTER_TYPE"
+    echo "    Skip TLS Verify:     $SKIP_TLS_VERIFY"
+    echo "    Log Level:           $WVA_LOG_LEVEL"
+    echo ""
 }
 
 create_namespaces() {
@@ -321,7 +378,9 @@ deploy_wva_controller() {
         --set wva.prometheus.baseURL=$PROMETHEUS_URL \
         --set wva.prometheus.monitoringNamespace=$MONITORING_NAMESPACE \
         --set vllmService.enabled=$VLLM_SVC_ENABLED \
-        --set vllmService.nodePort=$VLLM_SVC_NODEPORT
+        --set vllmService.nodePort=$VLLM_SVC_NODEPORT \
+        --set wva.logging.level=$WVA_LOG_LEVEL \
+        --set wva.prometheus.tls.insecureSkipVerify=$SKIP_TLS_VERIFY
     
     cd "$WVA_PROJECT"
     
@@ -422,179 +481,6 @@ deploy_llm_d_infrastructure() {
     
     cd "$WVA_PROJECT"
     log_success "llm-d infrastructure deployment complete"
-}
-
-deploy_vllm_emulator() {
-    log_info "Deploying vLLM Metrics Emulator (No GPU required)..."
-
-    if [ "$VLLM_SVC_ENABLED" == "true" ]; then
-        log_info "Deleting default vLLM Service and ServiceMonitor to avoid conflicts..."
-        kubectl delete vllm-service -n "$LLMD_NS" || \
-            log_warning "Failed to delete default vLLM Service"
-        kubectl delete servicemonitor -n "$MONITORING_NAMESPACE" || \
-            log_warning "Failed to delete default vLLM ServiceMonitor"
-    fi
-    
-    # Create vLLM emulator deployment
-    log_info "Creating vLLM emulator deployment..."
-    kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: $VLLM_EMULATOR_NAME-decode
-  namespace: $LLMD_NS
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: $VLLM_EMULATOR_NAME
-      llm-d.ai/inferenceServing: "true"
-      llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
-  template:
-    metadata:
-      labels:
-        app: $VLLM_EMULATOR_NAME
-        llm-d.ai/inferenceServing: "true"
-        llm-d.ai/model: $LLM_D_MODELSERVICE_NAME
-    spec:
-      containers:
-      - name: $VLLM_EMULATOR_NAME
-        image: quay.io/infernoautoscaler/vllme:0.2.3-multi-arch
-        imagePullPolicy: Always
-        env: 
-        - name: MODEL_NAME
-          value: "$MODEL_ID"
-        - name: DECODE_TIME
-          value: "20"        # In milliseconds, e.g., 20ms per token decode
-        - name: PREFILL_TIME
-          value: "20"        # In milliseconds, e.g., 20ms for prefill
-        - name: MODEL_SIZE
-          value: "25000"     # In MB, e.g., 25GB model size
-        - name: KVC_PER_TOKEN
-          value: "2"         # In MB, e.g., 2MB per token for KV cache
-        - name: MAX_SEQ_LEN
-          value: "2048"      # Max sequence length
-        - name: MEM_SIZE
-          value: "80000"     # Total device memory in MB, e.g., 80GB
-        - name: AVG_TOKENS
-          value: "128"       # Average generated tokens
-        - name: TOKENS_DISTRIBUTION
-          value: "deterministic"   # "uniform", "normal", "deterministic"
-        - name: MAX_BATCH_SIZE
-          value: "8"         # Max concurrent requests in a batch 
-        - name: REALTIME
-          value: "True"      # Boolean: "True" or "False"
-        - name: MUTE_PRINT
-          value: "False"     # Boolean: "True" or "False"
-        ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 500m
-            memory: 1Gi
-            nvidia.com/gpu: "1"  # Limit to 1 GPU (emulated)
-          requests:
-            cpu: 100m
-            memory: 500Mi
-            nvidia.com/gpu: "1"  # Request 1 GPU (emulated)
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: $VLLM_EMULATOR_NAME-service
-  namespace: $LLMD_NS
-  labels:
-    app: $VLLM_EMULATOR_NAME
-    llm-d.ai/inferenceServing: "true"
-spec:
-  selector:
-    app: $VLLM_EMULATOR_NAME
-    llm-d.ai/inferenceServing: "true"
-  ports:
-    - name: $VLLM_EMULATOR_NAME
-      port: 80
-      protocol: TCP
-      targetPort: 80
-  type: ClusterIP
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: $VLLM_EMULATOR_NAME-servicemonitor
-  namespace: $MONITORING_NAMESPACE
-  labels:
-    app: $VLLM_EMULATOR_NAME
-    release: kube-prometheus-stack
-spec:
-  selector:
-    matchLabels:
-      app: $VLLM_EMULATOR_NAME
-  endpoints:
-  - port: $VLLM_EMULATOR_NAME
-    path: /metrics
-    interval: 15s
-  namespaceSelector:
-    matchNames:
-    - $LLMD_NS
-EOF
-    
-    log_info "Waiting for vLLM emulator to be ready..."
-    kubectl wait --for=condition=available deployment/$VLLM_EMULATOR_NAME-decode -n "$LLMD_NS" --timeout=120s || \
-        log_warning "vLLM emulator deployment may still be starting"
-    
-    log_success "vLLM Emulator deployment complete"
-}
-
-# TODO: remove once we move to llm-d-inference-simulator
-apply_vllm_emulator_fixes() {
-    log_info "Applying vLLM emulator integration fixes..."
-        
-    # Patch InferencePool to target vLLM emulator port
-    kubectl get inferencepool "gaie-$WELL_LIT_PATH_NAME" -n "$LLMD_NS" &> /dev/null || \
-        log_warning "InferencePool 'gaie-$WELL_LIT_PATH_NAME' not found"
-
-    log_info "Patching InferencePool to target vLLM emulator port 80..."
-    kubectl patch inferencepool "gaie-$WELL_LIT_PATH_NAME" -n "$LLMD_NS" --type='merge' \
-        -p '{"spec":{"targetPortNumber":80}}' || log_warning "Failed to patch InferencePool"
-    
-    log_success "InferencePool patched successfully"
-    
-    # Delete default ModelService deployments - using vLLM emulator
-    log_info "Deleting default ModelService deployments..."
-    kubectl delete deployments.apps \
-        $LLM_D_MODELSERVICE_NAME-decode \
-        $LLM_D_MODELSERVICE_NAME-prefill \
-        --ignore-not-found -n "$LLMD_NS"
-    
-    # Restart EPP deployment to pick up ConfigMap changes
-    log_info "Restarting EPP deployment..."
-    kubectl rollout restart deployment gaie-$WELL_LIT_PATH_NAME-epp -n $LLMD_NS 2>/dev/null || \
-        log_warning "Could not restart EPP deployment"
-
-    if [ "$DEPLOY_INFERENCE_MODEL" == "true" ]; then
-      log_info "Creating InferenceModel for vLLM emulator..."
-      kubectl apply -f - <<EOF
-apiVersion: inference.networking.x-k8s.io/v1alpha2
-kind: InferenceModel
-metadata:
-  name: $VLLM_EMULATOR_NAME
-  namespace: $LLMD_NS
-spec:
-  modelName: $MODEL_ID
-  criticality: Critical  
-  poolRef:
-    name: gaie-$WELL_LIT_PATH_NAME
-  targetModels:
-    - name: $MODEL_ID
-      weight: 100
-EOF
-    log_success "InferenceModel created successfully"
-
-    else
-        log_info "Skipping InferenceModel creation (DEPLOY_INFERENCE_MODEL=false)"
-    fi
-    
-    log_success "vLLM emulator integration fixes applied"
 }
 
 deploy_prometheus_adapter() {
@@ -1021,6 +907,9 @@ main() {
         check_prerequisites
     fi
 
+    # Detect cluster environment
+    detect_cluster_environment
+
     # Source environment-specific script to make functions available
     log_info "Loading environment-specific functions for $ENVIRONMENT..."
     if [ -f "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh" ]; then
@@ -1043,6 +932,8 @@ main() {
         log_info "Skipping GPU type detection for emulated environment (ENVIRONMENT=$ENVIRONMENT)"
     fi
 
+
+
     # Display configuration
     log_info "Using configuration:"
     echo "    Deployed on:          $ENVIRONMENT"
@@ -1052,7 +943,6 @@ main() {
     echo "    Monitoring Namespace: $MONITORING_NAMESPACE"
     echo "    Model:                $MODEL_ID"
     echo "    Accelerator:          $ACCELERATOR_TYPE"
-    echo "    Emulator Mode:        $DEPLOY_VLLM_EMULATOR"
     echo ""
 
     # Create namespaces
@@ -1080,21 +970,6 @@ main() {
     # Deploy llm-d
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         deploy_llm_d_infrastructure
-        
-        # Deploy vLLM Emulator if needed
-        if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-            log_info "vLLM Emulator deployment enabled (DEPLOY_VLLM_EMULATOR=true)"
-            deploy_vllm_emulator
-
-            if [ "$APPLY_VLLM_EMULATOR_FIXES" = "true" ]; then
-                log_info "Applying vLLM emulator integration fixes (APPLY_VLLM_EMULATOR_FIXES=true)"
-            
-                # Apply vLLM emulator-specific fixes
-                apply_vllm_emulator_fixes
-            fi
-        else
-            log_info "vLLM Emulator deployment disabled (DEPLOY_VLLM_EMULATOR=false), skipping"
-        fi
     else
         log_info "Skipping llm-d deployment (DEPLOY_LLM_D=false)"
     fi

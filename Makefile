@@ -95,7 +95,7 @@ destroy-kind-cluster:
 deploy-wva-emulated-on-kind:
 	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false && \
-		deploy/kind-emulator/kind-emulator.sh $(KIND_ARGS)
+		deploy/kind-emulator/install.sh $(KIND_ARGS)
 
 # Deploy controller in emulator mode
 .PHONY: deploy-emulated
@@ -108,7 +108,7 @@ deploy-emulated: deploy
 deploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=true \
-		deploy/kind-emulator/kind-emulator.sh $(KIND_ARGS)
+		deploy/kind-emulator/install.sh $(KIND_ARGS)
 
 ## Deploy WVA to OpenShift cluster with specified image.
 .PHONY: deploy-wva-on-openshift
@@ -129,20 +129,20 @@ deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the spec
 undeploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kind cluster"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=true DELETE_NAMESPACES=true && \
-		deploy/kind-emulator/kind-emulator.sh --undeploy
+		deploy/kind-emulator/install.sh --undeploy
 
 .PHONY: undeploy-wva-on-kind
 undeploy-wva-on-kind:
 	@echo ">>> Undeploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
 	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false DELETE_NAMESPACES=true \
-		deploy/kind-emulator/kind-emulator.sh $(KIND_ARGS) --undeploy
+		deploy/kind-emulator/install.sh $(KIND_ARGS) --undeploy
 
 ## Undeploy WVA from the emulated environment on Kind and delete the cluster.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind-delete-cluster
 undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler and deleting Kind cluster"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		deploy/kind-emulator/kind-emulator.sh --undeploy --delete-cluster
+		deploy/kind-emulator/install.sh --undeploy --delete-cluster
 
 ## Undeploy WVA from OpenShift.
 .PHONY: undeploy-wva-on-openshift

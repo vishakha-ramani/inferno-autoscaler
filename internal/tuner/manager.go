@@ -27,6 +27,16 @@ type TunedResults struct {
 	Covariance   *mat.Dense
 }
 
+const (
+	/*
+		Under nominal conditions, the NIS (Normalized Innovations Squared) of a Kalman Filter is expected to follow
+		a Chi-Squared Distribution with degrees of freedom equal to the dimension of the measurement vector (n = 2 for [ttft, itl]).
+		Here, we enforce that a tuner update is accepted for 95% confidence interval of NIS.
+		The upper bound of the interval in our case is 7.378.
+	*/
+	MaxNIS float64 = 7.378
+)
+
 func NewTunerManager() *TunerManager {
 	return &TunerManager{
 		tuners:  make(map[string]*tune.Tuner),
@@ -91,7 +101,13 @@ func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server 
 		return fmt.Errorf("failed to extract tuned params: %w", err)
 	}
 
-	// TODO: check validity of tunedResults
+	// check validity of tunedResults
+	if err := tm.validateTunedResults(tunedResults, tuner); err != nil {
+		logger.Log.Warn("Tuned parameters failed validation, rejecting update",
+			"server", server.Name,
+			"error", err)
+		return nil
+	}
 
 	// update modelperf using tuned params
 	if err := updateModelPerfDataInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator, tunedResults); err != nil {
@@ -215,4 +231,43 @@ func (tm *TunerManager) removeTuner(serverName string) {
 
 	delete(tm.tuners, serverName)
 	logger.Log.Info("Removed tuner", "server", serverName)
+}
+
+func (tm *TunerManager) validateTunedResults(tunedResults *TunedResults, tuner *tune.Tuner) error {
+	parms := tunedResults.ServiceParms
+
+	// 1. check parms are positive
+	if parms.Decode.Alpha <= 0 || parms.Decode.Beta <= 0 {
+		return fmt.Errorf("decode parameters must be positive: alpha=%f, beta=%f", parms.Decode.Alpha, parms.Decode.Beta)
+	}
+	if parms.Prefill.Gamma <= 0 || parms.Prefill.Delta <= 0 {
+		return fmt.Errorf("prefill parameters must be positive: gamma=%f, delta=%f", parms.Prefill.Gamma, parms.Prefill.Delta)
+	}
+
+	// 2. innovation check using Normalized Innovation Squared (NIS)
+	innovation := tuner.Innovation() // y vector
+	innovationCov := tuner.S()       // S matrix
+
+	// Calculate NIS = y^T * S^-1 * y
+	S_inv := mat.NewDense(innovationCov.RawMatrix().Rows, innovationCov.RawMatrix().Cols, nil)
+	if err := S_inv.Inverse(innovationCov); err != nil {
+		return fmt.Errorf("singular innovation covariance matrix S encountered: %w", err)
+	}
+
+	// tmp = S^-1 * y
+	tmp := mat.NewVecDense(S_inv.RawMatrix().Rows, nil)
+	tmp.MulVec(S_inv, innovation)
+
+	// NIS = y^T * tmp
+	NIS := mat.Dot(innovation, tmp)
+
+	if NIS >= MaxNIS {
+		return fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
+			NIS, MaxNIS)
+	}
+
+	// 3. estimate covariance check?
+	// TODO
+
+	return nil
 }

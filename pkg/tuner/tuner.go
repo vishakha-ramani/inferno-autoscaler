@@ -87,6 +87,10 @@ func (t *Tuner) P() *mat.Dense {
 	return t.filter.P
 }
 
+func (t *Tuner) S() *mat.Dense {
+	return t.filter.S
+}
+
 func (t *Tuner) String() string {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "Tuner: \n")
@@ -147,9 +151,10 @@ func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 			fmt.Println(err)
 			return mat.NewVecDense(t.configurator.nX, nil)
 		}
-		itl := float64(metrics.AvgTokenTime)
-		ttft := float64(metrics.AvgWaitTime + metrics.AvgPrefillTime)
 
-		return mat.NewVecDense(2, []float64{itl, ttft})
+		ttft := float64(metrics.AvgWaitTime + metrics.AvgPrefillTime)
+		itl := float64(metrics.AvgTokenTime)
+
+		return mat.NewVecDense(2, []float64{ttft, itl})
 	}
 }

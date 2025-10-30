@@ -84,6 +84,22 @@ func Run(cmd *exec.Cmd) (string, error) {
 	return string(output), nil
 }
 
+func detectArchitecture() (string, error) {
+	var arch string
+	out, err := exec.Command("uname", "-m").CombinedOutput()
+	if err != nil {
+		// fallback to GOARCH env if uname fails
+		if goarch := os.Getenv("GOARCH"); goarch != "" {
+			arch = goarch
+			return arch, nil
+		}
+		return "", fmt.Errorf("failed to detect architecture: %v", err)
+	}
+
+	arch = strings.TrimSpace(string(out))
+	return arch, nil
+}
+
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 // Includes TLS certificate generation and configuration for HTTPS support.
 func InstallPrometheusOperator() error {
@@ -486,7 +502,22 @@ func startPortForwarding(service *corev1.Service, namespace string, localPort, s
 }
 
 // CreateLoadGeneratorJob creates and launches a Kubernetes Job for load generation using GuideLLM with the specified parameters
-func CreateLoadGeneratorJob(namespace, targetURL, modelName string, rate, maxSeconds, inputTokens, outputTokens int, k8sClient *kubernetes.Clientset, ctx context.Context) (*batchv1.Job, error) {
+func CreateLoadGeneratorJob(image, namespace, targetURL, modelName string, rate, maxSeconds, inputTokens, outputTokens int, k8sClient *kubernetes.Clientset, ctx context.Context) (*batchv1.Job, error) {
+
+	// Detect host architecture and override image for arm64 hosts
+	// TODO: Change to always use the guidellm image once they support multiple architectures
+	arch, err := detectArchitecture()
+
+	if err != nil {
+		return nil, fmt.Errorf("error when detecting architecture for loadgen job creation: %v", err)
+	}
+
+	// If running on an arm64 architecture, use the arm64-compatible image
+	if arch == "aarch64" || arch == "arm64" {
+		image = "quay.io/tomsgre/guidellm:latest"
+		_, _ = fmt.Fprintf(gink.GinkgoWriter, "Using arm64 guidellm image: %s (detected arch: %s)\n", image, arch)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("guidellm-job-%d", rand.Intn(1000)),
@@ -497,9 +528,8 @@ func CreateLoadGeneratorJob(namespace, targetURL, modelName string, rate, maxSec
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name: "guidellm-e2e-container",
-							// TODO: Update to the guidellm image once they support multiple architectures
-							Image:           "quay.io/tomsgre/guidellm:latest",
+							Name:            "guidellm-e2e-container",
+							Image:           image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Env: []corev1.EnvVar{
 								{
@@ -528,7 +558,7 @@ func CreateLoadGeneratorJob(namespace, targetURL, modelName string, rate, maxSec
 	}
 
 	// Create the Job
-	_, err := k8sClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+	_, err = k8sClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create load generator Job: %v", err)

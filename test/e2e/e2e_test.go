@@ -66,6 +66,8 @@ var (
 	k8sClient *kubernetes.Clientset
 	crClient  client.Client
 	scheme    = runtime.NewScheme()
+
+	GuidellmImage = "ghcr.io/vllm-project/guidellm:latest"
 )
 
 func init() {
@@ -356,7 +358,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
 
 		By("starting load generation to create traffic")
-		loadGenJob, err = utils.CreateLoadGeneratorJob(namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		loadGenJob, err = utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", deployName))
 		defer func() {
 			By("stopping load generation job")
@@ -430,7 +432,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("restarting load generation at the same rate")
-		loadGenJob, err = utils.CreateLoadGeneratorJob(namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		loadGenJob, err = utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create load generator job for: %s", deployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob, k8sClient, ctx)
@@ -861,7 +863,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic for both deployments")
-		loadGenJob1, err := utils.CreateLoadGeneratorJob(namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", firstDeployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob1, k8sClient, ctx)
@@ -959,7 +961,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 
 		By("starting load generation to create traffic for both deployments")
 		loadRate = 10
-		loadGenJob1, err := utils.CreateLoadGeneratorJob(namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", firstDeployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob1, k8sClient, ctx)

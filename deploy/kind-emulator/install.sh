@@ -203,7 +203,7 @@ check_prerequisites() {
     local missing_tools=()
     
     # Check for required tools
-    for tool in kubectl helm yq kind docker; do
+    for tool in kubectl helm kind docker; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi
@@ -211,14 +211,11 @@ check_prerequisites() {
     
     if [ ${#missing_tools[@]} -ne 0 ]; then
         log_error "Missing required tools: ${missing_tools[*]}"
-        log_info "Please install the missing tools and try again"
-        exit 1
     fi
     
     # Check if Docker is running
     if ! docker info &> /dev/null; then
         log_error "Docker is not running. Please start Docker and try again"
-        exit 1
     fi
     
     # Check Kubernetes connection (if cluster exists)

@@ -25,7 +25,7 @@ check_specific_prerequisites() {
     local missing_tools=()
     
     # Check for required tools (including Kubernetes-specific ones)
-    for tool in kubectl helm yq; do
+    for tool in kubectl helm; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi
@@ -33,8 +33,6 @@ check_specific_prerequisites() {
     
     if [ ${#missing_tools[@]} -ne 0 ]; then
         log_error "Missing required tools: ${missing_tools[*]}"
-        log_info "Please install the missing tools and try again"
-        exit 1
     fi
     
     log_success "All Kubernetes prerequisites met"

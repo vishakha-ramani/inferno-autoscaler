@@ -52,6 +52,14 @@ deploy_wva_prerequisites() {
     log_info "Updating Prometheus URL in config/manager/configmap.yaml"
     sed -i.bak "s|PROMETHEUS_BASE_URL:.*|PROMETHEUS_BASE_URL: \"$PROMETHEUS_URL\"|" config/manager/configmap.yaml
 
+    if [ "$SKIP_TLS_VERIFY" = true ]; then
+        log_warning "TLS verification NOT enabled: using values-dev.yaml for dev deployments - NOT FOR PRODUCTION USE"
+        VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values-dev.yaml"
+    else
+        log_info "TLS verification enabled: using values.yaml for production deployments"
+        VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values.yaml"
+    fi
+
     log_success "WVA prerequisites complete"
 }
 

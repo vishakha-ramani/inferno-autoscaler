@@ -39,6 +39,7 @@ VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}
 GAIE_IMAGE_ARM64=${GAIE_IMAGE_ARM64:-"quay.io/infernoautoscaler/llm-d-inference-scheduler:v0.2.1-arm64"}
 SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
 WVA_LOG_LEVEL=${WVA_LOG_LEVEL:-"info"}
+VALUES_FILE=${VALUES_FILE:-"$WVA_PROJECT/charts/workload-variant-autoscaler/values.yaml"}
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -358,10 +359,10 @@ deploy_wva_controller() {
 
     # Deploy WVA using Helm chart
     log_info "Installing Workload-Variant-Autoscaler via Helm chart"
-    cd "$WVA_PROJECT/charts"
     
     helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
         -n $WVA_NS \
+        --values $VALUES_FILE \
         --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
         --set wva.image.repository=$WVA_IMAGE_REPO \
         --set wva.image.tag=$WVA_IMAGE_TAG \

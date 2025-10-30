@@ -20,7 +20,10 @@ MONITORING_NAMESPACE="openshift-user-workload-monitoring"
 PROMETHEUS_SECRET_NAME="thanos-querier-tls"
 PROMETHEUS_SECRET_NS="openshift-monitoring"
 DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
+
+# TLS verification enabled by default on OpenShift
 SKIP_TLS_VERIFY=false
+VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values.yaml"
 
 check_specific_prerequisites() {
     log_info "Checking OpenShift-specific prerequisites..."

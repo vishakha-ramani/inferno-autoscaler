@@ -90,6 +90,50 @@ kubectl patch gatewayparameters.gateway.kgateway.dev $GATEWAY_NAME \
 cd $WVA_PROJECT/..
 ```
 
+## Configuration Files
+
+### Production vs Development Values
+
+The Helm chart provides different configuration files for different environments:
+
+#### Production Values (`values.yaml`)
+- **TLS Verification**: Enabled (`insecureSkipVerify: false`)
+- **Logging Level**: Production (`LOG_LEVEL: info`)
+- **Security**: Strict security settings for production use
+
+#### Development Values (`values-dev.yaml`)
+- **TLS Verification**: Relaxed (`insecureSkipVerify: true`) for easier development
+- **Logging Level**: Debug (`LOG_LEVEL: debug`) for detailed development logging
+- **Security**: Relaxed settings for development and testing
+
+### Usage Examples
+
+#### Production Deployment
+```bash
+# Use production values (secure by default)
+helm install workload-variant-autoscaler ./workload-variant-autoscaler \
+  -n workload-variant-autoscaler-system \
+  --values values.yaml
+```
+
+#### Development Deployment
+```bash
+# Use development values (relaxed security)
+helm install workload-variant-autoscaler ./workload-variant-autoscaler \
+  -n workload-variant-autoscaler-system \
+  --values values-dev.yaml
+```
+
+#### Custom Configuration
+```bash
+# Override specific values
+helm install workload-variant-autoscaler ./workload-variant-autoscaler \
+  -n workload-variant-autoscaler-system \
+  --values values.yaml \
+  --set wva.prometheus.tls.insecureSkipVerify=true \
+  --set wva.image.tag=v0.0.1-dev
+```
+
 ### CLEANUP
 ```
 export MON_NS="openshift-user-workload-monitoring"

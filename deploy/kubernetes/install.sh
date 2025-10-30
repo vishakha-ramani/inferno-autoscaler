@@ -54,6 +54,128 @@ deploy_wva_prerequisites() {
     log_success "WVA prerequisites complete"
 }
 
+detect_cluster_environment() {
+    log_info "Detecting cluster environment..."
+    
+    # Auto-detect cluster type if not specified
+    if [ "$CLUSTER_TYPE" = "auto" ]; then
+        # Check if this is a Kind cluster
+        if kubectl config current-context | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster"
+        elif kubectl get nodes -o json | jq -r '.items[].metadata.labels["kubernetes.io/hostname"]' | grep -q "kind"; then
+            CLUSTER_TYPE="kind"
+            log_info "Detected Kind cluster (by node hostname)"
+        else
+            CLUSTER_TYPE="production"
+            log_info "Detected production cluster"
+        fi
+    fi
+    
+    # Auto-detect TLS verification setting if not specified
+    if [ "$SKIP_TLS_VERIFY" = "auto" ]; then
+        case "$CLUSTER_TYPE" in
+            "kind")
+                SKIP_TLS_VERIFY="true"
+                log_info "Kind cluster detected - enabling TLS skip verification for self-signed certificates"
+                ;;
+            "production")
+                SKIP_TLS_VERIFY="false"
+                log_info "Production cluster detected - enabling strict TLS verification"
+                ;;
+            *)
+                SKIP_TLS_VERIFY="false"
+                log_warning "Unknown cluster type - defaulting to strict TLS verification"
+                ;;
+        esac
+    fi
+    
+    # Set logging level based on environment
+    if [ "$CLUSTER_TYPE" = "kind" ]; then
+        WVA_LOG_LEVEL="debug"
+        log_info "Development environment - using debug logging"
+    else
+        WVA_LOG_LEVEL="info"
+        log_info "Production environment - using info logging"
+    fi
+    
+    export CLUSTER_TYPE
+    export SKIP_TLS_VERIFY
+    export WVA_LOG_LEVEL
+    
+    log_success "Environment detection complete:"
+    echo "    Cluster Type:        $CLUSTER_TYPE"
+    echo "    Skip TLS Verify:     $SKIP_TLS_VERIFY"
+    echo "    Log Level:           $WVA_LOG_LEVEL"
+    echo ""
+}
+
+detect_gpu_type() {
+    log_info "Detecting GPU type in cluster..."
+    
+    # Check if GPUs are visible to Kubernetes
+    local gpu_count=$(kubectl get nodes -o json | jq -r '.items[].status.allocatable["nvidia.com/gpu"]' | grep -v null | head -1)
+    
+    if [ -z "$gpu_count" ] || [ "$gpu_count" == "null" ]; then
+        log_warning "No GPUs visible to Kubernetes"
+        log_warning "GPUs may exist on host but need NVIDIA Device Plugin or GPU Operator"
+        
+        # Check if GPUs exist on host
+        if nvidia-smi &> /dev/null; then
+            log_info "nvidia-smi detected GPUs on host:"
+            nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -5
+            log_warning "Install NVIDIA GPU Operator or set DEPLOY_VLLM_EMULATOR=true for demo"
+        else
+            log_warning "No GPUs detected on host either"
+            log_info "Setting DEPLOY_VLLM_EMULATOR=true for demo mode"
+            DEPLOY_VLLM_EMULATOR=true
+        fi
+    else
+        log_success "GPUs visible to Kubernetes: $gpu_count GPU(s) per node"
+        
+        # Detect GPU type from labels
+        local gpu_product=$(kubectl get nodes -o json | jq -r '.items[] | select(.status.allocatable["nvidia.com/gpu"] != null) | .metadata.labels["nvidia.com/gpu.product"]' | head -1)
+        
+        if [ -n "$gpu_product" ]; then
+            log_success "Detected GPU: $gpu_product"
+            
+            # Map GPU product to accelerator type
+            case "$gpu_product" in
+                *H100*)
+                    ACCELERATOR_TYPE="H100"
+                    ;;
+                *A100*)
+                    ACCELERATOR_TYPE="A100"
+                    ;;
+                *L40S*)
+                    ACCELERATOR_TYPE="L40S"
+                    ;;
+                *)
+                    log_warning "Unknown GPU type: $gpu_product, using default: $ACCELERATOR_TYPE"
+                    ;;
+            esac
+        fi
+    fi
+    
+    export ACCELERATOR_TYPE
+    export DEPLOY_VLLM_EMULATOR
+    log_info "Using detected accelerator type: $ACCELERATOR_TYPE"
+    log_info "Emulator mode: $DEPLOY_VLLM_EMULATOR"
+}
+
+create_namespaces() {
+    log_info "Creating namespaces..."
+    
+    for ns in $WVA_NS $MONITORING_NAMESPACE $LLMD_NS; do
+        if kubectl get namespace $ns &> /dev/null; then
+            log_info "Namespace $ns already exists"
+        else
+            kubectl create namespace $ns
+            log_success "Namespace $ns created"
+        fi
+    done
+}
+
 # Deploy Prometheus on Kubernetes
 deploy_prometheus_stack() {
     log_info "Deploying kube-prometheus-stack with TLS..."

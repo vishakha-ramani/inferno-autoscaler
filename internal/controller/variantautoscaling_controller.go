@@ -382,14 +382,14 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 
 		// Emit optimization signals for external autoscalers
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
-			logger.Log.Error(err, "failed to emit optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
+			logger.Log.Error(err, "failed to emit optimization signals for external autoscalers", "variant", updateVa.Name)
 		} else {
-			logger.Log.Debug("Successfully emitted optimization signals for external autoscalers - ", "variant: ", updateVa.Name)
+			logger.Log.Info(fmt.Sprintf("Successfully emitted optimization signals for external autoscalers - variant: %s", updateVa.Name))
 			updateVa.Status.Actuation.Applied = true // Signals emitted successfully
 		}
 
 		if err := utils.UpdateStatusWithBackoff(ctx, r.Client, &updateVa, utils.StandardBackoff, "VariantAutoscaling"); err != nil {
-			logger.Log.Error(err, "failed to patch status for variantAutoscaling after retries - ", "variantAutoscaling-name: ", updateVa.Name)
+			logger.Log.Error(err, "failed to patch status for variantAutoscaling after retries", "variantAutoscaling-name", updateVa.Name)
 			continue
 		}
 	}

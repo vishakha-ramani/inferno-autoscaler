@@ -369,7 +369,7 @@ deploy_wva_controller() {
     log_info "Installing Workload-Variant-Autoscaler via Helm chart"
     
     # Check if values-dev.yaml exists, if not use values.yaml
-    if [ -f "./workload-variant-autoscaler/values-dev.yaml" ]; then
+    if [ -f "$WVA_PROJECT/charts/workload-variant-autoscaler/values-dev.yaml" ]; then
         VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values-dev.yaml"
         log_info "Using development values file: $VALUES_FILE"
     else

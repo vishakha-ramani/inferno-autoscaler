@@ -887,10 +887,10 @@ main() {
         echo ""
         
         # Source environment-specific script to make functions available
-        if [ -f "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh" ]; then
-            source "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh"
+        if [ -f "$SCRIPT_DIR/$ENVIRONMENT/install.sh" ]; then
+            source "$SCRIPT_DIR/$ENVIRONMENT/install.sh"
         else
-            log_error "Environment script not found: $SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh"
+            log_error "Environment-specific script not found: $SCRIPT_DIR/$ENVIRONMENT/install.sh"
         fi
         
         cleanup

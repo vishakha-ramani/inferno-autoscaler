@@ -271,7 +271,6 @@ detect_gpu_type() {
     export ACCELERATOR_TYPE
     export DEPLOY_LLM_D_INFERENCE_SIM
     log_info "Using detected accelerator type: $ACCELERATOR_TYPE"
-    log_info "Emulator mode: $DEPLOY_LLM_D_INFERENCE_SIM"
 }
 
 detect_cluster_environment() {
@@ -376,7 +375,7 @@ deploy_llm_d_infrastructure() {
      # Clone llm-d repo if not exists
     if [ ! -d "$LLM_D_PROJECT" ]; then
         log_info "Cloning $LLM_D_PROJECT repository (release: $LLM_D_RELEASE)"
-        git clone -b $LLM_D_RELEASE -- https://github.com/$LLM_D_OWNER/$LLM_D_PROJECT.git $LLM_D_PROJECT
+        git clone -b $LLM_D_RELEASE -- https://github.com/$LLM_D_OWNER/$LLM_D_PROJECT.git $LLM_D_PROJECT &> /dev/null
     else
         log_warning "$LLM_D_PROJECT directory already exists, skipping clone"
     fi

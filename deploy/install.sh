@@ -128,7 +128,6 @@ Environment Variables:
   DEPLOY_PROMETHEUS_ADAPTER    Deploy Prometheus Adapter (default: true)
   DEPLOY_VA                    Deploy VariantAutoscaling (default: true)
   DEPLOY_HPA                   Deploy HPA (default: true)
-  DEPLOY_VLLM_EMULATOR            Use vLLM emulator instead of real vLLM (default: false)
   UNDEPLOY                     Undeploy mode (default: false)
   DELETE_NAMESPACES            Delete namespaces after undeploy (default: false)
 
@@ -141,9 +140,6 @@ Examples:
   
   # Deploy with custom model and accelerator
   $(basename "$0") -m unsloth/Meta-Llama-3.1-8B -a A100
-  
-  # Deploy with vLLM emulator (no GPU required)
-  DEPLOY_VLLM_EMULATOR=true $(basename "$0")
   
   # Undeploy all components (keep namespaces)
   $(basename "$0") --undeploy
@@ -219,15 +215,8 @@ check_prerequisites() {
         log_info "Please install the missing tools and try again"
         exit 1
     fi
-    
-    # Check Kubernetes connection
-    if ! kubectl cluster-info &> /dev/null; then
-        log_error "Not connected to Kubernetes cluster. Please check your kubeconfig"
-        exit 1
-    fi
-    
-    log_success "All prerequisites met"
-    log_info "Connected to Kubernetes cluster"
+
+    log_success "All generic prerequisites tools met"
 }
 
 
@@ -245,7 +234,7 @@ detect_gpu_type() {
         if nvidia-smi &> /dev/null; then
             log_info "nvidia-smi detected GPUs on host:"
             nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -5
-            log_warning "Install NVIDIA GPU Operator or set DEPLOY_VLLM_EMULATOR=true for demo"
+            log_warning "Install NVIDIA GPU Operator"
         else
             log_warning "No GPUs detected on host either"
             log_info "Setting DEPLOY_LLM_D_INFERENCE_SIM=true for demo mode"
@@ -340,19 +329,6 @@ detect_cluster_environment() {
     echo ""
 }
 
-create_namespaces() {
-    log_info "Creating namespaces..."
-    
-    for ns in $WVA_NS $MONITORING_NAMESPACE $LLMD_NS; do
-        if kubectl get namespace $ns &> /dev/null; then
-            log_info "Namespace $ns already exists"
-        else
-            kubectl create namespace $ns
-            log_success "Namespace $ns created"
-        fi
-    done
-}
-
 deploy_wva_controller() {
     log_info "Deploying Workload-Variant-Autoscaler..."
     log_info "Using image: $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
@@ -360,7 +336,7 @@ deploy_wva_controller() {
     # Deploy WVA using Helm chart
     log_info "Installing Workload-Variant-Autoscaler via Helm chart"
     
-    helm upgrade -i workload-variant-autoscaler ./workload-variant-autoscaler \
+    helm upgrade -i workload-variant-autoscaler ${WVA_PROJECT}/charts/workload-variant-autoscaler \
         -n $WVA_NS \
         --values $VALUES_FILE \
         --set-file wva.prometheus.caCert=$PROM_CA_CERT_PATH \
@@ -433,8 +409,8 @@ deploy_llm_d_infrastructure() {
         log_info "Skipping Gateway control plane installation (INSTALL_GATEWAY_CTRLPLANE=false)"
     fi
 
-    # Configure benchmark mode for Istio if enabled
-    if [[ "$BENCHMARK_MODE" == "true" ]]; then
+    # Configure benchmark mode for Istio if enabled (not available for emulated deployments)
+    if [ "$BENCHMARK_MODE" == "true" ] ; then
       log_info "Benchmark mode enabled - using benchmark configuration for Istio"
       GATEWAY_PROVIDER="istioBench"
     fi
@@ -453,13 +429,22 @@ deploy_llm_d_infrastructure() {
     
     cd $EXAMPLE_DIR
 
-    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ]; then
+    # Update model ID if different from default and not in emulator mode
+    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ] && [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "false" ]; then
         log_info "Updating deployment to use model: $MODEL_ID"
         yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
 
         # Increase model-storage volume size
         log_info "Increasing model-storage volume size for model: $MODEL_ID"
         yq eval '.modelArtifacts.size = "30Gi"' -i ms-$WELL_LIT_PATH_NAME/values.yaml
+    fi
+
+    # Configure llm-d-inference-simulator if needed
+    if [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "true" ]; then
+      log_info "Deploying llm-d-inference-simulator..."
+        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\"" -i "$EXAMPLE_DIR/ms-sim/values.yaml"
+    else
+      log_info "Skipping llm-d-inference-simulator deployment (DEPLOY_LLM_D_INFERENCE_SIM=false)"
     fi
 
     # Deploy llm-d core components
@@ -491,6 +476,13 @@ deploy_prometheus_adapter() {
     log_info "Adding Prometheus community helm repo"
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
     helm repo update
+
+    # Create CA ConfigMap from TLS certificate
+    log_info "Creating Prometheus CA ConfigMap in $MONITORING_NAMESPACE namespace for the Prometheus Adapter"
+    kubectl create configmap prometheus-ca \
+        --from-file=ca.crt=$PROM_CA_CERT_PATH \
+        -n $MONITORING_NAMESPACE \
+        --dry-run=client -o yaml | kubectl apply -f -
     
     # Create prometheus-adapter values for Kubernetes
     cat > /tmp/prometheus-adapter-values.yaml <<EOF
@@ -593,16 +585,6 @@ verify_deployment() {
         else
             log_warning "llm-d infrastructure may still be deploying"
         fi
-        
-        # Check for vLLM emulator if enabled
-        if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-            if kubectl get deployment $LLM_D_MODELSERVICE_NAME-decode -n $LLMD_NS &> /dev/null; then
-                log_success "vLLM emulator deployment exists"
-            else
-                log_warning "vLLM emulator deployment not found"
-                all_good=false
-            fi
-        fi
     fi
     
     # Check VariantAutoscaling deployed by WVA Helm chart
@@ -649,7 +631,6 @@ print_summary() {
     echo "Model:                  $MODEL_ID"
     echo "Accelerator:            $ACCELERATOR_TYPE"
     echo "WVA Image:              $WVA_IMAGE_REPO:$WVA_IMAGE_TAG"
-    echo "Emulator Mode:          $DEPLOY_VLLM_EMULATOR"
     echo "SLO (TPOT):             $SLO_TPOT ms"
     echo "SLO (TTFT):             $SLO_TTFT ms"
     echo ""
@@ -663,13 +644,6 @@ print_summary() {
     fi
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         echo "✓ llm-d Infrastructure (Gateway, GAIE, ModelService)"
-        if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-            echo "✓ vLLM Emulator (no GPU required)"
-        fi
-        
-        if [ "$APPLY_VLLM_EMULATOR_FIXES" = "true" ]; then
-            log_info " Applied vLLM emulator integration fixes"
-        fi
     fi
     if [ "$DEPLOY_PROMETHEUS_ADAPTER" = "true" ]; then
         echo "✓ Prometheus Adapter (external metrics API)"
@@ -697,16 +671,15 @@ print_summary() {
     echo "   kubectl get --raw \"/apis/external.metrics.k8s.io/v1beta1/namespaces/$LLMD_NS/inferno_desired_replicas\" | jq"
     echo ""
     echo "5. Port-forward Prometheus to view metrics:"
-    echo "   kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-prometheus 9090:9090"
-    echo "   # Then visit https://localhost:9090 (accept self-signed cert)"
+    echo "   kubectl port-forward -n $MONITORING_NAMESPACE svc/${PROMETHEUS_SVC_NAME} ${PROMETHEUS_PORT}:${PROMETHEUS_PORT}"
+    echo "   # Then visit https://localhost:${PROMETHEUS_PORT}"
     echo ""
     echo "Important Notes:"
     echo "================"
     echo ""
-    if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-        echo "• This deployment uses vLLM EMULATOR (no real GPUs or models)"
-        echo "• vLLM emulator generates synthetic metrics for testing"
-        echo "• Perfect for development and testing without GPU hardware"
+    if  ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}"; then
+        echo "• This deployment uses the llm-d inference simulator without real GPUs"
+        echo "• The llm-d inference simulator generates synthetic metrics for testing"
     else
         echo "• Model Loading:"
         echo "  - Using $MODEL_ID"
@@ -725,8 +698,8 @@ print_summary() {
     echo "  kubectl get pods -n $LLMD_NS"
     echo ""
     echo "• Check if metrics are being scraped by Prometheus:"
-    echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/kube-prometheus-stack-prometheus 9090:9090"
-    echo "  # Then visit https://localhost:9090 and query: vllm:request_success_total"
+    echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/${PROMETHEUS_SVC_NAME} ${PROMETHEUS_PORT}:${PROMETHEUS_PORT}"
+    echo "  # Then visit https://localhost:${PROMETHEUS_PORT} and query: vllm:request_success_total"
     echo ""
     echo "• Check Prometheus Adapter logs:"
     echo "  kubectl logs -n $MONITORING_NAMESPACE deployment/prometheus-adapter"
@@ -744,16 +717,6 @@ undeploy_prometheus_adapter() {
     rm -f /tmp/prometheus-adapter-values-k8s.yaml
     
     log_success "Prometheus Adapter uninstalled"
-}
-
-undeploy_vllm_emulator() {
-    log_info "Removing vLLM Emulator..."
-    
-    kubectl delete deployment $VLLM_EMULATOR_NAME-decode -n $LLMD_NS --ignore-not-found
-    kubectl delete service $VLLM_EMULATOR_NAME-service -n $LLMD_NS --ignore-not-found
-    kubectl delete servicemonitor $VLLM_EMULATOR_NAME-servicemonitor -n $MONITORING_NAMESPACE --ignore-not-found
-    
-    log_success "vLLM Emulator removed"
 }
 
 undeploy_llm_d_infrastructure() {
@@ -825,10 +788,6 @@ cleanup() {
         undeploy_prometheus_adapter
     fi
     
-    if [ "$DEPLOY_VLLM_EMULATOR" = "true" ]; then
-        undeploy_vllm_emulator
-    fi
-    
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         undeploy_llm_d_infrastructure
     fi
@@ -858,7 +817,6 @@ cleanup() {
     echo ""
     echo "Removed components:"
     [ "$DEPLOY_PROMETHEUS_ADAPTER" = "true" ] && echo "✓ Prometheus Adapter"
-    [ "$DEPLOY_VLLM_EMULATOR" = "true" ] && echo "✓ vLLM Emulator"
     [ "$DEPLOY_LLM_D" = "true" ] && echo "✓ llm-d Infrastructure"
     [ "$DEPLOY_WVA" = "true" ] && echo "✓ WVA Controller"
     [ "$DEPLOY_PROMETHEUS" = "true" ] && echo "✓ Prometheus Stack"
@@ -911,15 +869,21 @@ main() {
     # Detect cluster environment
     detect_cluster_environment
 
+    if [[ "$CLUSTER_TYPE" == "kind" ]]; then
+        log_info "Kind cluster detected - setting environment to kind-emulated"
+        ENVIRONMENT="kind-emulator"
+    fi
+
     # Source environment-specific script to make functions available
     log_info "Loading environment-specific functions for $ENVIRONMENT..."
-    if [ -f "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh" ]; then
-        source "$SCRIPT_DIR/$ENVIRONMENT/$ENVIRONMENT.sh"
-        
+    if [ -f "$SCRIPT_DIR/$ENVIRONMENT/install.sh" ]; then
+        source "$SCRIPT_DIR/$ENVIRONMENT/install.sh"
+
         # Run environment-specific prerequisite checks if function exists
         if declare -f check_prerequisites > /dev/null; then
             if [ "$SKIP_CHECKS" != "true" ]; then
                 check_prerequisites
+                check_specific_prerequisites
             fi
         fi
     else
@@ -932,8 +896,6 @@ main() {
     else
         log_info "Skipping GPU type detection for emulated environment (ENVIRONMENT=$ENVIRONMENT)"
     fi
-
-
 
     # Display configuration
     log_info "Using configuration:"
@@ -971,6 +933,14 @@ main() {
     # Deploy llm-d
     if [ "$DEPLOY_LLM_D" = "true" ]; then
         deploy_llm_d_infrastructure
+        
+        # For emulated environments, apply specific fixes
+        if ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}"; then
+            apply_llm_d_infrastructure_fixes
+        else
+            log_info "Skipping llm-d related fixes for non-emulated environment (ENVIRONMENT=$ENVIRONMENT)"
+        fi
+
     else
         log_info "Skipping llm-d deployment (DEPLOY_LLM_D=false)"
     fi

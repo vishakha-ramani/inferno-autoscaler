@@ -3,6 +3,9 @@ IMAGE_TAG_BASE ?= ghcr.io/llm-d
 IMG_TAG ?= latest
 IMG ?= $(IMAGE_TAG_BASE)/workload-variant-autoscaler:$(IMG_TAG)
 KIND_ARGS ?= -t mix -n 3 -g 2   # Default: 3 nodes, 2 GPUs per node, mixed vendors
+CLUSTER_GPU_TYPE ?= mix
+CLUSTER_NODES ?= 3
+CLUSTER_GPUS ?= 4
 KUBECONFIG ?= $(HOME)/.kube/config
 K8S_VERSION ?= v1.32.0
 
@@ -80,7 +83,7 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 .PHONY: create-kind-cluster
 create-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		deploy/kind-emulator/setup.sh $(KIND_ARGS)
+		deploy/kind-emulator/setup.sh -t $(CLUSTER_GPU_TYPE) -n $(CLUSTER_NODES) -g $(CLUSTER_GPUS)
 
 # Destroys the Kind cluster created by `create-kind-cluster`
 .PHONY: destroy-kind-cluster
@@ -88,27 +91,37 @@ destroy-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
         deploy/kind-emulator/teardown.sh
 
-# Create Kind cluster (if needed)
-# Deploys the WVA controller on a Kind cluster with emulated GPU support.
-# This target assumes that the Kind cluster has been created and is running.
-.PHONY: deploy-wva-emulated-on-kind
-deploy-wva-emulated-on-kind:
-	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false && \
-		deploy/kind-emulator/install.sh $(KIND_ARGS)
-
-# Deploy controller in emulator mode
-.PHONY: deploy-emulated
-deploy-emulated: deploy
-
 # Creates Kind cluster with emulated GPU support (if needed)
 # Deploys the WVA controller on a Kind cluster
+# Deploys the llm-d components in the same Kind cluster
+.PHONY: deploy-llm-d-wva-emulated-on-kind-create-cluster
+deploy-llm-d-wva-emulated-on-kind-create-cluster:
+	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
+	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=true ENVIRONMENT=kind-emulator CREATE_CLUSTER=true CLUSTER_GPU_TYPE=$(CLUSTER_GPU_TYPE) CLUSTER_NODES=$(CLUSTER_NODES) CLUSTER_GPUS=$(CLUSTER_GPUS) \
+		deploy/install.sh 
+
+# Deploys Kind cluster with emulated GPU support (if needed)
+# Deploys the WVA controller on a pre-existing Kind cluster
 # Deploys the llm-d components in the same Kind cluster
 .PHONY: deploy-llm-d-wva-emulated-on-kind
 deploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Deploying integrated llm-d and workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
-	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=true \
-		deploy/kind-emulator/install.sh $(KIND_ARGS)
+	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=true ENVIRONMENT=kind-emulator CREATE_CLUSTER=false CLUSTER_GPU_TYPE=$(CLUSTER_GPU_TYPE) CLUSTER_NODES=$(CLUSTER_NODES) CLUSTER_GPUS=$(CLUSTER_GPUS) \
+		deploy/install.sh 
+
+# Deploys the WVA controller on a Kind cluster (creates cluster)
+.PHONY: deploy-wva-emulated-on-kind-create-cluster
+deploy-wva-emulated-on-kind-create-cluster:
+	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
+	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false ENVIRONMENT=kind-emulator CREATE_CLUSTER=true CLUSTER_GPU_TYPE=$(CLUSTER_GPU_TYPE) CLUSTER_NODES=$(CLUSTER_NODES) CLUSTER_GPUS=$(CLUSTER_GPUS) \
+		deploy/install.sh $(KIND_ARGS)
+
+# Deploys the WVA controller on a pre-existing Kind cluster
+.PHONY: deploy-wva-emulated-on-kind
+deploy-wva-emulated-on-kind:
+	@echo ">>> Deploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
+	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false ENVIRONMENT=kind-emulator CREATE_CLUSTER=false CLUSTER_GPU_TYPE=$(CLUSTER_GPU_TYPE) CLUSTER_NODES=$(CLUSTER_NODES) CLUSTER_GPUS=$(CLUSTER_GPUS) \
+		deploy/install.sh $(KIND_ARGS)
 
 ## Deploy WVA to OpenShift cluster with specified image.
 .PHONY: deploy-wva-on-openshift
@@ -122,27 +135,33 @@ deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster 
 deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the specified image.
 	@echo "Deploying WVA on Kubernetes with image: $(IMG)"
 	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes ./deploy/kubernetes/install.sh
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes ./deploy/install.sh
 
 ## Undeploy WVA and llm-d from the emulated environment on Kind.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
 undeploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kind cluster"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=true DELETE_NAMESPACES=true && \
-		deploy/kind-emulator/install.sh --undeploy
+		deploy/install.sh --undeploy
 
 .PHONY: undeploy-wva-on-kind
 undeploy-wva-on-kind:
 	@echo ">>> Undeploying workload-variant-autoscaler (cluster args: $(KIND_ARGS), image: $(IMG))"
-	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false DELETE_NAMESPACES=true \
-		deploy/kind-emulator/install.sh $(KIND_ARGS) --undeploy
+	KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=false DELETE_NAMESPACES=true ENVIRONMENT=kind-emulator \
+		deploy/install.sh $(KIND_ARGS) --undeploy
 
 ## Undeploy WVA from the emulated environment on Kind and delete the cluster.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind-delete-cluster
 undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler and deleting Kind cluster"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		deploy/kind-emulator/install.sh --undeploy --delete-cluster
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kind-emulator && \
+		deploy/install.sh --undeploy --delete-cluster
+
+.PHONY: undeploy-wva-on-kind-delete-cluster
+undeploy-wva-on-kind-delete-cluster:
+	@echo ">>> Undeploying workload-variant-autoscaler and deleting Kind cluster"
+	KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=false DELETE_NAMESPACES=true ENVIRONMENT=kind-emulator \
+		deploy/install.sh $(KIND_ARGS) --undeploy --delete-cluster
 
 ## Undeploy WVA from OpenShift.
 .PHONY: undeploy-wva-on-openshift
@@ -158,22 +177,6 @@ undeploy-wva-on-k8s:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
 		ENVIRONMENT=kubernetes deploy/install.sh --undeploy
 
-# Backwards compatibility aliases (deprecated - use wva targets above)
-.PHONY: deploy-inferno-emulated-on-kind
-deploy-inferno-emulated-on-kind: deploy-wva-emulated-on-kind
-
-.PHONY: undeploy-inferno-on-kind
-undeploy-inferno-on-kind: undeploy-wva-on-kind
-
-.PHONY: deploy-llm-d-inferno-emulated-on-kind
-deploy-llm-d-inferno-emulated-on-kind: deploy-llm-d-wva-emulated-on-kind
-
-.PHONY: undeploy-llm-d-inferno-emulated-on-kind
-undeploy-llm-d-inferno-emulated-on-kind: undeploy-llm-d-wva-emulated-on-kind
-
-.PHONY: deploy-inferno-on-openshift
-deploy-inferno-on-openshift: deploy-wva-on-openshift
-
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
@@ -188,6 +191,8 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 	$(eval SKIP_ARGS := $(if $(SKIP),-ginkgo.skip="$(SKIP)",))
 	export KUBECONFIG=$(KUBECONFIG) K8S_EXPECTED_VERSION=$(K8S_VERSION) && go test ./test/e2e/ -timeout 30m -v -ginkgo.v $(FOCUS_ARGS) $(SKIP_ARGS)
 
+# E2E tests on OpenShift cluster
+# Requires KUBECONFIG and pre-deployed infrastructure.
 .PHONY: test-e2e-openshift
 test-e2e-openshift: ## Run the e2e tests on OpenShift. Requires KUBECONFIG and pre-deployed infrastructure.
 	@echo "Running e2e tests on OpenShift cluster..."

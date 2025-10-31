@@ -74,7 +74,7 @@ var _ = BeforeSuite(func() {
 	utils.SetupTestEnvironment(projectImage, numNodes, maximumAvailableGPUs, gpuTypes)
 
 	// Deploy llm-d and workload-variant-autoscaler on the Kind cluster
-	launchCmd := exec.Command("make", "deploy-llm-d-wva-emulated-on-kind", fmt.Sprintf("IMG=%s", projectImage))
+	launchCmd := exec.Command("make", "deploy-llm-d-wva-emulated-on-kind-create-cluster", fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(launchCmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install llm-d and workload-variant-autoscaler")
 	initializeK8sClient()

@@ -127,7 +127,7 @@ func findSLOInSystemData(
 	return nil, fmt.Errorf("model %q not found in service class %q", modelName, serviceClassName)
 }
 
-func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, modelName, accName string, tunedResults *TunedResults) error {
+func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, modelName, accName string, tunedResults *tune.TunedResults) error {
 	for i := range systemData.Spec.Models.PerfData {
 		perfData := &systemData.Spec.Models.PerfData[i]
 		if perfData.Name == modelName && perfData.Acc == accName {

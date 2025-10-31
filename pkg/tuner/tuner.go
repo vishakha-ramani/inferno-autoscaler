@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/analyzer"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	kalman "github.com/llm-inferno/kalman-filter/pkg/core"
@@ -14,6 +15,13 @@ type Tuner struct {
 	configurator *Configurator
 	filter       *kalman.ExtendedKalmanFilter
 	env          *Environment
+}
+
+// TunedResults holds the results of parameter tuning.
+type TunedResults struct {
+	ServiceParms *analyzer.ServiceParms
+	Innovation   *mat.VecDense
+	Covariance   *mat.Dense
 }
 
 func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
@@ -58,28 +66,46 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 	return t, nil
 }
 
-func (t *Tuner) Run() error {
+func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
+	// create a stasher and stash the current X and P
+	stasher := NewStasher(t.filter)
+	stasher.Stash()
+
+	// prediction
 	Q := t.filter.Q
 	if err := t.filter.Predict(Q); err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
-	// correct
+	// update
 	Z := t.env.GetObservations()
 	if err := t.filter.Update(Z, t.configurator.R); err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
-	return nil
+	// Extract tuned parameters
+	tunedResults, err = t.extractTunedResults()
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract tuned params: %w", err)
+	}
+
+	// check validity of tunedResults
+	if err := t.validateTunedResults(tunedResults); err != nil {
+		// unstash to return to previous filter state
+		stasher.UnStash()
+		return nil, err
+	}
+
+	return tunedResults, nil
 }
 
 func (t *Tuner) X() *mat.VecDense {
 	return t.filter.State()
 }
 
-func (t *Tuner) Innovation() *mat.VecDense {
+func (t *Tuner) Y() *mat.VecDense {
 	return t.filter.Innovation()
 }
 
@@ -157,4 +183,67 @@ func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 
 		return mat.NewVecDense(2, []float64{ttft, itl})
 	}
+}
+
+func (t *Tuner) extractTunedResults() (*TunedResults, error) {
+	stateVec := mat.VecDenseCopyOf(t.X())
+	if stateVec == nil {
+		return nil, fmt.Errorf("tuner returned nil state vector")
+	}
+	innovation := mat.VecDenseCopyOf(t.Y())
+	covariance := mat.DenseCopyOf(t.P())
+
+	return &TunedResults{
+		ServiceParms: &analyzer.ServiceParms{
+			Decode: &analyzer.DecodeParms{
+				Alpha: float32(stateVec.AtVec(0)),
+				Beta:  float32(stateVec.AtVec(1)),
+			},
+			Prefill: &analyzer.PrefillParms{
+				Gamma: float32(stateVec.AtVec(2)),
+				Delta: float32(stateVec.AtVec(3)),
+			},
+		},
+		Innovation: innovation,
+		Covariance: covariance,
+	}, nil
+}
+
+func (t *Tuner) validateTunedResults(tunedResults *TunedResults) error {
+	parms := tunedResults.ServiceParms
+
+	// 1. check parms are positive
+	if parms.Decode.Alpha <= 0 || parms.Decode.Beta <= 0 {
+		return fmt.Errorf("decode parameters must be positive: alpha=%f, beta=%f", parms.Decode.Alpha, parms.Decode.Beta)
+	}
+	if parms.Prefill.Gamma <= 0 || parms.Prefill.Delta <= 0 {
+		return fmt.Errorf("prefill parameters must be positive: gamma=%f, delta=%f", parms.Prefill.Gamma, parms.Prefill.Delta)
+	}
+
+	// 2. innovation check using Normalized Innovation Squared (NIS)
+	innovation := mat.VecDenseCopyOf(t.Y()) // y vector
+	innovationCov := mat.DenseCopyOf(t.S()) // S matrix
+
+	// Calculate NIS = y^T * S^-1 * y
+	S_inv := mat.NewDense(innovationCov.RawMatrix().Rows, innovationCov.RawMatrix().Cols, nil)
+	if err := S_inv.Inverse(innovationCov); err != nil {
+		return fmt.Errorf("singular innovation covariance matrix S encountered: %w", err)
+	}
+
+	// tmp = S^-1 * y
+	tmp := mat.NewVecDense(S_inv.RawMatrix().Rows, nil)
+	tmp.MulVec(S_inv, innovation)
+
+	// NIS = y^T * tmp
+	NIS := mat.Dot(innovation, tmp)
+
+	if NIS >= constants.DefaultMaxNIS {
+		return fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
+			NIS, constants.DefaultMaxNIS)
+	}
+
+	// 3. estimate covariance check?
+	// TODO
+
+	return nil
 }

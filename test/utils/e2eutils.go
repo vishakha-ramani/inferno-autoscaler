@@ -84,7 +84,8 @@ func Run(cmd *exec.Cmd) (string, error) {
 	return string(output), nil
 }
 
-func detectArchitecture() (string, error) {
+// DetectArchitecture checks the host architecture
+func DetectArchitecture() (string, error) {
 	var arch string
 	out, err := exec.Command("uname", "-m").CombinedOutput()
 	if err != nil {
@@ -505,8 +506,8 @@ func startPortForwarding(service *corev1.Service, namespace string, localPort, s
 func CreateLoadGeneratorJob(image, namespace, targetURL, modelName string, rate, maxSeconds, inputTokens, outputTokens int, k8sClient *kubernetes.Clientset, ctx context.Context) (*batchv1.Job, error) {
 
 	// Detect host architecture and override image for arm64 hosts
-	// TODO: Change to always use the guidellm image once they support multiple architectures
-	arch, err := detectArchitecture()
+	// TODO: Change to always use the upstream GuideLLM image once they support multiple architectures
+	arch, err := DetectArchitecture()
 
 	if err != nil {
 		return nil, fmt.Errorf("error when detecting architecture for loadgen job creation: %v", err)
@@ -567,7 +568,7 @@ func CreateLoadGeneratorJob(image, namespace, targetURL, modelName string, rate,
 	return job, nil
 }
 
-// StopJob deletes a Kubernetes Job
+// StopJob deletes a Kubernetes Job and ensures it is removed from the cluster
 func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset, ctx context.Context) error {
 	if err := k8sClient.BatchV1().Jobs(namespace).Delete(ctx, job.Name, metav1.DeleteOptions{
 		PropagationPolicy: func() *metav1.DeletionPropagation {
@@ -585,6 +586,7 @@ func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset
 	return nil
 }
 
+// StopCmd attempts to gracefully stop the provided command, handling early exits and timeouts.
 func StopCmd(cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {
 		return fmt.Errorf("command or process is nil")
@@ -638,6 +640,7 @@ func StopCmd(cmd *exec.Cmd) error {
 	}
 }
 
+// SetUpPortForward sets up port forwarding to a Service on the specified port
 func SetUpPortForward(k8sClient *kubernetes.Clientset, ctx context.Context, serviceName, namespace string, localPort, servicePort int) *exec.Cmd {
 	service, err := k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
 	gom.Expect(err).NotTo(gom.HaveOccurred(), "Should be able to fetch service")
@@ -645,10 +648,11 @@ func SetUpPortForward(k8sClient *kubernetes.Clientset, ctx context.Context, serv
 	return portForwardCmd
 }
 
+// VerifyPortForwardReadiness checks if the port forwarding is ready by sending HTTP requests to the specified local port
 func VerifyPortForwardReadiness(ctx context.Context, localPort int, request string) error {
 	var client *http.Client
 	tr := &http.Transport{}
-	// Prometheus uses a self-signed certificate, so we need to skip verification when accessing its HTTPS endpoint.
+	// Prometheus uses a self-signed certificate for tests, so we need to skip verification when accessing its HTTPS endpoint.
 	if request == fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", localPort) {
 		tr = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -786,6 +790,7 @@ func ValidateVariantAutoscalingUniqueness(namespace, modelId, acc string, crClie
 	}
 }
 
+// LogVariantAutoscalingStatus fetches and logs the status of the specified VariantAutoscaling resource
 func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, crClient client.Client) error {
 	variantAutoscaling := &v1alpha1.VariantAutoscaling{}
 	err := crClient.Get(ctx, client.ObjectKey{Name: vaName, Namespace: namespace}, variantAutoscaling)
@@ -1185,10 +1190,9 @@ func SetupTestEnvironment(image string, numNodes, gpusPerNode int, gpuTypes stri
 	gom.Expect(os.Setenv("WVA_RECONCILE_INTERVAL", "30s")).To(gom.Succeed())
 
 	// Disable components not needed to be deployed by the script
-	// Tests create their own llm-d-sim deployments
-	gom.Expect(os.Setenv("DEPLOY_LLM_D_INFERENCE_SIM", "false")).To(gom.Succeed()) // we create our own llm-d-sim deployments in the tests
-	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed())                  // we create our own VariantAutoscaling resources in the tests
+	gom.Expect(os.Setenv("DEPLOY_LLM_D_INFERENCE_SIM", "false")).To(gom.Succeed()) // tests deploy their own llm-d-sim deployments
+	gom.Expect(os.Setenv("DEPLOY_VA", "false")).To(gom.Succeed())                  // tests create their own VariantAutoscaling resources
 	gom.Expect(os.Setenv("DEPLOY_HPA", "false")).To(gom.Succeed())                 // HPA is not needed for these tests
 	gom.Expect(os.Setenv("DEPLOY_PROMETHEUS_ADAPTER", "false")).To(gom.Succeed())  // Prometheus Adapter is not needed for these tests
-	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed())           // we deploy our own Service in the tests
+	gom.Expect(os.Setenv("VLLM_SVC_ENABLED", "false")).To(gom.Succeed())           // tests deploy their own Service
 }

@@ -26,6 +26,7 @@ DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
 SKIP_TLS_VERIFY=false
 VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values.yaml"
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
 check_specific_prerequisites() {
     log_info "Checking OpenShift-specific prerequisites..."
     
@@ -55,6 +56,7 @@ check_specific_prerequisites() {
     log_info "Current project: $(oc project -q)"
 }
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
 create_namespaces() {
     log_info "Creating namespaces..."
     
@@ -84,6 +86,7 @@ find_thanos_url() {
     export PROMETHEUS_URL
 }
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
 # OpenShift uses existing monitoring stack (Thanos/Prometheus)
 deploy_prometheus_stack() {
     log_info "Using OpenShift built-in monitoring (Thanos)..."
@@ -91,6 +94,7 @@ deploy_prometheus_stack() {
     log_success "OpenShift monitoring stack is available"
 }
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
 deploy_wva_prerequisites() {
     log_info "Deploying Workload-Variant-Autoscaler..."
 
@@ -114,11 +118,14 @@ deploy_wva_prerequisites() {
     log_success "WVA prerequisites deployed"
 }
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
 # OpenShift uses built-in monitoring, nothing to undeploy
 undeploy_prometheus_stack() {
     log_info "OpenShift uses built-in monitoring stack (no cleanup needed)"
 }
 
+#### REQUIRED FUNCTION used by deploy/install.sh ####
+# Namespaces are not deleted on OpenShift to avoid removing user projects
 delete_namespaces() {
     log_info "Not deleting namespaces on OpenShift to avoid removing user projects"
 }

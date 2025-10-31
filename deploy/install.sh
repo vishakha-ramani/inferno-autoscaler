@@ -359,8 +359,6 @@ deploy_wva_controller() {
         --set wva.logging.level=$WVA_LOG_LEVEL \
         --set wva.prometheus.tls.insecureSkipVerify=$SKIP_TLS_VERIFY
     
-    cd "$WVA_PROJECT"
-    
     # Wait for WVA to be ready
     log_info "Waiting for WVA controller to be ready..."
     kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=60s || \
@@ -414,20 +412,10 @@ deploy_llm_d_infrastructure() {
       log_info "Benchmark mode enabled - using benchmark configuration for Istio"
       GATEWAY_PROVIDER="istioBench"
     fi
-
-    # Configure llm-d infrastructure
-    log_info "Configuring llm-d infrastructure"
     
+    # Configuring llm-d before installation
     cd $EXAMPLE_DIR
-
-    # Deploy llm-d core components
-    log_info "Deploying llm-d core components"
-    helmfile apply -e $GATEWAY_PROVIDER -n ${LLMD_NS}
-    kubectl apply -f httproute.yaml -n ${LLMD_NS}
-
     log_info "Configuring llm-d infrastructure"
-    
-    cd $EXAMPLE_DIR
 
     # Update model ID if different from default
     if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ] ; then

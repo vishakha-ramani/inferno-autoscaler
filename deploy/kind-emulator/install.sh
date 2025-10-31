@@ -73,8 +73,6 @@ DEPLOY_LLM_D_INFERENCE_SIM=${DEPLOY_LLM_D_INFERENCE_SIM:-true}
 E2E_TESTS_ENABLED=${E2E_TESTS_ENABLED:-false}
 
 # Undeployment flags
-UNDEPLOY_ALL=${UNDEPLOY_ALL:-false}
-DELETE_NAMESPACES=${DELETE_NAMESPACES:-false}
 DELETE_CLUSTER=${DELETE_CLUSTER:-false}
 
 # Function to check Kind emulator-specific prerequisites

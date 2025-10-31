@@ -127,7 +127,7 @@ deploy-wva-emulated-on-kind:
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
 undeploy-llm-d-wva-emulated-on-kind:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kind cluster"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=true DELETE_NAMESPACES=true && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=true DELETE_NAMESPACES=true ENVIRONMENT=kind-emulator && \
 		deploy/install.sh --undeploy
 
 .PHONY: undeploy-wva-on-kind
@@ -140,14 +140,14 @@ undeploy-wva-on-kind:
 .PHONY: undeploy-llm-d-wva-emulated-on-kind-delete-cluster
 undeploy-llm-d-wva-emulated-on-kind-delete-cluster:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler and deleting Kind cluster"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kind-emulator && \
-		deploy/install.sh --undeploy --delete-cluster
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kind-emulator DELETE_NAMESPACES=true DELETE_CLUSTER=true && \
+		deploy/install.sh --undeploy
 
 .PHONY: undeploy-wva-on-kind-delete-cluster
 undeploy-wva-on-kind-delete-cluster:
 	@echo ">>> Undeploying workload-variant-autoscaler and deleting Kind cluster"
-	KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=false DELETE_NAMESPACES=true ENVIRONMENT=kind-emulator \
-		deploy/install.sh $(KIND_ARGS) --undeploy --delete-cluster
+	KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kind-emulator DEPLOY_LLM_D=false DELETE_NAMESPACES=true DELETE_CLUSTER=true \
+		deploy/install.sh $(KIND_ARGS) --undeploy
 
 ## Deploy llm-d and WVA to OpenShift cluster with specified image.
 .PHONY: deploy-llm-d-wva-on-openshift
@@ -167,14 +167,14 @@ deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster 
 .PHONY: undeploy-llm-d-wva-on-openshift
 undeploy-llm-d-wva-on-openshift:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from OpenShift"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=openshift && \
 		ENVIRONMENT=openshift DEPLOY_LLM_D=true deploy/install.sh --undeploy
 
 ## Undeploy WVA from OpenShift.
 .PHONY: undeploy-wva-on-openshift
 undeploy-wva-on-openshift:
 	@echo ">>> Undeploying workload-variant-autoscaler from OpenShift"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=openshift && \
 		ENVIRONMENT=openshift DEPLOY_LLM_D=false deploy/install.sh --undeploy
 
 ## Deploy llm-d and WVA on Kubernetes with the specified image.
@@ -195,14 +195,14 @@ deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the spec
 .PHONY: undeploy-llm-d-wva-on-k8s
 undeploy-llm-d-wva-on-k8s:
 	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kubernetes && \
 		ENVIRONMENT=kubernetes DEPLOY_LLM_D=true deploy/install.sh --undeploy
 
 ## Undeploy WVA from Kubernetes.
 .PHONY: undeploy-wva-on-k8s
 undeploy-wva-on-k8s:
 	@echo ">>> Undeploying workload-variant-autoscaler from Kubernetes"
-	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kubernetes && \
 		ENVIRONMENT=kubernetes DEPLOY_LLM_D=false deploy/install.sh --undeploy
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.

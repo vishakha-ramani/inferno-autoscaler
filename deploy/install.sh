@@ -722,6 +722,14 @@ undeploy_prometheus_adapter() {
 
 undeploy_llm_d_infrastructure() {
     log_info "Undeploying the llm-d infrastructure..."
+
+    # Determine release name based on environment
+    local RELEASE=""
+    if ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}" ; then
+        RELEASE="$NAMESPACE_SUFFIX"
+    else 
+        RELEASE="$WELL_LIT_PATH_NAME"
+    fi
     
     if [ ! -d "$EXAMPLE_DIR" ]; then
         log_warning "llm-d example directory not found, skipping cleanup"
@@ -730,14 +738,13 @@ undeploy_llm_d_infrastructure() {
         
         log_info "Removing llm-d core components..."
 
-        helm uninstall infra-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall infra-$RELEASE -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d infra components not found or already uninstalled"
-        helm uninstall gaie-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall gaie-$RELEASE -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d inference-scheduler components not found or already uninstalled"
-        helm uninstall ms-$WELL_LIT_PATH_NAME -n ${LLMD_NS} 2>/dev/null || \
+        helm uninstall ms-$RELEASE -n ${LLMD_NS} 2>/dev/null || \
             log_warning "llm-d ModelService components not found or already uninstalled"
 
-        cd "$WVA_PROJECT"
     fi
     
     # Remove HF token secret
@@ -753,10 +760,10 @@ undeploy_llm_d_infrastructure() {
     fi
 
     log_info "Deleting llm-d cloned repository..."
-    if [ ! -d "$(dirname $WVA_PROJECT)/$LLM_D_PROJECT" ]; then
+    if [ ! -d "$WVA_PROJECT/$LLM_D_PROJECT" ]; then
         log_warning "llm-d repository directory not found, skipping deletion"
     else
-        rm -rf "$(dirname $WVA_PROJECT)/$LLM_D_PROJECT" 2>/dev/null || \
+        rm -rf "$WVA_PROJECT/$LLM_D_PROJECT" 2>/dev/null || \
             log_warning "Failed to delete llm-d repository directory"
     fi
 

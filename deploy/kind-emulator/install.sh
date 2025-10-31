@@ -284,6 +284,18 @@ apply_llm_d_infrastructure_fixes() {
     fi
 }
 
+# Kubernetes-specific Undeployment functions
+undeploy_prometheus_stack() {
+    log_info "Uninstalling kube-prometheus-stack..."
+    
+    helm uninstall kube-prometheus-stack -n $MONITORING_NAMESPACE 2>/dev/null || \
+        log_warning "Prometheus stack not found or already uninstalled"
+
+    kubectl delete secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE --ignore-not-found
+
+    log_success "Prometheus stack uninstalled"
+}
+
 #### REQUIRED FUNCTION used by deploy/install.sh ####
 delete_namespaces() {
     log_info "Deleting namespaces..."

@@ -123,20 +123,6 @@ deploy-wva-emulated-on-kind:
 	KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) DEPLOY_LLM_D=false ENVIRONMENT=kind-emulator CREATE_CLUSTER=false CLUSTER_GPU_TYPE=$(CLUSTER_GPU_TYPE) CLUSTER_NODES=$(CLUSTER_NODES) CLUSTER_GPUS=$(CLUSTER_GPUS) \
 		deploy/install.sh $(KIND_ARGS)
 
-## Deploy WVA to OpenShift cluster with specified image.
-.PHONY: deploy-wva-on-openshift
-deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster with specified image.
-	@echo "Deploying WVA to OpenShift with image: $(IMG)"
-	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=openshift ./deploy/install.sh
-
-## Deploy WVA on Kubernetes with the specified image.
-.PHONY: deploy-wva-on-k8s
-deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the specified image.
-	@echo "Deploying WVA on Kubernetes with image: $(IMG)"
-	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
-	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes ./deploy/install.sh
-
 ## Undeploy WVA and llm-d from the emulated environment on Kind.
 .PHONY: undeploy-llm-d-wva-emulated-on-kind
 undeploy-llm-d-wva-emulated-on-kind:
@@ -163,19 +149,61 @@ undeploy-wva-on-kind-delete-cluster:
 	KIND=$(KIND) KUBECTL=$(KUBECTL) DEPLOY_LLM_D=false DELETE_NAMESPACES=true ENVIRONMENT=kind-emulator \
 		deploy/install.sh $(KIND_ARGS) --undeploy --delete-cluster
 
+## Deploy llm-d and WVA to OpenShift cluster with specified image.
+.PHONY: deploy-llm-d-wva-on-openshift
+deploy-llm-d-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster with specified image.
+	@echo "Deploying WVA to OpenShift with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=openshift DEPLOY_LLM_D=true ./deploy/install.sh
+
+## Deploy WVA to OpenShift cluster with specified image.
+.PHONY: deploy-wva-on-openshift
+deploy-wva-on-openshift: manifests kustomize ## Deploy WVA to OpenShift cluster with specified image.
+	@echo "Deploying WVA to OpenShift with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=openshift DEPLOY_LLM_D=false ./deploy/install.sh
+
+## Undeploy llm-d and WVA from OpenShift.
+.PHONY: undeploy-llm-d-wva-on-openshift
+undeploy-llm-d-wva-on-openshift:
+	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from OpenShift"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		ENVIRONMENT=openshift DEPLOY_LLM_D=true deploy/install.sh --undeploy
+
 ## Undeploy WVA from OpenShift.
 .PHONY: undeploy-wva-on-openshift
 undeploy-wva-on-openshift:
-	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from OpenShift"
+	@echo ">>> Undeploying workload-variant-autoscaler from OpenShift"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		ENVIRONMENT=openshift deploy/install.sh --undeploy
+		ENVIRONMENT=openshift DEPLOY_LLM_D=false deploy/install.sh --undeploy
+
+## Deploy llm-d and WVA on Kubernetes with the specified image.
+.PHONY: deploy-llm-d-wva-on-k8s
+deploy-llm-d-wva-on-k8s: manifests kustomize ## Deploy llm-d and WVA on Kubernetes with the specified image.
+	@echo "Deploying llm-d and WVA on Kubernetes with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes DEPLOY_LLM_D=true ./deploy/install.sh
+
+## Deploy WVA on Kubernetes with the specified image.
+.PHONY: deploy-wva-on-k8s
+deploy-wva-on-k8s: manifests kustomize ## Deploy WVA on Kubernetes with the specified image.
+	@echo "Deploying WVA on Kubernetes with image: $(IMG)"
+	@echo "Target namespace: $(or $(NAMESPACE),workload-variant-autoscaler-system)"
+	NAMESPACE=$(or $(NAMESPACE),workload-variant-autoscaler-system) IMG=$(IMG) ENVIRONMENT=kubernetes DEPLOY_LLM_D=false ./deploy/install.sh
+
+## Undeploy llm-d and WVA from Kubernetes.
+.PHONY: undeploy-llm-d-wva-on-k8s
+undeploy-llm-d-wva-on-k8s:
+	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
+		ENVIRONMENT=kubernetes DEPLOY_LLM_D=true deploy/install.sh --undeploy
 
 ## Undeploy WVA from Kubernetes.
 .PHONY: undeploy-wva-on-k8s
 undeploy-wva-on-k8s:
-	@echo ">>> Undeploying llm-d and workload-variant-autoscaler from Kubernetes"
+	@echo ">>> Undeploying workload-variant-autoscaler from Kubernetes"
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) && \
-		ENVIRONMENT=kubernetes deploy/install.sh --undeploy
+		ENVIRONMENT=kubernetes DEPLOY_LLM_D=false deploy/install.sh --undeploy
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

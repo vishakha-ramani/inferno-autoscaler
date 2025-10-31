@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 #
 # Workload-Variant-Autoscaler KIND Emulator Deployment Script
-# Automated deployment of WVA with llm-d infrastructure on KIND cluster with vLLM emulator
+# Automated deployment of WVA with llm-d infrastructure on Kind cluster with llm-d-inference-sim simulator
 #
 # Prerequisites:
 # - kubectl installed and configured
 # - helm installed
-# - yq installed
 # - kind installed (for cluster creation)
 # - Docker installed and running
 #
@@ -26,6 +25,7 @@ WVA_PROJECT=${WVA_PROJECT:-$PWD}
 WELL_LIT_PATH_NAME="simulated-accelerators"
 NAMESPACE_SUFFIX="sim"
 EXAMPLE_DIR="$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"
+DEPLOY_LLM_D_INFERENCE_SIM=true
 
 # Namespaces
 LLMD_NS="llm-d-$NAMESPACE_SUFFIX"
@@ -41,9 +41,11 @@ WVA_LOG_LEVEL="debug" # WVA log level set to debug for emulated environments
 LLM_D_INFERENCE_SIM_IMG_REPO=${LLM_D_INFERENCE_SIM_IMG_REPO:-"ghcr.io/llm-d/llm-d-inference-sim"}
 LLM_D_INFERENCE_SIM_IMG_TAG=${LLM_D_INFERENCE_SIM_IMG_TAG:-"latest"}
 LLM_D_MODELSERVICE_NAME="ms-$NAMESPACE_SUFFIX-llm-d-modelservice"
+LLM_D_MODELSERVICE_VALUES="ms-$NAMESPACE_SUFFIX/values.yaml"
 
 # Model and SLO Configuration
-MODEL_ID="random"
+MODEL_ID=${MODEL_ID:-"unsloth/Meta-Llama-3.1-8B"}
+DEFAULT_MODEL_ID="random"
 ACCELERATOR_TYPE="A100"
 SLO_TPOT=24     # Target time-per-output-token SLO (in ms)
 SLO_TTFT=500  # Target time-to-first-token SLO (in ms)
@@ -299,9 +301,14 @@ delete_namespaces() {
     done
     
     log_success "Namespaces deleted"
+
+    if [ "$DELETE_CLUSTER" = true ]; then
+        delete_kind_cluster
+    fi
 }
 
-#### REQUIRED FUNCTION used by deploy/install.sh ####
+# Deletes the Kind cluster
+# Used when DELETE_CLUSTER=true by delete_namespaces()
 delete_kind_cluster() {
     log_info "Deleting KIND cluster '${CLUSTER_NAME}'..."
     

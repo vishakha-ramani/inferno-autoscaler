@@ -50,6 +50,7 @@ VLLM_EMULATOR_NAME=${VLLM_EMULATOR_NAME:-"vllm-emulator"}
 CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/client-setup"}
 GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/gateway-provider"}
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
+LLM_D_MODELSERVICE_VALUES=${LLM_D_MODELSERVICE_VALUES:-"ms-$WELL_LIT_PATH_NAME/values.yaml"}
 
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
@@ -429,20 +430,20 @@ deploy_llm_d_infrastructure() {
     
     cd $EXAMPLE_DIR
 
-    # Update model ID if different from default and not in emulator mode
-    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ] && [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "false" ]; then
+    # Update model ID if different from default
+    if [ "$MODEL_ID" != "$DEFAULT_MODEL_ID" ] ; then
         log_info "Updating deployment to use model: $MODEL_ID"
-        yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i ms-$WELL_LIT_PATH_NAME/values.yaml
+        yq eval "(.. | select(. == \"$DEFAULT_MODEL_ID\")) = \"$MODEL_ID\" | (.. | select(. == \"hf://$DEFAULT_MODEL_ID\")) = \"hf://$MODEL_ID\"" -i "$LLM_D_MODELSERVICE_VALUES"
 
         # Increase model-storage volume size
         log_info "Increasing model-storage volume size for model: $MODEL_ID"
-        yq eval '.modelArtifacts.size = "30Gi"' -i ms-$WELL_LIT_PATH_NAME/values.yaml
+        yq eval '.modelArtifacts.size = "30Gi"' -i "$LLM_D_MODELSERVICE_VALUES"
     fi
 
     # Configure llm-d-inference-simulator if needed
     if [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "true" ]; then
       log_info "Deploying llm-d-inference-simulator..."
-        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\"" -i "$EXAMPLE_DIR/ms-sim/values.yaml"
+        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\"" -i "$LLM_D_MODELSERVICE_VALUES"
     else
       log_info "Skipping llm-d-inference-simulator deployment (DEPLOY_LLM_D_INFERENCE_SIM=false)"
     fi

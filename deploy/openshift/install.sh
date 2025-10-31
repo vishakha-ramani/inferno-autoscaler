@@ -13,7 +13,8 @@ set -o pipefail  # Exit on pipe failure
 # OpenShift-specific Prometheus Configuration
 # Note: overriding defaults from common script
 #
-PROMETHEUS_BASE_URL="https://thanos-querier.openshift-monitoring.svc.cluster.local"
+PROMETHEUS_SVC_NAME="thanos-querier"
+PROMETHEUS_BASE_URL="https://$PROMETHEUS_SVC_NAME.openshift-monitoring.svc.cluster.local"
 PROMETHEUS_PORT="9091"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
 MONITORING_NAMESPACE="openshift-user-workload-monitoring"
@@ -52,6 +53,19 @@ check_specific_prerequisites() {
     log_success "All OpenShift prerequisites met"
     log_info "Connected to OpenShift as: $(oc whoami)"
     log_info "Current project: $(oc project -q)"
+}
+
+create_namespaces() {
+    log_info "Creating namespaces..."
+    
+    for ns in $WVA_NS $MONITORING_NAMESPACE $LLMD_NS; do
+        if kubectl get namespace $ns &> /dev/null; then
+            log_info "Namespace $ns already exists"
+        else
+            kubectl create namespace $ns
+            log_success "Namespace $ns created"
+        fi
+    done
 }
 
 find_thanos_url() {

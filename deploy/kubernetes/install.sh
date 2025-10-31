@@ -13,7 +13,8 @@ set -o pipefail  # Exit on pipe failure
 # Kubernetes-specific Prometheus Configuration
 # Note: overriding defaults from common script
 #
-PROMETHEUS_BASE_URL="https://kube-prometheus-stack-prometheus.$MONITORING_NAMESPACE.svc.cluster.local"
+PROMETHEUS_SVC_NAME="kube-prometheus-stack-prometheus"
+PROMETHEUS_BASE_URL="https://$PROMETHEUS_SVC_NAME.$MONITORING_NAMESPACE.svc.cluster.local"
 PROMETHEUS_PORT="9090"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
 DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-true}
@@ -45,10 +46,6 @@ deploy_wva_prerequisites() {
     # Extract Prometheus CA certificate
     log_info "Extracting Prometheus TLS certificate"
     kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
-
-    # Update Prometheus URL in configmap
-    log_info "Updating Prometheus URL in config/manager/configmap.yaml"
-    sed -i.bak "s|PROMETHEUS_BASE_URL:.*|PROMETHEUS_BASE_URL: \"$PROMETHEUS_URL\"|" config/manager/configmap.yaml
 
     if [ "$SKIP_TLS_VERIFY" = true ]; then
         log_warning "TLS verification NOT enabled: using values-dev.yaml for dev deployments - NOT FOR PRODUCTION USE"

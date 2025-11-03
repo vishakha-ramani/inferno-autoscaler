@@ -21,22 +21,7 @@ DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-"true"}
 SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"true"}
 
 check_specific_prerequisites() {
-    log_info "Checking Kubernetes-specific prerequisites..."
-    
-    local missing_tools=()
-    
-    # Check for required tools (including Kubernetes-specific ones)
-    for tool in kubectl helm; do
-        if ! command -v $tool &> /dev/null; then
-            missing_tools+=($tool)
-        fi
-    done
-    
-    if [ ${#missing_tools[@]} -ne 0 ]; then
-        log_error "Missing required tools: ${missing_tools[*]}"
-    fi
-    
-    log_success "All Kubernetes prerequisites met"
+    log_info "No Kubernetes-specific prerequisites needed other than common prerequisites"
 }
 
 # Deploy WVA prerequisites for Kubernetes

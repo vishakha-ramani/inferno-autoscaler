@@ -22,7 +22,6 @@ NC='\033[0m' # No Color
 WVA_PROJECT=${WVA_PROJECT:-$PWD}
 WELL_LIT_PATH_NAME=${WELL_LIT_PATH_NAME:-"inference-scheduling"}
 NAMESPACE_SUFFIX=${NAMESPACE_SUFFIX:-"inference-scheduler"}
-ARCH=$(uname -m)
 
 # Namespaces
 LLMD_NS=${LLMD_NS:-"llm-d-$NAMESPACE_SUFFIX"}
@@ -85,6 +84,7 @@ SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 ENVIRONMENT=${ENVIRONMENT:-"kubernetes"}
 COMPATIBLE_ENV_LIST=("kubernetes" "openshift" "kind-emulator")
 NON_EMULATED_ENV_LIST=("kubernetes" "openshift")
+REQUIRED_TOOLS=("kubectl" "helm" "helmfile" "git")
 
 # TODO: add kubernetes to these defaults to enable TLS verification when deploying to production clusters
 PRODUCTION_ENV_LIST=("openshift")
@@ -158,7 +158,6 @@ containsElement () {
   return 1
 }
 
-
 parse_args() {
   # Check for IMG environment variable (used by Make)
   if [[ -n "$IMG" ]]; then
@@ -204,7 +203,7 @@ check_prerequisites() {
     local missing_tools=()
     
     # Check for required tools
-    for tool in kubectl helm; do
+    for tool in "${REQUIRED_TOOLS[@]}"; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi
@@ -218,7 +217,6 @@ check_prerequisites() {
 
     log_success "All generic prerequisites tools met"
 }
-
 
 detect_gpu_type() {
     log_info "Detecting GPU type in cluster..."

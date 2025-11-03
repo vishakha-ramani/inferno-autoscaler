@@ -22,6 +22,9 @@ PROMETHEUS_SECRET_NAME="thanos-querier-tls"
 PROMETHEUS_SECRET_NS="openshift-monitoring"
 DEPLOY_PROMETHEUS=false  # OpenShift uses built-in monitoring stack
 
+# OpenShift-specific prerequisites
+REQUIRED_TOOLS=("oc")
+
 # TLS verification enabled by default on OpenShift
 SKIP_TLS_VERIFY=false
 VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values.yaml"
@@ -33,7 +36,7 @@ check_specific_prerequisites() {
     local missing_tools=()
     
     # Check for required tools (including OpenShift-specific ones)
-    for tool in oc kubectl helm yq; do
+    for tool in "${REQUIRED_TOOLS[@]}"; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi

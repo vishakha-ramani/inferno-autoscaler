@@ -75,6 +75,9 @@ E2E_TESTS_ENABLED=${E2E_TESTS_ENABLED:-false}
 # Undeployment flags
 DELETE_CLUSTER=${DELETE_CLUSTER:-false}
 
+# Kind-specific prerequisites
+REQUIRED_TOOLS=("kind")
+
 # Function to check Kind emulator-specific prerequisites
 # - checks for kind, kubectl and helm
 # - creates Kind cluster if CREATE_CLUSTER=true, otherwise tries to use an existing cluster
@@ -85,7 +88,7 @@ check_specific_prerequisites() {
     local missing_tools=()
     
     # Check for required tools (including Kubernetes-specific ones)
-    for tool in kubectl helm kind; do
+    for tool in "${REQUIRED_TOOLS[@]}"; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi
@@ -124,7 +127,7 @@ check_specific_prerequisites() {
     # Load WVA image into KIND cluster
     load_image
 
-    log_success "All emulated env prerequisites met"
+    log_success "All Kind emulated deployment prerequisites met"
 }
 
 # Creates Kind cluster using `setup.sh` script for GPU emulation

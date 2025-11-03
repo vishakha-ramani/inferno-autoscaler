@@ -929,7 +929,7 @@ main() {
     echo ""
 
     # Prompt for Gateway control plane installation
-    if [[ "$E2E_TESTS_ENABLED" == "true" ]]; then
+    if [[ "$E2E_TESTS_ENABLED" == "false" ]]; then
         prompt_gateway_installation
     else
         log_info "Enabling Gateway control plane installation for tests"

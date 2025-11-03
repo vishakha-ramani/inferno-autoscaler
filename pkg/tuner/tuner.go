@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/analyzer"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	kalman "github.com/llm-inferno/kalman-filter/pkg/core"
@@ -25,11 +26,12 @@ type Tuner struct {
 	env          *Environment
 }
 
-// TunedResults holds the results of parameter tuning.
+// TunedResults holds the results of parameter tuning
 type TunedResults struct {
 	ServiceParms *analyzer.ServiceParms
 	Innovation   *mat.VecDense
 	Covariance   *mat.Dense
+	NIS          float64
 }
 
 func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
@@ -44,16 +46,12 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 		return nil, fmt.Errorf("invalid environment: %s", env.String())
 	}
 
-	t := &Tuner{
-		env: env,
-	}
-
 	// create configurator
 	if c, err = NewConfigurator(configData); err != nil {
 		return nil, err
 	}
 
-	//create filter
+	// create filter
 	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.X0, c.P)
 	if err != nil {
 		return nil, err
@@ -72,12 +70,18 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 			return nil, err
 		}
 	}
+
+	// create tuner
+	t := &Tuner{
+		env:          env,
+		configurator: c,
+		filter:       f,
+	}
+
+	// assign observation function to filter
 	if err := f.SethH(t.makeObservationFunc()); err != nil {
 		return nil, err
 	}
-
-	t.configurator = c
-	t.filter = f
 
 	return t, nil
 }
@@ -90,7 +94,12 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 
 	// create a stasher and stash the current X and P
 	stasher := NewStasher(t.filter)
-	stasher.Stash()
+	if stasher == nil {
+		return nil, fmt.Errorf("failed to create stasher")
+	}
+	if err := stasher.Stash(); err != nil {
+		return nil, fmt.Errorf("failed to stash filter state: %w", err)
+	}
 
 	// prediction
 	Q := t.filter.Q
@@ -113,7 +122,9 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	// check validity of tunedResults
 	if err := t.validateTunedResults(tunedResults); err != nil {
 		// unstash to return to previous filter state
-		stasher.UnStash()
+		if err := stasher.UnStash(); err != nil {
+			return nil, fmt.Errorf("failed to unstash filter state: %w", err)
+		}
 		return nil, fmt.Errorf("tuned results validation failed: %w", err)
 	}
 
@@ -193,15 +204,15 @@ func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 
 		qa, err := analyzer.NewQueueAnalyzer(qConfig, requestData)
 		if err != nil {
-			fmt.Println(err)
-			return mat.NewVecDense(t.configurator.nX, nil)
+			logger.Log.Warn(err, "model tuner observation function: failed to create queue analyzer")
+			return nil
 		}
 
 		lambda := t.env.Lambda / 60 // convert to req per sec
 		metrics, err := qa.Analyze(lambda)
 		if err != nil {
-			fmt.Println(err)
-			return mat.NewVecDense(t.configurator.nX, nil)
+			logger.Log.Warn(err, "model tuner observation function: failed to analyze queueing model")
+			return nil
 		}
 
 		ttft := float64(metrics.AvgWaitTime + metrics.AvgPrefillTime)
@@ -262,6 +273,7 @@ func (t *Tuner) validateTunedResults(tunedResults *TunedResults) error {
 
 	// NIS = y^T * tmp
 	NIS := mat.Dot(innovation, tmp)
+	tunedResults.NIS = NIS
 
 	if NIS >= constants.DefaultMaxNIS {
 		return fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",

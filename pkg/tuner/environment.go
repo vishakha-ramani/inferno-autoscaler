@@ -7,6 +7,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// Representation of the environment in which the system operates
 type Environment struct {
 	Lambda        float32 // request arrival rate (per minute)
 	AvgInputToks  int     // average number of prompt (input) tokens per request

@@ -463,10 +463,10 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
 
-	// TODO: Create Tuner Manager
+	// Create Tuner Manager
 	r.TunerMgr = tuner.NewTunerManager()
 	r.TunerMgr.Enable()
-	logger.Log.Info("Tuner manager initialized")
+	logger.Log.Info("Tuner manager started")
 
 	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 

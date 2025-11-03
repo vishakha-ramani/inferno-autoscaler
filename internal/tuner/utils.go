@@ -4,16 +4,20 @@ import (
 	"fmt"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	tune "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/tuner"
 )
 
+// build config data from defaults, init state and slos
 func BuildTunerConfig(
 	initState []float64,
 	slos []float64,
 ) (*tune.TunerConfigData, error) {
 
-	// build config data from defaults, init state and slos
+	if len(initState) == 0 || len(slos) == 0 {
+		return nil, fmt.Errorf("initState and slos must be non-empty")
+	}
 	return &tune.TunerConfigData{
 		FilterData: getDefaultFilterData(),
 		ModelData: tune.TunerModelData{
@@ -44,9 +48,9 @@ func getDefaultPercentChange() []float64 {
 	}
 }
 
+// multiply each element in initState by multiplier and returns the new slice
 func getFactoredState(initState []float64, multiplier float64) []float64 {
 	multipliedNumbers := make([]float64, len(initState))
-	// Iterate and multiply
 	for i, num := range initState {
 		multipliedNumbers[i] = num * multiplier
 	}
@@ -57,7 +61,10 @@ func getFactoredState(initState []float64, multiplier float64) []float64 {
 // This is the adapter between the WVA collector and the Kalman filter tuner.
 func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environment {
 	// first get the request rate per min per replica
-	ratePerReplica := alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
+	var ratePerReplica float32
+	if alloc.NumReplicas > 0 {
+		ratePerReplica = alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
+	}
 	return &tune.Environment{
 		Lambda:        ratePerReplica,
 		AvgOutputToks: alloc.Load.AvgOutTokens,
@@ -99,9 +106,9 @@ func findSLOInSystemData(
 	serviceClassName string,
 ) ([]float64, error) {
 	var svcSpecs *infernoConfig.ServiceClassSpec
-	for i := range systemData.Spec.ServiceClasses.Spec {
-		if systemData.Spec.ServiceClasses.Spec[i].Name == serviceClassName {
-			svcSpecs = &systemData.Spec.ServiceClasses.Spec[i]
+	for _, spec := range systemData.Spec.ServiceClasses.Spec {
+		if spec.Name == serviceClassName {
+			svcSpecs = &spec
 			break
 		}
 	}
@@ -135,6 +142,17 @@ func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, model
 			perfData.DecodeParms.Beta = float32(tunedResults.ServiceParms.Decode.Beta)
 			perfData.PrefillParms.Gamma = float32(tunedResults.ServiceParms.Prefill.Gamma)
 			perfData.PrefillParms.Delta = float32(tunedResults.ServiceParms.Prefill.Delta)
+
+			logger.Log.Debug("Model tuner results - ",
+				"model", modelName,
+				"accelerator", accName,
+				"alpha", perfData.DecodeParms.Alpha,
+				"beta", perfData.DecodeParms.Beta,
+				"gamma", perfData.PrefillParms.Gamma,
+				"delta", perfData.PrefillParms.Delta,
+				"NIS", tunedResults.NIS,
+			)
+
 			return nil
 		}
 	}

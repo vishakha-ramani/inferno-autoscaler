@@ -36,9 +36,19 @@ import (
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
+
+// Helper function to create a properly initialized reconciler for tests
+func createTestReconciler(k8sClient client.Client) *VariantAutoscalingReconciler {
+	return &VariantAutoscalingReconciler{
+		Client:   k8sClient,
+		Scheme:   k8sClient.Scheme(),
+		TunerMgr: tuner.NewTunerManager(),
+	}
+}
 
 var _ = Describe("VariantAutoscalings Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -146,10 +156,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
@@ -165,10 +172,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 
 		It("should fail on missing serviceClass ConfigMap", func() {
 			By("Creating VariantAutoscaling without required ConfigMaps")
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			_, err := controllerReconciler.readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
 			Expect(err).To(HaveOccurred(), "Expected error when reading missing serviceClass ConfigMap")
@@ -176,10 +180,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 
 		It("should fail on missing accelerator ConfigMap", func() {
 			By("Creating VariantAutoscaling without required ConfigMaps")
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			_, err := controllerReconciler.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
 			Expect(err).To(HaveOccurred(), "Expected error when reading missing accelerator ConfigMap")
@@ -187,10 +188,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 
 		It("should fail on missing variant autoscaling optimization ConfigMap", func() {
 			By("Creating VariantAutoscaling without required ConfigMaps")
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			_, err := controllerReconciler.readOptimizationConfig(ctx)
 			Expect(err).To(HaveOccurred(), "Expected error when reading missing variant autoscaling optimization ConfigMap")
@@ -251,10 +249,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 		})
 
 		It("should return empty on variant autoscaling optimization ConfigMap with missing interval value", func() {
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			// delete correct configMap
 			configMap := &v1.ConfigMap{
@@ -288,10 +283,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 		})
 
 		It("should return empty on variant autoscaling optimization ConfigMap with missing prometheus base URL", func() {
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			// delete correct configMap
 			configMap := &v1.ConfigMap{
@@ -325,10 +317,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 		})
 
 		It("should return error on VA optimization ConfigMap with missing prometheus base URL and no env variable", func() {
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			// delete correct configMap
 			configMap := &v1.ConfigMap{
@@ -361,10 +350,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 		})
 
 		It("should return default values on variant autoscaling optimization ConfigMap with missing TLS values", func() {
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
 
 			// delete correct configMap
 			configMap := &v1.ConfigMap{
@@ -736,11 +722,8 @@ data:
 				QueryErrors: map[string]error{},
 			}
 
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client:  k8sClient,
-				Scheme:  k8sClient.Scheme(),
-				PromAPI: mockPromAPI,
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
+			controllerReconciler.PromAPI = mockPromAPI
 
 			By("Reading the required configmaps")
 			accMap, err := controllerReconciler.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
@@ -791,11 +774,8 @@ data:
 				QueryErrors:  map[string]error{},
 			}
 
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client:  k8sClient,
-				Scheme:  k8sClient.Scheme(),
-				PromAPI: mockPromAPI,
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
+			controllerReconciler.PromAPI = mockPromAPI
 
 			By("Reading the required configmaps")
 			accMap, err := controllerReconciler.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
@@ -844,11 +824,8 @@ data:
 				QueryErrors: map[string]error{},
 			}
 
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client:  k8sClient,
-				Scheme:  k8sClient.Scheme(),
-				PromAPI: mockPromAPI,
-			}
+			controllerReconciler := createTestReconciler(k8sClient)
+			controllerReconciler.PromAPI = mockPromAPI
 
 			By("Performing a full reconciliation")
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})

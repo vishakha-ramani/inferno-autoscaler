@@ -29,10 +29,10 @@ wva:
     tls:
       insecureSkipVerify: true   # Development: true, Production: false
       caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
-    caCert: |  # Uncomment and provide your CA certificate
-      -----BEGIN CERTIFICATE-----
-      YOUR_CA_CERTIFICATE_HERE
-      -----END CERTIFICATE-----
+    # caCert: |  # Uncomment and provide your CA certificate
+    #   -----BEGIN CERTIFICATE-----
+    #   YOUR_CA_CERTIFICATE_HERE
+    #   -----END CERTIFICATE-----
 
 llmd:
   namespace: llm-d-inference-scheduling

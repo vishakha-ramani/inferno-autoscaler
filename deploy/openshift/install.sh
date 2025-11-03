@@ -72,15 +72,30 @@ create_namespaces() {
 
 find_thanos_url() {
     log_info "Finding Thanos querier URL..."
-    
-    local thanos_svc=$(kubectl get svc -n $PROMETHEUS_SECRET_NS thanos-querier -o jsonpath='{.metadata.name}' 2>/dev/null || echo "")
-    
+
+    local thanos_svc=$(kubectl get svc -n $PROMETHEUS_SECRET_NS $PROMETHEUS_SVC_NAME -o jsonpath='{.metadata.name}' 2>/dev/null || echo "")
+
     # Set PROMETHEUS_URL if Thanos service is found
     if [ -n "$thanos_svc" ]; then
-        PROMETHEUS_URL="${PROMETHEUS_BASE_URL}:${PROMETHEUS_PORT}"
-        log_success "Found Thanos querier: $PROMETHEUS_URL"
+        # Extract the actual service name and port from the service
+        local svc_name=$(kubectl get svc -n $PROMETHEUS_SECRET_NS $PROMETHEUS_SVC_NAME -o jsonpath='{.metadata.name}' 2>/dev/null)
+        local svc_port=$(kubectl get svc -n $PROMETHEUS_SECRET_NS $PROMETHEUS_SVC_NAME -o jsonpath='{.spec.ports[?(@.name=="web")].port}' 2>/dev/null)
+        
+        # Fallback to default port if not found or try first port
+        if [ -z "$svc_port" ]; then
+            svc_port=$(kubectl get svc -n $PROMETHEUS_SECRET_NS $PROMETHEUS_SVC_NAME -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
+        fi
+
+        if [ -z "$svc_port" ]; then
+            svc_port="9091"
+            log_warning "Could not extract port from service, using default: $svc_port"
+        fi
+        
+        # Construct the full URL
+        PROMETHEUS_URL="https://${svc_name}.${PROMETHEUS_SECRET_NS}.svc.cluster.local:${svc_port}"
+        log_success "Found Thanos querier: $PROMETHEUS_URL (port: $svc_port)"
     else
-        log_error "Thanos querier service not found in openshift-monitoring namespace"
+        log_error "Thanos querier service not found in openshift-monitoring namespace - using default URL: $PROMETHEUS_URL"
     fi
     
     export PROMETHEUS_URL

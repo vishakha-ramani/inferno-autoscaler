@@ -12,10 +12,14 @@ import (
 )
 
 // TunerManager manages Kalman filter tuners for all VariantAutoscalings.
+// Assumption: Server environments are assumed to be prefill and decode.
 type TunerManager struct {
-	tuners  map[string]*tune.Tuner
-	mu      sync.RWMutex
-	enabled bool // feature flag
+	// Map of server (variant) name to its tuner
+	tuners map[string]*tune.Tuner
+	// Mutex for concurrent access to tuners map
+	mu sync.RWMutex
+	// whether tuner manager is enabled
+	enabled bool
 }
 
 func NewTunerManager() *TunerManager {
@@ -37,7 +41,7 @@ func (tm *TunerManager) Disable() {
 	tm.enabled = false
 }
 
-// TuneModelPerfParams tunes performance model parameters for all servers in SystemData.
+// TuneModelPerfParams tunes performance model parameters for all servers in SystemData
 func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData) error {
 	// Check if tuning is disabled
 	if !tm.enabled {
@@ -50,7 +54,7 @@ func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData
 		server := &systemData.Spec.Servers.Spec[i]
 		if err := tm.tuneServer(systemData, server); err != nil {
 			logger.Log.Warn("Failed to tune server, keeping original params",
-				"server", systemData.Spec.Servers.Spec[i].Name,
+				"server", server.Name,
 				"error", err)
 			continue
 		}
@@ -129,16 +133,14 @@ func (tm *TunerManager) getOrCreateTuner(
 	initState, err := findInitStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find init state for model accelerator pair %s, %s: %w",
-			server.Model, server.CurrentAlloc.Accelerator,
-			err)
+			server.Model, server.CurrentAlloc.Accelerator, err)
 	}
 
 	// Find SLO targets from system data
 	slos, err := findSLOInSystemData(systemData, server.Model, server.Class)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find SLO for model class pair %s, %s: %w",
-			server.Model, server.Class,
-			err)
+			server.Model, server.Class, err)
 	}
 
 	// build tuner config from initial state and slo

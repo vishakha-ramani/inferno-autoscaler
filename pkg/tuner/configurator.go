@@ -31,6 +31,7 @@ type TunerModelData struct {
 	ExpectedObservations []float64 `json:"expectedObservations"` // expected values of observations
 }
 
+// Configurator for the model tuner
 type Configurator struct {
 	// dimensions
 	nX int

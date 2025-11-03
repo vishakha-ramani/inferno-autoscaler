@@ -3,6 +3,7 @@ package tuner
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -19,6 +20,8 @@ type Environment struct {
 
 func (e *Environment) Valid() bool {
 	return e.Lambda > 0 &&
+		!math.IsInf(float64(e.Lambda), 0) &&
+		!math.IsNaN(float64(e.Lambda)) &&
 		e.AvgInputToks > 0 &&
 		e.AvgOutputToks > 0 &&
 		e.MaxBatchSize > 0

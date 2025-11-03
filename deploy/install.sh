@@ -887,6 +887,7 @@ main() {
 
     # Set TLS verification and logging level based on environment
     set_tls_verification
+    set_wva_logging_level
 
     if [[ "$CLUSTER_TYPE" == "kind" ]]; then
         log_info "Kind cluster detected - setting environment to kind-emulated"
@@ -928,7 +929,12 @@ main() {
     echo ""
 
     # Prompt for Gateway control plane installation
-    prompt_gateway_installation
+    if [[ "$E2E_TESTS_ENABLED" == "true" ]]; then
+        prompt_gateway_installation
+    else
+        log_info "Enabling Gateway control plane installation for tests"
+        export INSTALL_GATEWAY_CTRLPLANE="true"
+    fi
 
     # Create namespaces
     create_namespaces

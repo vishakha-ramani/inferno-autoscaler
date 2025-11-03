@@ -53,7 +53,12 @@ LLM_D_MODELSERVICE_VALUES=${LLM_D_MODELSERVICE_VALUES:-"$EXAMPLE_DIR/ms-$WELL_LI
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
 BENCHMARK_MODE=${BENCHMARK_MODE:-"true"} # if true, updates to Istio config for benchmark
-INSTALL_GATEWAY_CTRLPLANE=${INSTALL_GATEWAY_CTRLPLANE:-"false"} # if true, installs gateway control plane providers - defaults to true for emulated clusters
+# Track if INSTALL_GATEWAY_CTRLPLANE was explicitly set via environment variable
+if [ -n "${INSTALL_GATEWAY_CTRLPLANE:-}" ]; then
+    INSTALL_GATEWAY_CTRLPLANE_SET="true"
+else
+    INSTALL_GATEWAY_CTRLPLANE="false"
+fi
 
 # Model and SLO Configuration
 DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-"Qwen/Qwen3-0.6B"}
@@ -75,11 +80,14 @@ DEPLOY_VA=${DEPLOY_VA:-true}
 DEPLOY_HPA=${DEPLOY_HPA:-true}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
 
-# Script directories
+# Environment-related variables
 SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 ENVIRONMENT=${ENVIRONMENT:-"kubernetes"}
 COMPATIBLE_ENV_LIST=("kubernetes" "openshift" "kind-emulator")
 NON_EMULATED_ENV_LIST=("kubernetes" "openshift")
+
+# TODO: add kubernetes to these defaults to enable TLS verification when deploying to production clusters
+PRODUCTION_ENV_LIST=("openshift")
 
 # Undeployment flags
 UNDEPLOY=${UNDEPLOY:-false}
@@ -120,6 +128,7 @@ Options:
 Environment Variables:
   IMG                          Container image to use for the WVA (alternative to -i flag)
   HF_TOKEN                     HuggingFace token for model access (required for llm-d deployment)
+  INSTALL_GATEWAY_CTRLPLANE    Install Gateway control plane (default: prompt user, can be set to "true"/"false")
   DEPLOY_PROMETHEUS            Deploy Prometheus stack (default: true)
   DEPLOY_WVA                   Deploy WVA controller (default: true)
   DEPLOY_LLM_D                 Deploy llm-d infrastructure (default: true)
@@ -138,12 +147,6 @@ Examples:
   
   # Deploy with custom model and accelerator
   $(basename "$0") -m unsloth/Meta-Llama-3.1-8B -a A100
-  
-  # Undeploy all components (keep namespaces)
-  $(basename "$0") --undeploy
-  
-  # Undeploy all components and delete namespaces
-  $(basename "$0") --undeploy --delete-namespaces
 EOF
 }
 
@@ -269,44 +272,75 @@ detect_gpu_type() {
     log_info "Using detected accelerator type: $ACCELERATOR_TYPE"
 }
 
-detect_cluster_environment() {
-    log_info "Detecting cluster environment..."
+prompt_gateway_installation() {
+    echo ""
+    log_info "Gateway Control Plane Configuration"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "The Gateway control plane (${GATEWAY_PROVIDER}) is required to serve requests."
+    echo "You can either:"
+    echo "  1. Install the Gateway control plane (recommended for new clusters or emulated clusters)"
+    echo "  2. Use an existing Gateway control plane in your cluster (recommended for production clusters)"
+    echo ""
     
-    # Auto-detect cluster type if not specified
-    if [ "$CLUSTER_TYPE" = "auto" ]; then
-        # Check if this is a Kind cluster
-        if kubectl config current-context | grep -q "kind"; then
-            CLUSTER_TYPE="kind"
-            log_info "Detected Kind cluster"
-        elif kubectl get nodes -o json | jq -r '.items[].metadata.labels["kubernetes.io/hostname"]' | grep -q "kind"; then
-            CLUSTER_TYPE="kind"
-            log_info "Detected Kind cluster (by node hostname)"
-        else
-            CLUSTER_TYPE="production"
-            log_info "Detected production cluster"
-        fi
-    fi
+    while true; do
+        read -p "Do you want to install the Gateway control plane? (y/n): " -r answer
+        case $answer in
+            [Yy]* )
+                INSTALL_GATEWAY_CTRLPLANE="true"
+                log_success "Will install Gateway control plane ($GATEWAY_PROVIDER) when deploying llm-d"
+                break
+                ;;
+            [Nn]* )
+                INSTALL_GATEWAY_CTRLPLANE="false"
+                log_info "Will attempt to use existing Gateway control plane when deploying llm-d"
+                break
+                ;;
+            * )
+                echo "Please answer y (yes) or n (no)."
+                ;;
+        esac
+    done
+    
+    export INSTALL_GATEWAY_CTRLPLANE
+    echo ""
+}
+
+set_tls_verification() {
+    log_info "Setting TLS verification..."
     
     # Auto-detect TLS verification setting if not specified
-    if [ "$SKIP_TLS_VERIFY" = "auto" ]; then
-        case "$CLUSTER_TYPE" in
-            "kind")
+    if ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}"; then
+            SKIP_TLS_VERIFY="true"
+            log_info "Emulated environment detected - enabling TLS skip verification for self-signed certificates"
+    else
+        case "$ENVIRONMENT" in
+            "kubernetes")
+                # TODO: change to false when Kubernetes support for TLS verification is enabled
                 SKIP_TLS_VERIFY="true"
-                log_info "Kind cluster detected - enabling TLS skip verification for self-signed certificates"
+                log_info "Kubernetes cluster - enabling TLS skip verification for self-signed certificates"
                 ;;
-            "production")
+            "openshift")
                 SKIP_TLS_VERIFY="false"
-                log_info "Production cluster detected - enabling strict TLS verification"
+                log_warning "OpenShift cluster - enabling strict TLS verification"
                 ;;
             *)
-                SKIP_TLS_VERIFY="false"
-                log_warning "Unknown cluster type - defaulting to strict TLS verification"
+                SKIP_TLS_VERIFY="true"
+                log_warning "Unknown environment - enabling TLS skip verification for self-signed certificates"
                 ;;
         esac
     fi
+
+    export SKIP_TLS_VERIFY
+    
+    log_success "Successfully set TLS verification to: $SKIP_TLS_VERIFY"
+}
+
+set_wva_logging_level() {
+    log_info "Setting WVA logging level..."
     
     # Set logging level based on environment
-    if [ "$CLUSTER_TYPE" = "kind" ]; then
+    if ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}"; then
         WVA_LOG_LEVEL="debug"
         log_info "Development environment - using debug logging"
     else
@@ -314,14 +348,8 @@ detect_cluster_environment() {
         log_info "Production environment - using info logging"
     fi
     
-    export CLUSTER_TYPE
-    export SKIP_TLS_VERIFY
     export WVA_LOG_LEVEL
-    
-    log_success "Environment detection complete:"
-    echo "    Cluster Type:        $CLUSTER_TYPE"
-    echo "    Skip TLS Verify:     $SKIP_TLS_VERIFY"
-    echo "    Log Level:           $WVA_LOG_LEVEL"
+    log_success "WVA logging level set to: $WVA_LOG_LEVEL"
     echo ""
 }
 
@@ -683,7 +711,7 @@ print_summary() {
     echo ""
     echo "• Check if metrics are being scraped by Prometheus:"
     echo "  kubectl port-forward -n $MONITORING_NAMESPACE svc/${PROMETHEUS_SVC_NAME} ${PROMETHEUS_PORT}:${PROMETHEUS_PORT}"
-    echo "  # Then visit https://localhost:${PROMETHEUS_PORT} and query: vllm:request_success_total"
+    echo "  # Then visit https://localhost:${PROMETHEUS_PORT} and query: vllm:num_requests_running"
     echo ""
     echo "• Check Prometheus Adapter logs:"
     echo "  kubectl logs -n $MONITORING_NAMESPACE deployment/prometheus-adapter"
@@ -788,7 +816,7 @@ cleanup() {
     fi
     
     # Delete namespaces if requested
-    if [ "$DELETE_NAMESPACES" = "true" ]; then
+    if [ "$DELETE_NAMESPACES" = "true" ] || [ "$DELETE_CLUSTER" = "true" ]; then
         delete_namespaces
     else
         log_info "Keeping namespaces (use --delete-namespaces or set DELETE_NAMESPACES=true to remove)"
@@ -857,8 +885,8 @@ main() {
         check_prerequisites
     fi
 
-    # Detect cluster environment
-    detect_cluster_environment
+    # Set TLS verification and logging level based on environment
+    set_tls_verification
 
     if [[ "$CLUSTER_TYPE" == "kind" ]]; then
         log_info "Kind cluster detected - setting environment to kind-emulated"
@@ -898,6 +926,9 @@ main() {
     echo "    Model:                $MODEL_ID"
     echo "    Accelerator:          $ACCELERATOR_TYPE"
     echo ""
+
+    # Prompt for Gateway control plane installation
+    prompt_gateway_installation
 
     # Create namespaces
     create_namespaces

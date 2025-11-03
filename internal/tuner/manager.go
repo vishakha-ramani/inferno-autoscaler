@@ -39,6 +39,12 @@ func (tm *TunerManager) Disable() {
 
 // TuneModelPerfParams tunes performance model parameters for all servers in SystemData.
 func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData) error {
+	// Check if tuning is disabled
+	if !tm.enabled {
+		logger.Log.Debug("Tuning is disabled, skipping parameter tuning")
+		return nil
+	}
+
 	// tune model tuner for each server
 	for i := range systemData.Spec.Servers.Spec {
 		server := &systemData.Spec.Servers.Spec[i]

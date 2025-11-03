@@ -78,6 +78,7 @@ DEPLOY_PROMETHEUS_ADAPTER=${DEPLOY_PROMETHEUS_ADAPTER:-true}
 DEPLOY_VA=${DEPLOY_VA:-true}
 DEPLOY_HPA=${DEPLOY_HPA:-true}
 SKIP_CHECKS=${SKIP_CHECKS:-false}
+E2E_TESTS_ENABLED=${E2E_TESTS_ENABLED:-false}
 
 # Environment-related variables
 SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
@@ -400,8 +401,15 @@ deploy_llm_d_infrastructure() {
         log_warning "$LLM_D_PROJECT directory already exists, skipping clone"
     fi
     
-    # Check for HF_TOKEN (use dummy for emulator)
-    export HF_TOKEN=${HF_TOKEN:-"dummy-token"}
+    # Check for HF_TOKEN (use dummy for emulated deployments)
+    if [ -z "$HF_TOKEN" ]; then
+        if ! containsElement "$ENVIRONMENT" "${NON_EMULATED_ENV_LIST[@]}"; then
+            log_warning "HF_TOKEN not set - using dummy token for emulated deployment"
+            export HF_TOKEN="dummy-token"
+        else 
+            log_error "HF_TOKEN is required for non-emulated deployments. Please set HF_TOKEN and try again."
+        fi
+    fi
     
     # Create HF token secret
     log_info "Creating HuggingFace token secret"

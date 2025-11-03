@@ -848,4 +848,163 @@ data:
 			}
 		})
 	})
+
+	Context("When the model tuner is enabled", func() {
+		const resourceName = "tuner-test-resource"
+		var typeNamespacedName = types.NamespacedName{
+			Name:      resourceName,
+			Namespace: "default",
+		}
+
+		BeforeEach(func() {
+			logger.Log = zap.NewNop().Sugar()
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workload-variant-autoscaler-system",
+				},
+			}
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
+
+			By("creating the required configmaps")
+			configMap := testutils.CreateServiceClassConfigMap(ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
+
+			configMap = testutils.CreateAcceleratorUnitCostConfigMap(ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
+
+			configMap = testutils.CreateVariantAutoscalingConfigMap(configMapName, ns.Name)
+			Expect(k8sClient.Create(ctx, configMap)).NotTo(HaveOccurred())
+
+			By("creating the custom resource for tuner testing")
+			resource := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ModelID: "default/default",
+					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
+						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
+							{
+								Acc:      "A100",
+								AccCount: 1,
+								PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
+									DecodeParms:  map[string]string{"alpha": "8.5", "beta": "2.1"},
+									PrefillParms: map[string]string{"gamma": "5.0", "delta": "0.11"},
+								},
+								MaxBatchSize: 4,
+							},
+						},
+					},
+					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
+						Name: "premium",
+						Key:  "default/default",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			By("Cleanup the VariantAutoscaling resource")
+			resource := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("Deleting the configmap resources")
+			configMap := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-classes-config",
+					Namespace: "workload-variant-autoscaler-system",
+				},
+			}
+			err = k8sClient.Delete(ctx, configMap)
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+
+			configMap = &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "accelerator-unit-costs",
+					Namespace: "workload-variant-autoscaler-system",
+				},
+			}
+			err = k8sClient.Delete(ctx, configMap)
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+
+			configMap = &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: configMapNamespace,
+				},
+			}
+			err = k8sClient.Delete(ctx, configMap)
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+		})
+
+		It("should enable and use tuner manager during reconciliation", func() {
+			By("Setting up reconciler with tuner enabled")
+			controllerReconciler := createTestReconciler(k8sClient)
+			controllerReconciler.TunerMgr.Enable()
+
+			By("Verifying tuner manager is enabled")
+			Expect(controllerReconciler.TunerMgr).NotTo(BeNil(), "TunerManager should be initialized")
+
+			By("Reconciling should work with tuner enabled")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should work with tuner in either enable or disable state", func() {
+			By("Setting up reconciler and testing enable/disable")
+			controllerReconciler := createTestReconciler(k8sClient)
+
+			By("Disabling tuner")
+			controllerReconciler.TunerMgr.Disable()
+
+			By("Reconciling should work with tuner disabled")
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Enabling tuner")
+			controllerReconciler.TunerMgr.Enable()
+
+			By("Reconciling should work with tuner enabled")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle tuner operations without crashing", func() {
+			By("Setting up reconciler with tuner enabled")
+			controllerReconciler := createTestReconciler(k8sClient)
+			controllerReconciler.TunerMgr.Enable()
+
+			By("Performing multiple reconciliations")
+			for i := 0; i < 3; i++ {
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("Getting the VariantAutoscaling resource for tuner removal")
+			var va llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+			err := k8sClient.Get(ctx, typeNamespacedName, &va)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Removing tuners for the resource")
+			controllerReconciler.TunerMgr.RemoveTuners([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va})
+
+			By("Reconciliation should still work after tuner removal")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })

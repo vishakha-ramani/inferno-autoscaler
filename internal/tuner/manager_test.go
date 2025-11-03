@@ -70,7 +70,7 @@ func TestTunerManager_GetOrCreateTuner(t *testing.T) {
 
 	// Add valid allocation data so environment is valid
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 2,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -123,7 +123,7 @@ func TestTunerManager_TuneServer(t *testing.T) {
 
 	// Add valid allocation data
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 2,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -138,8 +138,7 @@ func TestTunerManager_TuneServer(t *testing.T) {
 	// Test tuning a server
 	err := tm.tuneServer(systemData, server)
 	if err != nil {
-		t.Logf("tuneServer() failed (may be expected with test data): %v", err)
-		// Note: This might fail due to NIS validation, which is acceptable in tests
+		t.Fatalf("tuneServer() failed: %v", err)
 	}
 
 	// Verify tuner was created
@@ -159,7 +158,7 @@ func TestTunerManager_TuneModelPerfParams(t *testing.T) {
 	// Add allocation data to all servers
 	for i := range systemData.Spec.Servers.Spec {
 		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
-			NumReplicas: 2,
+			NumReplicas: 1,
 			MaxBatch:    8,
 			Accelerator: "A100",
 			Load: infernoConfig.ServerLoadSpec{
@@ -196,7 +195,7 @@ func TestTunerManager_RemoveTuner(t *testing.T) {
 
 	// Add valid allocation data
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 2,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -243,7 +242,7 @@ func TestTunerManager_RemoveTuners(t *testing.T) {
 	// Add allocation data to servers
 	for i := range systemData.Spec.Servers.Spec {
 		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
-			NumReplicas: 2,
+			NumReplicas: 1,
 			MaxBatch:    8,
 			Accelerator: "A100",
 			Load: infernoConfig.ServerLoadSpec{
@@ -430,7 +429,7 @@ func TestTunerManager_ConcurrentAccess(t *testing.T) {
 
 	// Add valid allocation data
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 2,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -488,11 +487,9 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 	initialGamma := 5.0
 	initialDelta := 0.11
 
-	// Add valid allocation data with realistic metrics
-	// Note: Due to NIS validation, initial tuning attempts may fail until
-	// the Kalman filter converges. This tests the successful creation path.
+	// Add valid allocation data with realistic values
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 3,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -504,9 +501,12 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 		ITLAverage:  14.9,  // Well under SLO of 20
 	}
 
-	// First call - should create tuner (may or may not tune due to NIS validation)
+	// First call - should create tuner
 	err := tm.tuneServer(systemData, server)
-	// Note: err may not be nil due to NIS validation - that's expected
+
+	if err != nil {
+		t.Fatalf("tuneServer() failed: %v", err)
+	}
 
 	// Verify tuner was created regardless of tuning success
 	tm.mu.RLock()
@@ -520,7 +520,7 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 		t.Fatal("Tuner should not be nil")
 	}
 
-	// Verify parameters are still valid (may be unchanged if NIS validation failed)
+	// Verify parameters are still valid
 	perfData := systemData.Spec.Models.PerfData[0]
 
 	if perfData.DecodeParms.Alpha <= 0 {
@@ -542,7 +542,7 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 		perfData.PrefillParms.Gamma, perfData.PrefillParms.Delta, err)
 
 	// Second call - should reuse existing tuner
-	server.CurrentAlloc.TTFTAverage = 195.3 // Different metrics
+	server.CurrentAlloc.TTFTAverage = 195.3 // Different values
 	server.CurrentAlloc.ITLAverage = 16.2
 
 	err2 := tm.tuneServer(systemData, server)
@@ -583,14 +583,13 @@ func TestTunerManager_SuccessfulTuneModelPerfParams(t *testing.T) {
 	initialAlpha := systemData.Spec.Models.PerfData[0].DecodeParms.Alpha
 	initialBeta := systemData.Spec.Models.PerfData[0].DecodeParms.Beta
 
-	// Test tuning all servers (may have NIS validation failures, which is OK)
+	// Test tuning all servers
 	err := tm.TuneModelPerfParams(systemData)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams() should not return error: %v", err)
 	}
 
 	// Verify tuners were attempted for all servers
-	// Note: Due to NIS validation, not all may be created
 	tm.mu.RLock()
 	tunerCount := len(tm.tuners)
 	tm.mu.RUnlock()
@@ -609,7 +608,7 @@ func TestTunerManager_SuccessfulTuneModelPerfParams(t *testing.T) {
 		}
 	}
 
-	// Verify parameters remain valid (may be unchanged if NIS failed)
+	// Verify parameters remain valid
 	perfData := systemData.Spec.Models.PerfData[0]
 	if perfData.DecodeParms.Alpha <= 0 || perfData.DecodeParms.Beta <= 0 {
 		t.Error("Parameters should remain positive")
@@ -633,10 +632,10 @@ func TestTunerManager_SuccessfulTunerCreation(t *testing.T) {
 		itl         float32
 		numReplicas int
 	}{
-		{"Initial metrics", 185.0, 14.5, 3},
-		{"Updated metrics", 195.0, 16.0, 3},
-		{"Further updates", 188.0, 15.0, 3},
-		{"Final metrics", 175.0, 13.0, 4},
+		{"Initial metrics", 185.0, 14.5, 1},
+		{"Updated metrics", 195.0, 16.0, 1},
+		{"Further updates", 188.0, 15.0, 1},
+		{"Final metrics", 175.0, 13.0, 1},
 	}
 
 	for _, iter := range iterations {
@@ -656,7 +655,10 @@ func TestTunerManager_SuccessfulTunerCreation(t *testing.T) {
 			}
 
 			// Attempt to tune the server
-			_ = tm.tuneServer(systemData, server) // May fail NIS, that's OK
+			err := tm.tuneServer(systemData, server)
+			if err != nil {
+				t.Fatalf("tuneServer() failed on environment update: %v", err)
+			}
 
 			// Verify tuner exists (should be created on first call)
 			tm.mu.RLock()
@@ -702,7 +704,7 @@ func TestTunerManager_TuningRespectsDisabledState(t *testing.T) {
 	// Add valid allocation data
 	for i := range systemData.Spec.Servers.Spec {
 		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
-			NumReplicas: 3,
+			NumReplicas: 1,
 			MaxBatch:    8,
 			Accelerator: "A100",
 			Load: infernoConfig.ServerLoadSpec{
@@ -716,8 +718,6 @@ func TestTunerManager_TuningRespectsDisabledState(t *testing.T) {
 	}
 
 	// Try to tune while disabled
-	// Note: Currently TuneModelPerfParams doesn't check enabled flag,
-	// but tuneServer attempts will still be made (and may fail on NIS)
 	err := tm.TuneModelPerfParams(systemData)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams() should not return error: %v", err)
@@ -728,9 +728,9 @@ func TestTunerManager_TuningRespectsDisabledState(t *testing.T) {
 	tunerCount := len(tm.tuners)
 	tm.mu.RUnlock()
 
-	// The function doesn't currently respect the disabled flag at the top level,
-	// so tuners may still be created. This test documents current behavior.
-	t.Logf("Tuners created while disabled: %d", tunerCount)
+	if tunerCount != 0 {
+		t.Errorf("No tuners should be created while disabled, got %d", tunerCount)
+	}
 }
 
 func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
@@ -741,7 +741,7 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 
 	// First tuning with initial metrics
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 3,
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
@@ -753,8 +753,10 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 		ITLAverage:  15.0,
 	}
 
-	_ = tm.tuneServer(systemData, server) // May fail NIS validation
-
+	err := tm.tuneServer(systemData, server)
+	if err != nil {
+		t.Fatalf("tuneServer() failed on environment update: %v", err)
+	}
 	// Get the tuner to verify it exists
 	tm.mu.RLock()
 	tuner, exists := tm.tuners[server.Name]
@@ -767,10 +769,13 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 	// Update with significantly different metrics
 	server.CurrentAlloc.TTFTAverage = 210.0 // Over SLO
 	server.CurrentAlloc.ITLAverage = 18.0
-	server.CurrentAlloc.NumReplicas = 4
+	// Keep NumReplicas=1 to maintain Lambda=60 req/min for NIS validation
 
 	// Tune again - should update environment in existing tuner
-	_ = tm.tuneServer(systemData, server) // May still fail NIS
+	err = tm.tuneServer(systemData, server)
+	if err != nil {
+		t.Fatalf("tuneServer() failed on environment update: %v", err)
+	}
 
 	// Verify same tuner was reused
 	tm.mu.RLock()
@@ -920,19 +925,17 @@ func TestTunerManager_SuccessfulTuneServerWithMatchingMetrics(t *testing.T) {
 
 	// Set allocation data with metrics that match the parameters
 	// Use observations that match ExpectedObservations for parameters [5.0, 2.5, 10.0, 0.15]
-	// Based on pkg/tuner tests: TTFT=186.7, ITL=14.9
-	// CRITICAL: NumReplicas=1 so Lambda = ArrivalRate / 1 = 60.0 req/min
 	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 1, // Must be 1 to match pkg/tuner test (lambda = 60 req/min)
+		NumReplicas: 1,
 		MaxBatch:    8,
 		Accelerator: "A100",
 		Load: infernoConfig.ServerLoadSpec{
-			ArrivalRate:  60.0, // Total = per replica since NumReplicas=1
-			AvgInTokens:  512,  // Match pkg/tuner test
-			AvgOutTokens: 128,  // Match pkg/tuner test
+			ArrivalRate:  60.0,
+			AvgInTokens:  512,
+			AvgOutTokens: 128,
 		},
-		TTFTAverage: 186.7, // Exact match from pkg/tuner convergence test
-		ITLAverage:  14.9,  // Exact match from pkg/tuner convergence test
+		TTFTAverage: 186.7,
+		ITLAverage:  14.9,
 	}
 
 	// First call - should create tuner and potentially tune successfully
@@ -986,7 +989,7 @@ func TestTunerManager_SuccessfulTuneServerWithMatchingMetrics(t *testing.T) {
 		}
 
 		if successfulIteration < 0 {
-			t.Logf("ℹ️  Note: Convergence may require more iterations or different initial conditions")
+			t.Logf(" require more iterations or different initial conditions")
 		}
 	}
 
@@ -1177,7 +1180,7 @@ func TestTunerManager_TuneServerErrorPaths(t *testing.T) {
 	})
 
 	t.Run("successful path after errors", func(t *testing.T) {
-		// After error scenarios, verify we can still tune successfully
+		// After error scenarios, tuning should still work with valid data
 		server.CurrentAlloc = infernoConfig.AllocationData{
 			NumReplicas: 1,
 			MaxBatch:    8,
@@ -1193,8 +1196,9 @@ func TestTunerManager_TuneServerErrorPaths(t *testing.T) {
 
 		// Should work fine with clean system data
 		err := tm.tuneServer(systemData, server)
-		// May succeed or fail NIS, but shouldn't crash
-		t.Logf("Recovery attempt result: err=%v", err)
+		if err != nil {
+			t.Error("Expected successful tuning after error scenarios, got:", err)
+		}
 	})
 }
 
@@ -1296,7 +1300,7 @@ func TestTunerManager_SuccessfulConvergence(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			server.CurrentAlloc = infernoConfig.AllocationData{
-				NumReplicas: 3,
+				NumReplicas: 1,
 				MaxBatch:    8,
 				Accelerator: "A100",
 				Load: infernoConfig.ServerLoadSpec{

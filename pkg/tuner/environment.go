@@ -24,7 +24,9 @@ func (e *Environment) Valid() bool {
 		!math.IsNaN(float64(e.Lambda)) &&
 		e.AvgInputToks > 0 &&
 		e.AvgOutputToks > 0 &&
-		e.MaxBatchSize > 0
+		e.MaxBatchSize > 0 &&
+		e.AvgTTFT > 0 &&
+		e.AvgITL > 0
 }
 
 func (e *Environment) GetObservations() *mat.VecDense {

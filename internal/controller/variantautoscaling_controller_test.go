@@ -991,20 +991,6 @@ data:
 				})
 				Expect(err).NotTo(HaveOccurred())
 			}
-
-			By("Getting the VariantAutoscaling resource for tuner removal")
-			var va llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-			err := k8sClient.Get(ctx, typeNamespacedName, &va)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Removing tuners for the resource")
-			controllerReconciler.TunerMgr.RemoveTuners([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va})
-
-			By("Reconciliation should still work after tuner removal")
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

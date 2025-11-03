@@ -6,10 +6,8 @@ import (
 
 	"go.uber.org/zap"
 
-	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Helper to initialize logger for tests
@@ -185,107 +183,6 @@ func TestTunerManager_TuneModelPerfParams(t *testing.T) {
 	expectedCount := len(systemData.Spec.Servers.Spec)
 	if tunerCount != expectedCount {
 		t.Errorf("Expected %d tuners, got %d", expectedCount, tunerCount)
-	}
-}
-
-func TestTunerManager_RemoveTuner(t *testing.T) {
-	tm := NewTunerManager()
-	systemData := createTestSystemData()
-	server := &systemData.Spec.Servers.Spec[0]
-
-	// Add valid allocation data
-	server.CurrentAlloc = infernoConfig.AllocationData{
-		NumReplicas: 1,
-		MaxBatch:    8,
-		Accelerator: "A100",
-		Load: infernoConfig.ServerLoadSpec{
-			ArrivalRate:  60.0,
-			AvgInTokens:  512,
-			AvgOutTokens: 128,
-		},
-		TTFTAverage: 186.7,
-		ITLAverage:  14.9,
-	}
-
-	// Create a tuner first
-	_, err := tm.getOrCreateTuner(systemData, server)
-	if err != nil {
-		t.Fatalf("Failed to create tuner: %v", err)
-	}
-
-	// Verify it exists
-	tm.mu.RLock()
-	_, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
-
-	if !exists {
-		t.Fatal("Tuner should exist before removal")
-	}
-
-	// Remove the tuner
-	tm.removeTuner(server.Name)
-
-	// Verify it's gone
-	tm.mu.RLock()
-	_, exists = tm.tuners[server.Name]
-	tm.mu.RUnlock()
-
-	if exists {
-		t.Error("Tuner should not exist after removal")
-	}
-}
-
-func TestTunerManager_RemoveTuners(t *testing.T) {
-	tm := NewTunerManager()
-	systemData := createTestSystemData()
-
-	// Add allocation data to servers
-	for i := range systemData.Spec.Servers.Spec {
-		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
-			NumReplicas: 1,
-			MaxBatch:    8,
-			Accelerator: "A100",
-			Load: infernoConfig.ServerLoadSpec{
-				ArrivalRate:  60.0,
-				AvgInTokens:  512,
-				AvgOutTokens: 128,
-			},
-			TTFTAverage: 186.7,
-			ITLAverage:  14.9,
-		}
-	}
-
-	// Create tuners for servers
-	for i := range systemData.Spec.Servers.Spec {
-		server := &systemData.Spec.Servers.Spec[i]
-		_, err := tm.getOrCreateTuner(systemData, server)
-		if err != nil {
-			t.Fatalf("Failed to create tuner for server %s: %v", server.Name, err)
-		}
-	}
-
-	// Create VariantAutoscaling items with deletion timestamps
-	now := metav1.Now()
-	items := []llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-server-1",
-				Namespace:         "default",
-				DeletionTimestamp: &now,
-			},
-		},
-	}
-
-	// Remove tuners for deleted items
-	tm.RemoveTuners(items)
-
-	// Verify correct tuner was removed
-	tm.mu.RLock()
-	_, exists := tm.tuners["default/test-server-1"]
-	tm.mu.RUnlock()
-
-	if exists {
-		t.Error("Tuner for deleted VariantAutoscaling should be removed")
 	}
 }
 

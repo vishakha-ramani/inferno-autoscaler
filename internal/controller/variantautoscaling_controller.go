@@ -143,7 +143,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// tune queueing model parameters for all servers using the system data
 	if r.TunerMgr.IsEnabled() {
 		// first handle va deletions
-		r.TunerMgr.RemoveTuners(variantAutoscalingList.Items)
+		r.TunerMgr.RemoveTuners(systemData)
 
 		// tune model perf params for existing VAs
 		if err := r.TunerMgr.TuneModelPerfParams(systemData); err != nil {

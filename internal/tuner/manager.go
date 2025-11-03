@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
-	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	tune "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/tuner"
 )
@@ -171,21 +169,20 @@ func (tm *TunerManager) getOrCreateTuner(
 	return tuner, nil
 }
 
-func (tm *TunerManager) RemoveTuners(items []llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
-	for _, va := range items {
-		if !va.DeletionTimestamp.IsZero() {
-			serverName := utils.FullName(va.Name, va.Namespace)
-			tm.removeTuner(serverName)
-		}
-	}
-
-}
-
-// removeTuner removes a tuner by server name
-func (tm *TunerManager) removeTuner(serverName string) {
+func (tm *TunerManager) RemoveTuners(systemData *infernoConfig.SystemData) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	delete(tm.tuners, serverName)
-	logger.Log.Info("Removed tuner", "server", serverName)
+	activeServers := make(map[string]bool)
+	for _, server := range systemData.Spec.Servers.Spec {
+		activeServers[server.Name] = true
+	}
+
+	// Remove tuners that are no longer in SystemData
+	for serverName := range tm.tuners {
+		if !activeServers[serverName] {
+			delete(tm.tuners, serverName)
+			logger.Log.Info("Removed tuner for deleted server", "server", serverName)
+		}
+	}
 }

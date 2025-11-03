@@ -11,6 +11,14 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// State vector indices for model parameters
+const (
+	StateIndexAlpha = 0 // Decode base parameter
+	StateIndexBeta  = 1 // Decode slope parameter
+	StateIndexGamma = 2 // Prefill base parameter
+	StateIndexDelta = 3 // Prefill slope parameter
+)
+
 type Tuner struct {
 	configurator *Configurator
 	filter       *kalman.ExtendedKalmanFilter
@@ -27,6 +35,14 @@ type TunedResults struct {
 func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
 	var c *Configurator
 	var f *kalman.ExtendedKalmanFilter
+
+	// Validate inputs
+	if env == nil {
+		return nil, fmt.Errorf("environment cannot be nil")
+	}
+	if !env.Valid() {
+		return nil, fmt.Errorf("invalid environment: %s", env.String())
+	}
 
 	t := &Tuner{
 		env: env,
@@ -67,6 +83,11 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 }
 
 func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
+	// validate environment before running
+	if !t.env.Valid() {
+		return nil, fmt.Errorf("cannot run tuner with invalid environment: %s", t.env.String())
+	}
+
 	// create a stasher and stash the current X and P
 	stasher := NewStasher(t.filter)
 	stasher.Stash()
@@ -74,15 +95,13 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	// prediction
 	Q := t.filter.Q
 	if err := t.filter.Predict(Q); err != nil {
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to predict: %w", err)
 	}
 
 	// update
 	Z := t.env.GetObservations()
 	if err := t.filter.Update(Z, t.configurator.R); err != nil {
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get observations: %w", err)
 	}
 
 	// Extract tuned parameters
@@ -95,7 +114,7 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	if err := t.validateTunedResults(tunedResults); err != nil {
 		// unstash to return to previous filter state
 		stasher.UnStash()
-		return nil, err
+		return nil, fmt.Errorf("tuned results validation failed: %w", err)
 	}
 
 	return tunedResults, nil
@@ -125,8 +144,15 @@ func (t *Tuner) String() string {
 	return b.String()
 }
 
-func (t *Tuner) UpdateEnvironment(envt *Environment) {
-	t.env = envt
+func (t *Tuner) UpdateEnvironment(env *Environment) error {
+	if env == nil {
+		return fmt.Errorf("environment cannot be nil")
+	}
+	if !env.Valid() {
+		return fmt.Errorf("invalid environment: %s", env.String())
+	}
+	t.env = env
+	return nil
 }
 
 func (t *Tuner) GetParms() *mat.VecDense {
@@ -151,12 +177,12 @@ func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 			MaxQueueSize: maxQueue,
 			ServiceParms: &analyzer.ServiceParms{
 				Prefill: &analyzer.PrefillParms{
-					Gamma: float32(x.AtVec(3)),
-					Delta: float32(x.AtVec(2)),
+					Gamma: float32(x.AtVec(StateIndexGamma)),
+					Delta: float32(x.AtVec(StateIndexDelta)),
 				},
 				Decode: &analyzer.DecodeParms{
-					Alpha: float32(x.AtVec(0)),
-					Beta:  float32(x.AtVec(1)),
+					Alpha: float32(x.AtVec(StateIndexAlpha)),
+					Beta:  float32(x.AtVec(StateIndexBeta)),
 				},
 			},
 		}
@@ -196,12 +222,12 @@ func (t *Tuner) extractTunedResults() (*TunedResults, error) {
 	return &TunedResults{
 		ServiceParms: &analyzer.ServiceParms{
 			Decode: &analyzer.DecodeParms{
-				Alpha: float32(stateVec.AtVec(0)),
-				Beta:  float32(stateVec.AtVec(1)),
+				Alpha: float32(stateVec.AtVec(StateIndexAlpha)),
+				Beta:  float32(stateVec.AtVec(StateIndexBeta)),
 			},
 			Prefill: &analyzer.PrefillParms{
-				Gamma: float32(stateVec.AtVec(2)),
-				Delta: float32(stateVec.AtVec(3)),
+				Gamma: float32(stateVec.AtVec(StateIndexGamma)),
+				Delta: float32(stateVec.AtVec(StateIndexDelta)),
 			},
 		},
 		Innovation: innovation,

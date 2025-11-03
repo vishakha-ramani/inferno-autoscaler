@@ -17,8 +17,8 @@ PROMETHEUS_SVC_NAME="kube-prometheus-stack-prometheus"
 PROMETHEUS_BASE_URL="https://$PROMETHEUS_SVC_NAME.$MONITORING_NAMESPACE.svc.cluster.local"
 PROMETHEUS_PORT="9090"
 PROMETHEUS_URL=${PROMETHEUS_URL:-"$PROMETHEUS_BASE_URL:$PROMETHEUS_PORT"}
-DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-true}
-SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
+DEPLOY_PROMETHEUS=${DEPLOY_PROMETHEUS:-"true"}
+SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"true"}
 
 check_specific_prerequisites() {
     log_info "Checking Kubernetes-specific prerequisites..."
@@ -47,7 +47,7 @@ deploy_wva_prerequisites() {
     log_info "Extracting Prometheus TLS certificate"
     kubectl get secret $PROMETHEUS_SECRET_NAME -n $MONITORING_NAMESPACE -o jsonpath='{.data.tls\.crt}' | base64 -d > $PROM_CA_CERT_PATH
 
-    if [ "$SKIP_TLS_VERIFY" = true ]; then
+    if [ "$SKIP_TLS_VERIFY" = "true" ]; then
         log_warning "TLS verification NOT enabled: using values-dev.yaml for dev deployments - NOT FOR PRODUCTION USE"
         VALUES_FILE="${WVA_PROJECT}/charts/workload-variant-autoscaler/values-dev.yaml"
     else

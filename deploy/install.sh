@@ -36,8 +36,7 @@ WVA_IMAGE_TAG=${WVA_IMAGE_TAG:-"latest"}
 WVA_IMAGE_PULL_POLICY=${WVA_IMAGE_PULL_POLICY:-"Always"}
 VLLM_SVC_ENABLED=${VLLM_SVC_ENABLED:-true}
 VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}
-GAIE_IMAGE_ARM64=${GAIE_IMAGE_ARM64:-"quay.io/infernoautoscaler/llm-d-inference-scheduler:v0.2.1-arm64"}
-SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
+SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"false"}
 WVA_LOG_LEVEL=${WVA_LOG_LEVEL:-"info"}
 VALUES_FILE=${VALUES_FILE:-"$WVA_PROJECT/charts/workload-variant-autoscaler/values.yaml"}
 
@@ -46,11 +45,10 @@ LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
 LLM_D_PROJECT=${LLM_D_PROJECT:-"llm-d"}
 LLM_D_RELEASE=${LLM_D_RELEASE:-"v0.3.0"}
 LLM_D_MODELSERVICE_NAME=${LLM_D_MODELSERVICE_NAME:-"ms-$WELL_LIT_PATH_NAME-llm-d-modelservice"}
-VLLM_EMULATOR_NAME=${VLLM_EMULATOR_NAME:-"vllm-emulator"}
 CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/client-setup"}
 GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/gateway-provider"}
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
-LLM_D_MODELSERVICE_VALUES=${LLM_D_MODELSERVICE_VALUES:-"ms-$WELL_LIT_PATH_NAME/values.yaml"}
+LLM_D_MODELSERVICE_VALUES=${LLM_D_MODELSERVICE_VALUES:-"$EXAMPLE_DIR/ms-$WELL_LIT_PATH_NAME/values.yaml"}
 
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
@@ -116,7 +114,6 @@ Options:
   -m, --model MODEL            Model ID to use (default: $MODEL_ID)
   -a, --accelerator TYPE       Accelerator type: A100, H100, L40S, etc. (default: $ACCELERATOR_TYPE)
   -u, --undeploy               Undeploy all components
-  -d, --delete-namespaces      Delete namespaces after undeployment
   -e, --environment            Specify deployment environment: kubernetes, openshift, kind-emulated (default: kubernetes)
   -h, --help                   Show this help and exit
 
@@ -186,7 +183,6 @@ parse_args() {
       -m|--model)             MODEL_ID="$2"; shift 2 ;;
       -a|--accelerator)       ACCELERATOR_TYPE="$2"; shift 2 ;;
       -u|--undeploy)          UNDEPLOY=true; shift ;;
-      -d|--delete-namespaces) DELETE_NAMESPACES=true; shift ;;
       -e|--environment)
         ENVIRONMENT="$2" ; shift 2
         if ! containsElement "$ENVIRONMENT" "${COMPATIBLE_ENV_LIST[@]}"; then

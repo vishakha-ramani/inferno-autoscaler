@@ -85,7 +85,7 @@ SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 ENVIRONMENT=${ENVIRONMENT:-"kubernetes"}
 COMPATIBLE_ENV_LIST=("kubernetes" "openshift" "kind-emulator")
 NON_EMULATED_ENV_LIST=("kubernetes" "openshift")
-REQUIRED_TOOLS=("kubectl" "helm" "helmfile" "git")
+REQUIRED_TOOLS=("kubectl" "helm" "git")
 
 # TODO: add kubernetes to these defaults to enable TLS verification when deploying to production clusters
 PRODUCTION_ENV_LIST=("openshift")
@@ -211,12 +211,43 @@ check_prerequisites() {
     done
     
     if [ ${#missing_tools[@]} -ne 0 ]; then
-        log_error "Missing required tools: ${missing_tools[*]}"
-        log_info "Please install the missing tools and try again"
-        exit 1
+        log_warning "Missing required tools: ${missing_tools[*]}"
+        if [ "$E2E_TESTS_ENABLED" == "false" ]; then
+            prompt_install_missing_tools
+        else
+            log_info "E2E tests enabled - will install missing tools by default"
+        fi
     fi
 
     log_success "All generic prerequisites tools met"
+}
+
+prompt_install_missing_tools() {
+    echo ""
+    log_info "The client tools are required to install and manage the infrastructure."
+    echo "  You can either:"
+    echo "      1. Install them manually."
+        echo "      2. Let the script attempt to install them for you."
+        echo "The environment is currently set to: ${ENVIRONMENT}"
+    
+        while true; do
+        read -p "Do you want to install the required client tools? (y/n): " -r answer
+        case $answer in
+            [Yy]* )
+                INSTALL_CLIENT_TOOLS="true"
+                log_success "Will install client tools when deploying llm-d"
+                break
+                ;;
+            [Nn]* )
+                INSTALL_CLIENT_TOOLS="false"
+                log_warning "Will not install the required client tools. Please install them manually."
+                break
+                ;;
+            * )
+                echo "Please answer y (yes) or n (no)."
+                ;;
+        esac
+    done
 }
 
 detect_gpu_type() {
@@ -280,7 +311,7 @@ prompt_gateway_installation() {
     echo "You can either:"
     echo "  1. Install the Gateway control plane (recommended for new clusters or emulated clusters)"
     echo "  2. Use an existing Gateway control plane in your cluster (recommended for production clusters)"
-    echo ""
+    echo "The environment is currently set to: ${ENVIRONMENT}"
     
     while true; do
         read -p "Do you want to install the Gateway control plane? (y/n): " -r answer
@@ -837,7 +868,7 @@ cleanup() {
     log_success "Undeployment complete!"
     echo ""
     echo "=========================================="
-    echo " Undeployment Summary"
+    echo " Undeployment Summary for $ENVIRONMENT"
     echo "=========================================="
     echo ""
     echo "Removed components:"

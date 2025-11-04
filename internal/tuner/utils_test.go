@@ -60,6 +60,26 @@ func TestBuildTunerConfig(t *testing.T) {
 	}
 }
 
+func TestBuildTunerConfigEmptySlo(t *testing.T) {
+	initState := []float64{8.5, 2.1, 5.0, 0.11}
+	slos := []float64{} // empty slos
+
+	_, err := BuildTunerConfig(initState, slos)
+	if err == nil {
+		t.Fatalf("BuildTunerConfig() should have failed for empty slos: %v", err)
+	}
+}
+
+func TestBuildTunerConfigEmptyInitState(t *testing.T) {
+	initState := []float64{} // empty init state
+	slos := []float64{200.0, 20.0}
+
+	_, err := BuildTunerConfig(initState, slos)
+	if err == nil {
+		t.Fatalf("BuildTunerConfig() should have failed for empty init state: %v", err)
+	}
+}
+
 func TestConvertAllocToEnvironment(t *testing.T) {
 	alloc := infernoConfig.AllocationData{
 		NumReplicas: 2,

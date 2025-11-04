@@ -692,6 +692,241 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 	t.Logf("Environment updated successfully, parameters remain valid")
 }
 
+func TestTunerManager_RemoveTuners(t *testing.T) {
+	tm := NewTunerManager()
+	systemData := createTestSystemData()
+
+	// Add valid allocation data to all servers
+	for i := range systemData.Spec.Servers.Spec {
+		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
+			NumReplicas: 1,
+			MaxBatch:    8,
+			Accelerator: "A100",
+			Load: infernoConfig.ServerLoadSpec{
+				ArrivalRate:  60.0,
+				AvgInTokens:  512,
+				AvgOutTokens: 128,
+			},
+			TTFTAverage: 190.0,
+			ITLAverage:  15.0,
+		}
+	}
+
+	// Create tuners for all servers
+	err := tm.TuneModelPerfParams(systemData)
+	if err != nil {
+		t.Fatalf("TuneModelPerfParams failed: %v", err)
+	}
+
+	// Verify tuners were created
+	tm.mu.RLock()
+	initialCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if initialCount == 0 {
+		t.Fatal("No tuners were created")
+	}
+
+	// Remove one server from system data
+	removedServerName := systemData.Spec.Servers.Spec[0].Name
+	systemData.Spec.Servers.Spec = systemData.Spec.Servers.Spec[1:]
+
+	// Call RemoveTuners
+	tm.RemoveTuners(systemData)
+
+	// Verify the tuner for removed server was deleted
+	tm.mu.RLock()
+	_, exists := tm.tuners[removedServerName]
+	finalCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if exists {
+		t.Errorf("Tuner for removed server %s still exists", removedServerName)
+	}
+
+	expectedCount := len(systemData.Spec.Servers.Spec)
+	if finalCount != expectedCount {
+		t.Errorf("After removal, tuner count = %d, want %d", finalCount, expectedCount)
+	}
+}
+
+func TestTunerManager_RemoveTunersMultiple(t *testing.T) {
+	tm := NewTunerManager()
+	systemData := createTestSystemData()
+
+	// Add a third server
+	thirdServer := infernoConfig.ServerSpec{
+		Name:  "test-server-3",
+		Model: "llama-7b",
+		Class: "default",
+		CurrentAlloc: infernoConfig.AllocationData{
+			NumReplicas: 1,
+			MaxBatch:    8,
+			Accelerator: "A100",
+			Load: infernoConfig.ServerLoadSpec{
+				ArrivalRate:  60.0,
+				AvgInTokens:  512,
+				AvgOutTokens: 128,
+			},
+			TTFTAverage: 190.0,
+			ITLAverage:  15.0,
+		},
+	}
+	systemData.Spec.Servers.Spec = append(systemData.Spec.Servers.Spec, thirdServer)
+
+	// Add valid allocation data to existing servers
+	for i := range systemData.Spec.Servers.Spec[:2] {
+		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
+			NumReplicas: 1,
+			MaxBatch:    8,
+			Accelerator: "A100",
+			Load: infernoConfig.ServerLoadSpec{
+				ArrivalRate:  60.0,
+				AvgInTokens:  512,
+				AvgOutTokens: 128,
+			},
+			TTFTAverage: 190.0,
+			ITLAverage:  15.0,
+		}
+	}
+
+	// Create tuners for all 3 servers
+	err := tm.TuneModelPerfParams(systemData)
+	if err != nil {
+		t.Fatalf("TuneModelPerfParams failed: %v", err)
+	}
+
+	// Verify 3 tuners were created
+	tm.mu.RLock()
+	initialCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if initialCount != 3 {
+		t.Errorf("Initial tuner count = %d, want 3", initialCount)
+	}
+
+	// Remove 2 servers, keep only the first one
+	removedServer1 := systemData.Spec.Servers.Spec[1].Name
+	removedServer2 := systemData.Spec.Servers.Spec[2].Name
+	systemData.Spec.Servers.Spec = systemData.Spec.Servers.Spec[:1]
+
+	// Call RemoveTuners
+	tm.RemoveTuners(systemData)
+
+	// Verify the tuners for removed servers were deleted
+	tm.mu.RLock()
+	_, exists1 := tm.tuners[removedServer1]
+	_, exists2 := tm.tuners[removedServer2]
+	finalCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if exists1 {
+		t.Errorf("Tuner for removed server %s still exists", removedServer1)
+	}
+	if exists2 {
+		t.Errorf("Tuner for removed server %s still exists", removedServer2)
+	}
+
+	if finalCount != 1 {
+		t.Errorf("After removal, tuner count = %d, want 1", finalCount)
+	}
+}
+
+func TestTunerManager_RemoveTunersEmptySystemData(t *testing.T) {
+	tm := NewTunerManager()
+	systemData := createTestSystemData()
+
+	// Add valid allocation data to all servers
+	for i := range systemData.Spec.Servers.Spec {
+		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
+			NumReplicas: 1,
+			MaxBatch:    8,
+			Accelerator: "A100",
+			Load: infernoConfig.ServerLoadSpec{
+				ArrivalRate:  60.0,
+				AvgInTokens:  512,
+				AvgOutTokens: 128,
+			},
+			TTFTAverage: 190.0,
+			ITLAverage:  15.0,
+		}
+	}
+
+	// Create tuners for all servers
+	err := tm.TuneModelPerfParams(systemData)
+	if err != nil {
+		t.Fatalf("TuneModelPerfParams failed: %v", err)
+	}
+
+	// Verify tuners were created
+	tm.mu.RLock()
+	initialCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if initialCount == 0 {
+		t.Fatal("No tuners were created")
+	}
+
+	// Remove all servers
+	systemData.Spec.Servers.Spec = []infernoConfig.ServerSpec{}
+
+	// Call RemoveTuners
+	tm.RemoveTuners(systemData)
+
+	// Verify all tuners were deleted
+	tm.mu.RLock()
+	finalCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if finalCount != 0 {
+		t.Errorf("After removing all servers, tuner count = %d, want 0", finalCount)
+	}
+}
+
+func TestTunerManager_RemoveTunersNoChange(t *testing.T) {
+	tm := NewTunerManager()
+	systemData := createTestSystemData()
+
+	// Add valid allocation data to all servers
+	for i := range systemData.Spec.Servers.Spec {
+		systemData.Spec.Servers.Spec[i].CurrentAlloc = infernoConfig.AllocationData{
+			NumReplicas: 1,
+			MaxBatch:    8,
+			Accelerator: "A100",
+			Load: infernoConfig.ServerLoadSpec{
+				ArrivalRate:  60.0,
+				AvgInTokens:  512,
+				AvgOutTokens: 128,
+			},
+			TTFTAverage: 190.0,
+			ITLAverage:  15.0,
+		}
+	}
+
+	// Create tuners for all servers
+	err := tm.TuneModelPerfParams(systemData)
+	if err != nil {
+		t.Fatalf("TuneModelPerfParams failed: %v", err)
+	}
+
+	// Get initial tuner count
+	tm.mu.RLock()
+	initialCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	// Call RemoveTuners with same system data (no servers removed)
+	tm.RemoveTuners(systemData)
+
+	// Verify tuner count hasn't changed
+	tm.mu.RLock()
+	finalCount := len(tm.tuners)
+	tm.mu.RUnlock()
+
+	if finalCount != initialCount {
+		t.Errorf("Tuner count changed from %d to %d, but no servers were removed", initialCount, finalCount)
+	}
+}
+
 // Helper function to create test system data with valid configuration
 // Parameters are chosen to match the observations in tests to pass NIS validation
 func createTestSystemData() *infernoConfig.SystemData {

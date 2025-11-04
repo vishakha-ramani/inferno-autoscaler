@@ -216,16 +216,7 @@ func TestStasher_UnStashWithoutStash(t *testing.T) {
 
 	// Call UnStash without calling Stash first
 	// This tests that the code handles the case gracefully
-	defer func() {
-		if r := recover(); r != nil {
-			// This is expected - UnStash without Stash will cause a nil pointer dereference
-			// which is acceptable behavior (programmer error)
-			t.Logf("UnStash without Stash caused panic (expected): %v", r)
-		}
-	}()
-
 	stasher.UnStash()
-
 	// If we get here without panic, test passes
 	t.Log("UnStash without Stash completed without panic")
 }

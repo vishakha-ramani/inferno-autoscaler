@@ -6,8 +6,16 @@ import (
 	"testing"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/pkg/analyzer"
+	"go.uber.org/zap"
+	"gonum.org/v1/gonum/mat"
 )
+
+// Helper to initialize logger for tests
+func init() {
+	logger.Log = zap.NewNop().Sugar()
+}
 
 // Helper function to create a valid test environment
 func createTestEnvironment() *Environment {
@@ -615,7 +623,7 @@ func TestTuner_ConvergenceWithMultipleInitialGuesses(t *testing.T) {
 	lambda := 60.0 // req/min
 	batchSize := 8
 
-	t.Logf("\n📊 TEST CONFIGURATION:")
+	t.Logf("\n TEST CONFIGURATION:")
 	t.Logf("   Observed: TTFT=%.1f ms, ITL=%.1f ms", observedTTFT, observedITL)
 	t.Logf("   Workload: λ=%.0f req/min, input=%d toks, output=%d toks, batch=%d",
 		lambda, avgInputToks, avgOutputToks, batchSize)
@@ -656,7 +664,7 @@ func TestTuner_ConvergenceWithMultipleInitialGuesses(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("\n🎯 %s: α=%.1f β=%.1f γ=%.1f δ=%.3f",
+			t.Logf("\n %s: α=%.1f β=%.1f γ=%.1f δ=%.3f",
 				tc.description, tc.initAlpha, tc.initBeta, tc.initGamma, tc.initDelta)
 
 			// Calculate initial prediction error
@@ -930,4 +938,278 @@ func TestTuner_ErrorPaths(t *testing.T) {
 			t.Error("Expected error when creating tuner with mismatched PercentChange")
 		}
 	})
+}
+
+func TestTuner_RunWithStasherFailures(t *testing.T) {
+	t.Run("stash_failure", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		// Corrupt filter state to cause stash failure
+		tuner.filter.X = nil
+		tuner.filter.P = nil
+
+		_, err = tuner.Run()
+		if err == nil {
+			t.Error("Expected error when stashing fails")
+		}
+		if err != nil && !strings.Contains(err.Error(), "failed to stash") {
+			t.Errorf("Wrong error message: %v", err)
+		}
+	})
+
+	t.Run("unstash_after_validation_failure", func(t *testing.T) {
+		configData := createTestConfig()
+		env := &Environment{
+			Lambda:        60.0,
+			AvgInputToks:  100,
+			AvgOutputToks: 200,
+			MaxBatchSize:  8,
+			AvgTTFT:       10000.0, // Extremely high to trigger NIS rejection
+			AvgITL:        5000.0,
+		}
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		// Run should fail validation and attempt to unstash
+		_, err = tuner.Run()
+		if err == nil {
+			t.Error("Expected error for extreme observations")
+		}
+		// The error should be about validation, not unstashing
+		if err != nil && !strings.Contains(err.Error(), "validation failed") {
+			t.Errorf("Expected validation error, got: %v", err)
+		}
+	})
+}
+
+func TestTuner_MakeObservationFuncErrorPaths(t *testing.T) {
+	t.Run("invalid_state_parameters", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		obsFunc := tuner.makeObservationFunc()
+
+		// Test with invalid parameters (negative values)
+		invalidState := mat.NewVecDense(4, []float64{-1.0, -2.0, -3.0, -0.1})
+		result := obsFunc(invalidState)
+
+		// With invalid parameters, queue analyzer should fail and return nil
+		if result != nil {
+			t.Error("Expected nil result for invalid parameters")
+		}
+	})
+
+	t.Run("zero_state_parameters", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		obsFunc := tuner.makeObservationFunc()
+
+		// Test with zero parameters
+		zeroState := mat.NewVecDense(4, []float64{0.0, 0.0, 0.0, 0.0})
+		result := obsFunc(zeroState)
+
+		// Zero parameters may or may not cause analyzer to fail depending on implementation
+		// Just log the result
+		if result == nil {
+			t.Fatalf("Observation function returned nil for parameters all zero")
+		} else {
+			t.Logf("Observation function handled parameters: TTFT=%.2f, ITL=%.2f",
+				result.AtVec(0), result.AtVec(1))
+		}
+	})
+}
+
+func TestTuner_ValidateTunedResultsNegativeParameters(t *testing.T) {
+	t.Run("negative_alpha", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		results := &TunedResults{
+			ServiceParms: &analyzer.ServiceParms{
+				Decode: &analyzer.DecodeParms{
+					Alpha: -1.0, // Negative
+					Beta:  2.5,
+				},
+				Prefill: &analyzer.PrefillParms{
+					Gamma: 10.0,
+					Delta: 0.15,
+				},
+			},
+		}
+
+		err = tuner.validateTunedResults(results)
+		if err == nil {
+			t.Error("Expected error for negative alpha")
+		}
+		if err != nil && !strings.Contains(err.Error(), "decode parameters must be positive") {
+			t.Errorf("Wrong error message: %v", err)
+		}
+	})
+
+	t.Run("negative_delta", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		results := &TunedResults{
+			ServiceParms: &analyzer.ServiceParms{
+				Decode: &analyzer.DecodeParms{
+					Alpha: 5.0,
+					Beta:  2.5,
+				},
+				Prefill: &analyzer.PrefillParms{
+					Gamma: 10.0,
+					Delta: -0.15, // Negative
+				},
+			},
+		}
+
+		err = tuner.validateTunedResults(results)
+		if err == nil {
+			t.Error("Expected error for negative delta")
+		}
+		if err != nil && !strings.Contains(err.Error(), "prefill parameters must be positive") {
+			t.Errorf("Wrong error message: %v", err)
+		}
+	})
+
+	t.Run("zero_alpha", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		results := &TunedResults{
+			ServiceParms: &analyzer.ServiceParms{
+				Decode: &analyzer.DecodeParms{
+					Alpha: 0.0, // Zero
+					Beta:  2.5,
+				},
+				Prefill: &analyzer.PrefillParms{
+					Gamma: 10.0,
+					Delta: 0.15,
+				},
+			},
+		}
+
+		err = tuner.validateTunedResults(results)
+		if err == nil {
+			t.Error("Expected error for zero alpha")
+		}
+		if err != nil && !strings.Contains(err.Error(), "decode parameters must be positive") {
+			t.Errorf("Wrong error message: %v", err)
+		}
+	})
+
+	t.Run("singular_innovation_covariance", func(t *testing.T) {
+		configData := createTestConfig()
+		env := createTestEnvironment()
+
+		tuner, err := NewTuner(configData, env)
+		if err != nil {
+			t.Fatalf("NewTuner failed: %v", err)
+		}
+
+		// Create results with valid parameters
+		results := &TunedResults{
+			ServiceParms: &analyzer.ServiceParms{
+				Decode: &analyzer.DecodeParms{
+					Alpha: 5.0,
+					Beta:  2.5,
+				},
+				Prefill: &analyzer.PrefillParms{
+					Gamma: 10.0,
+					Delta: 0.15,
+				},
+			},
+		}
+
+		// Set innovation to valid values
+		tuner.filter.Y = mat.NewVecDense(2, []float64{1.0, 1.0})
+
+		// Create a singular S matrix (all zeros)
+		singularS := mat.NewDense(2, 2, []float64{0, 0, 0, 0})
+		tuner.filter.S = singularS
+
+		err = tuner.validateTunedResults(results)
+		if err == nil {
+			t.Error("Expected error for singular innovation covariance matrix")
+		}
+		if err != nil && !strings.Contains(err.Error(), "singular innovation covariance") {
+			t.Errorf("Wrong error message: %v", err)
+		}
+	})
+}
+
+func TestTuner_ExtractTunedResultsVerification(t *testing.T) {
+	configData := createTestConfig()
+	env := createTestEnvironment()
+
+	tuner, err := NewTuner(configData, env)
+	if err != nil {
+		t.Fatalf("NewTuner failed: %v", err)
+	}
+
+	// Get initial state
+	initialAlpha := tuner.X().AtVec(StateIndexAlpha)
+
+	// Extract results
+	results, err := tuner.extractTunedResults()
+	if err != nil {
+		t.Fatalf("extractTunedResults failed: %v", err)
+	}
+
+	// Verify state wasn't modified
+	currentAlpha := tuner.X().AtVec(StateIndexAlpha)
+	if currentAlpha != initialAlpha {
+		t.Error("extractTunedResults modified the tuner state")
+	}
+
+	// Verify extracted values match state
+	if float64(results.ServiceParms.Decode.Alpha) != initialAlpha {
+		t.Error("Extracted alpha doesn't match tuner state")
+	}
+
+	// Verify all results fields are populated
+	if results.ServiceParms == nil {
+		t.Error("ServiceParms is nil")
+	}
+	if results.Innovation == nil {
+		t.Error("Innovation is nil")
+	}
+	if results.Covariance == nil {
+		t.Error("Covariance is nil")
+	}
 }

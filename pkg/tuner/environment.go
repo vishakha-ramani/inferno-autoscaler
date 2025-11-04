@@ -4,18 +4,21 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"time"
 
 	"gonum.org/v1/gonum/mat"
 )
 
 // Representation of the environment in which the system operates
 type Environment struct {
-	Lambda        float32 // request arrival rate (per minute)
-	AvgInputToks  int     // average number of prompt (input) tokens per request
-	AvgOutputToks int     // average number of output tokens per request
-	MaxBatchSize  int     // maximum batch size
-	AvgTTFT       float32 // average request queueing time (msec)
-	AvgITL        float32 // average inter token latency (msec)
+	Lambda        float32    // request arrival rate (per minute)
+	AvgInputToks  int        // average number of prompt (input) tokens per request
+	AvgOutputToks int        // average number of output tokens per request
+	MaxBatchSize  int        // maximum batch size
+	AvgTTFT       float32    // average request queueing time (msec)
+	AvgITL        float32    // average inter token latency (msec)
+	NumReplicas   int        // number of replicas serving the requests
+	TimeStamp     *time.Time // timestamp of the environment data
 }
 
 func (e *Environment) Valid() bool {
@@ -26,7 +29,8 @@ func (e *Environment) Valid() bool {
 		e.AvgOutputToks > 0 &&
 		e.MaxBatchSize > 0 &&
 		e.AvgTTFT > 0 &&
-		e.AvgITL > 0
+		e.AvgITL > 0 &&
+		e.NumReplicas >= 0
 }
 
 func (e *Environment) GetObservations() *mat.VecDense {

@@ -3,7 +3,9 @@ package controller
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	tune "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/tuner"
@@ -62,6 +64,15 @@ func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData
 
 // tuneServer tunes parameters for a single server and updates SystemData.
 func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server *infernoConfig.ServerSpec) error {
+	// Check if we should skip tuning due to transient delay
+	skip, err := tm.skipIfInTransition(server)
+	if err != nil {
+		logger.Log.Info("Failed to check transition state: %w", err)
+	}
+	if skip {
+		logger.Log.Info("Skipping tuning due to transient delay", "server", server.Name)
+		return nil
+	}
 	// Get or create tuner for this server
 	tuner, err := tm.getOrCreateTuner(systemData, server)
 	if err != nil {
@@ -91,6 +102,32 @@ func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server 
 	}
 
 	return nil
+}
+
+// Check if the server is in a transient state due to recent up scaling.
+func (tm *TunerManager) skipIfInTransition(
+	server *infernoConfig.ServerSpec,
+) (bool, error) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	tuner, exists := tm.tuners[server.Name]
+	if !exists {
+		return false, fmt.Errorf("no tuner found for server %s", server.Name)
+	}
+	env := tuner.GetEnvironment()
+	if env == nil {
+		return false, fmt.Errorf("no tuner environment initialized for server %s", server.Name)
+	}
+	if env.TimeStamp == nil {
+		return false, fmt.Errorf("no timestamp set in tuner environment for server %s", server.Name)
+	}
+	pastNumReplicas := env.NumReplicas
+	curNumReplicas := server.CurrentAlloc.NumReplicas
+	timeout := env.TimeStamp.Add(constants.TransientDelaySeconds * time.Second)
+	if pastNumReplicas > 0 && curNumReplicas > pastNumReplicas && time.Now().Before(timeout) {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (tm *TunerManager) getOrCreateTuner(

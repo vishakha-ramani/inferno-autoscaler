@@ -1028,14 +1028,9 @@ func TestTuner_MakeObservationFuncErrorPaths(t *testing.T) {
 		zeroState := mat.NewVecDense(4, []float64{0.0, 0.0, 0.0, 0.0})
 		result := obsFunc(zeroState)
 
-		// Zero parameters do not cause the analyzer to fail
-		// Logging the result for verification
-		// TODO: change once the analyzer checks for zero params
-		if result == nil {
-			t.Log("Observation function returned nil for zero parameters (analyzer rejected them)")
-		} else {
-			t.Logf("Observation function handled zero parameters: TTFT=%.2f, ITL=%.2f",
-				result.AtVec(0), result.AtVec(1))
+		// Zero parameters should cause the analyzer to fail and have the observationFunc return nil
+		if result != nil {
+			t.Fatal("Observation function returned valid result for zero parameters")
 		}
 	})
 }

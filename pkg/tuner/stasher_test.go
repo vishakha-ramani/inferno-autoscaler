@@ -26,6 +26,16 @@ func TestNewStasher(t *testing.T) {
 	}
 }
 
+func TestNewStasherNilFilter(t *testing.T) {
+	// Create a nil filter
+	var filter *kalman.ExtendedKalmanFilter = nil
+	stasher := NewStasher(filter)
+
+	if stasher != nil {
+		t.Fatal("NewStasher() returned nil")
+	}
+}
+
 func TestStasher_StashAndUnStash(t *testing.T) {
 	// Create a filter
 	initialX := mat.NewVecDense(4, []float64{5.0, 2.0, 1.5, 10.0})

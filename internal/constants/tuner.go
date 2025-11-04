@@ -15,4 +15,7 @@ const (
 		The upper bound of the interval in our case is 7.378.
 	*/
 	DefaultMaxNIS = 7.378
+
+	// Transient delay to allow scaled up servers to start serving requests before tuning is applied
+	TransientDelaySeconds = 120
 )

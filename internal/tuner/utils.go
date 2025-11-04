@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
@@ -65,6 +66,7 @@ func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 	if alloc.NumReplicas > 0 {
 		ratePerReplica = alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
 	}
+	now := time.Now()
 	return &tune.Environment{
 		Lambda:        ratePerReplica,
 		AvgOutputToks: alloc.Load.AvgOutTokens,
@@ -72,6 +74,8 @@ func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 		MaxBatchSize:  alloc.MaxBatch,
 		AvgTTFT:       alloc.TTFTAverage,
 		AvgITL:        alloc.ITLAverage,
+		NumReplicas:   alloc.NumReplicas,
+		TimeStamp:     &now,
 	}
 }
 

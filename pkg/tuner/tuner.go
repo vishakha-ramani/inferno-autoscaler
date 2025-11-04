@@ -171,6 +171,10 @@ func (t *Tuner) GetParms() *mat.VecDense {
 	return t.X()
 }
 
+func (t *Tuner) GetEnvironment() *Environment {
+	return t.env
+}
+
 func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 	return func(x *mat.VecDense) *mat.VecDense {
 		// TODO: write for the case where max batch size is not available.

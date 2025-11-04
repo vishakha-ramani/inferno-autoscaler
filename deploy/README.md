@@ -2,6 +2,8 @@
 
 Complete guide for deploying the Workload-Variant-Autoscaler (WVA) on Kubernetes, OpenShift, and Kind clusters.
 
+> **Central Documentation Hub**: This is the main deployment guide containing comprehensive information about deployment methods, Helm chart configuration, and complete configuration reference. Platform-specific guides ([Kubernetes](kubernetes/README.md), [OpenShift](openshift/README.md), [Kind](kind-emulator/README.md)) provide additional platform-specific details and examples.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -540,29 +542,13 @@ helm uninstall workload-variant-autoscaler -n workload-variant-autoscaler-system
 
 ## Platform-Specific Guides
 
-### Kubernetes Deployment
+For platform-specific instructions and considerations:
 
-See [kubernetes/README.md](kubernetes/README.md) for detailed Kubernetes-specific instructions.
+- **[Kubernetes Guide](kubernetes/README.md)**: Detailed Kubernetes-specific instructions including kube-prometheus-stack setup, GPU operator installation, and ServiceMonitor configuration
+- **[OpenShift Guide](openshift/README.md)**: OpenShift-specific instructions including User Workload Monitoring (Thanos), Routes, Security Context Constraints (SCC), and GPU operator on OpenShift
+- **[Kind Guide (Local Testing)](kind-emulator/README.md)**: Local development and testing with Kind clusters and emulated GPUs
 
-### OpenShift Deployment
-
-See [openshift/README.md](openshift/README.md) for OpenShift-specific instructions.
-
-### Kind (Local Testing)
-
-For local development and testing with emulated GPUs:
-
-```bash
-# Create Kind cluster with GPU support
-make create-kind-cluster
-
-# Deploy WVA with emulated resources
-export HF_TOKEN="hf_xxx"
-make deploy-wva-emulated-on-kind
-
-# Tear down when done
-make destroy-kind-cluster
-```
+Each guide includes platform-specific examples, troubleshooting, and quick start commands. All guides use the same [Configuration Reference](#configuration-reference) documented below.
 
 ## Configuration Reference
 

@@ -48,26 +48,26 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 
 	// create configurator
 	if c, err = NewConfigurator(configData); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on configurator creation: %v", err)
 	}
 
 	// create filter
 	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.X0, c.P)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on filter creation: %v", err)
 	}
 	if err := f.SetQ(c.Q); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on setting Q: %v", err)
 	}
 	if err := f.SetR(c.R); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on setting R: %v", err)
 	}
 	if err := f.SetfF(c.fFunc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on setting fFunc: %v", err)
 	}
 	if c.Xbounded {
 		if err := f.SetStateLimiter(c.Xmin, c.Xmax); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error on setting state limiter: %v", err)
 		}
 	}
 
@@ -80,7 +80,7 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 
 	// assign observation function to filter
 	if err := f.SethH(t.makeObservationFunc()); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error on setting observation function: %v", err)
 	}
 
 	return t, nil
@@ -110,7 +110,7 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	// update
 	Z := t.env.GetObservations()
 	if err := t.filter.Update(Z, t.configurator.R); err != nil {
-		return nil, fmt.Errorf("failed to get observations: %w", err)
+		return nil, fmt.Errorf("failed to update filter: %w", err)
 	}
 
 	// Extract tuned parameters

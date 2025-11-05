@@ -1209,3 +1209,50 @@ func TestTuner_ExtractTunedResultsVerification(t *testing.T) {
 		t.Error("Covariance is nil")
 	}
 }
+
+// TODO: Re-enable when observation function nil check is added
+
+// func TestTuner_RunWithSystemOverload(t *testing.T) {
+// 	configData := createTestConfig()
+
+// 	// Start with valid environment to create tuner successfully
+// 	validEnv := createTestEnvironment()
+
+// 	tuner, err := NewTuner(configData, validEnv)
+// 	if err != nil {
+// 		t.Fatalf("NewTuner failed: %v", err)
+// 	}
+
+// 	// Store initial state
+// 	initialAlpha := tuner.X().AtVec(StateIndexAlpha)
+
+// 	// Now update to overload environment
+// 	// With the given parameters, max service rate is ~29 req/s = 1764 req/min
+// 	// Setting arrival rate much higher will cause overload and failure in observation
+// 	overloadEnv := &Environment{
+// 		Lambda:        3000.0, // 3000 req/min = 50 req/s - over capacity
+// 		AvgInputToks:  100,
+// 		AvgOutputToks: 200,
+// 		MaxBatchSize:  8,
+// 		AvgTTFT:       190.0,
+// 		AvgITL:        15.0,
+// 	}
+
+// 	err = tuner.UpdateEnvironment(overloadEnv)
+// 	if err != nil {
+// 		t.Fatalf("UpdateEnvironment failed: %v", err)
+// 	}
+
+// 	// Run should fail gracefully due to overload
+// 	_, err = tuner.Run()
+// 	if err == nil {
+// 		t.Error("Expected error when system is overloaded, got nil")
+// 	}
+
+// 	// Verify state was restored (unstashed) after failure
+// 	currentAlpha := tuner.X().AtVec(StateIndexAlpha)
+// 	if currentAlpha != initialAlpha {
+// 		t.Errorf("State was not restored after observation failure: initial=%.3f, current=%.3f",
+// 			initialAlpha, currentAlpha)
+// 	}
+// }

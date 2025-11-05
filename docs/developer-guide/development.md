@@ -361,6 +361,5 @@ make create-kind-cluster
 
 ## Next Steps
 
-- Read [Testing Guide](testing.md)
 - Review [Code Style Guidelines](../../CONTRIBUTING.md#coding-guidelines)
 - Check out [Good First Issues](https://github.com/llm-d-incubation/workload-variant-autoscaler/labels/good%20first%20issue)

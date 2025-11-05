@@ -15,17 +15,20 @@ Guide for developers contributing to Workload-Variant-Autoscaler.
 ### Initial Setup
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/llm-d-incubation/workload-variant-autoscaler.git
    cd workload-variant-autoscaler
    ```
 
 2. **Install dependencies:**
+
    ```bash
    go mod download
    ```
 
 3. **Install development tools:**
+
    ```bash
    make setup-envtest
    make controller-gen
@@ -34,7 +37,7 @@ Guide for developers contributing to Workload-Variant-Autoscaler.
 
 ## Project Structure
 
-```
+```bash
 workload-variant-autoscaler/
 ├── api/v1alpha1/          # CRD definitions
 ├── cmd/                   # Main application entry points
@@ -70,13 +73,15 @@ workload-variant-autoscaler/
 
 ### Running Locally
 
-**Option 1: Outside the cluster**
+#### Option 1: Outside the cluster
+
 ```bash
 # Run the controller on your machine (connects to configured cluster)
 make run
 ```
 
-**Option 2: In a Kind cluster**
+#### Option 2: In a Kind cluster
+
 ```bash
 # Create a Kind cluster with emulated GPUs
 make create-kind-cluster
@@ -91,6 +96,7 @@ make deploy-llm-d-wva-emulated-on-kind
 ### Making Changes
 
 1. **Create a feature branch:**
+
    ```bash
    git checkout -b feature/my-feature
    ```
@@ -98,17 +104,20 @@ make deploy-llm-d-wva-emulated-on-kind
 2. **Make your changes**
 
 3. **Generate code if needed:**
+
    ```bash
    # After modifying CRDs
    make manifests generate
    ```
 
-4. **Run tests:**
+4. **Run unit tests:**
+
    ```bash
    make test
    ```
 
 5. **Run linter:**
+
    ```bash
    make lint
    ```
@@ -165,10 +174,10 @@ go test -cover ./...
 make test-e2e
 
 # Run specific tests
-make test-e2e FOCUS="single VA"
+make test-e2e FOCUS="single VariantAutoscaling"
 
 # Skip specific tests
-make test-e2e SKIP="multiple VA"
+make test-e2e SKIP="multiple VariantAutoscaling"
 ```
 
 #### OpenShift E2E Tests
@@ -185,6 +194,7 @@ make test-e2e-openshift FOCUS="HPA integration"
 ```
 
 **Prerequisites for OpenShift E2E:**
+
 - Access to an OpenShift cluster (OCP 4.12+)
 - `oc` CLI tool configured and authenticated
 - Cluster admin permissions
@@ -195,16 +205,19 @@ See [Testing Guide](testing.md) for more details.
 ### Manual Testing
 
 1. **Deploy to Kind cluster:**
+
    ```bash
    make deploy-llm-d-wva-emulated-on-kind IMG=<your-image>
    ```
 
 2. **Create test resources:**
+
    ```bash
    kubectl apply -f config/samples/
    ```
 
 3. **Monitor controller logs:**
+
    ```bash
    kubectl logs -n workload-variant-autoscaler-system \
      deployment/workload-variant-autoscaler-controller-manager -f
@@ -297,6 +310,7 @@ kubectl logs -n workload-variant-autoscaler-system \
 ### Updating Documentation
 
 After code changes, update relevant docs in:
+
 - `docs/user-guide/` - User-facing changes
 - `docs/design/` - Architecture/design changes
 - `docs/integrations/` - Integration guide updates
@@ -304,6 +318,7 @@ After code changes, update relevant docs in:
 ### Testing Documentation
 
 Verify all commands and examples in documentation work:
+
 ```bash
 # Test installation steps
 # Test configuration examples
@@ -349,4 +364,3 @@ make create-kind-cluster
 - Read [Testing Guide](testing.md)
 - Review [Code Style Guidelines](../../CONTRIBUTING.md#coding-guidelines)
 - Check out [Good First Issues](https://github.com/llm-d-incubation/workload-variant-autoscaler/labels/good%20first%20issue)
-

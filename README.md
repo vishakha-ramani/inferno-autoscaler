@@ -133,9 +133,9 @@ More examples in [config/samples/](config/samples/).
 
 ## Contributing
 
-We welcome contributions! See the [llm-d Contributing Guide](https://github.com/llm-d-incubation/llm-d/blob/main/CONTRIBUTING.md) for guidelines.
+We welcome contributions! See the llm-d Contributing Guide for guidelines.
 
-Join the llm-d autoscaling community meetings to get involved.
+Join the [llm-d autoscaling community meetings](https://join.slack.com/share/enQtOTg1MzkwODExNDI5Mi02NWQwOWEwOWM4Y2Y3MTc4OTQyY2Y1ZDVlZmU2MjBmZDUwNjJhZGM3MjY4ZTQ5OTdjZjgzMmI0NjI0ZTBhZTM4) to get involved.
 
 ## License
 

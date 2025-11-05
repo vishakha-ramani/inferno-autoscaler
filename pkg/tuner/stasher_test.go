@@ -50,7 +50,10 @@ func TestStasher_StashAndUnStash(t *testing.T) {
 	stasher := NewStasher(filter)
 
 	// Stash the current state
-	stasher.Stash()
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 
 	// Modify the filter state
 	newX := mat.NewVecDense(4, []float64{10.0, 4.0, 3.0, 20.0})

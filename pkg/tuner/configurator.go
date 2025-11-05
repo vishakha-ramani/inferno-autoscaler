@@ -65,9 +65,9 @@ func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
 	fd := configData.FilterData
 	m := len(md.ExpectedObservations)
 	obsCOV := make([]float64, m)
-	factor := math.Pow(fd.ErrorLevel/fd.TPercentile, 2) / fd.GammaFactor
-	for j := 0; j < m; j++ {
-		obsCOV[j] = factor * math.Pow(md.ExpectedObservations[j], 2)
+	factor := ((fd.ErrorLevel / fd.TPercentile) * (fd.ErrorLevel / fd.TPercentile)) / fd.GammaFactor
+	for j := range m {
+		obsCOV[j] = factor * md.ExpectedObservations[j] * md.ExpectedObservations[j]
 	}
 	R := mat.DenseCopyOf(mat.NewDiagDense(m, obsCOV))
 

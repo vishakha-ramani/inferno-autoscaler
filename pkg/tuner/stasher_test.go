@@ -64,7 +64,10 @@ func TestStasher_StashAndUnStash(t *testing.T) {
 	}
 
 	// UnStash to restore
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 
 	// Verify that state was restored
 	for i := range 4 {
@@ -93,19 +96,27 @@ func TestStasher_MultipleStashOperations(t *testing.T) {
 	stasher := NewStasher(filter)
 
 	// First stash
-	stasher.Stash()
-
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 	// Modify state
 	filter.X = mat.NewVecDense(4, []float64{6.0, 2.5, 1.8, 11.0})
 
 	// Second stash (should overwrite first)
-	stasher.Stash()
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 
 	// Modify state again
 	filter.X = mat.NewVecDense(4, []float64{10.0, 5.0, 3.0, 20.0})
 
 	// UnStash should restore to second stash, not first
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 
 	expectedX := []float64{6.0, 2.5, 1.8, 11.0}
 	for i := range 4 {
@@ -185,14 +196,20 @@ func TestStasher_StateIndependence(t *testing.T) {
 	}
 
 	stasher := NewStasher(filter)
-	stasher.Stash()
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 
 	// Modify filter state
 	filter.X.SetVec(0, 999.0)
 	filter.P.Set(0, 0, 999.0)
 
 	// UnStash should restore original values
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 
 	if filter.X.AtVec(0) == 999.0 {
 		t.Error("Stash/UnStash did not properly restore state - stashed data was modified")
@@ -226,7 +243,10 @@ func TestStasher_UnStashWithoutStash(t *testing.T) {
 
 	// Call UnStash without calling Stash first
 	// This tests that the code handles the case gracefully
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 	// If we get here without panic, test passes
 	t.Log("UnStash without Stash completed without panic")
 }
@@ -242,7 +262,10 @@ func TestStasher_CopySemantics(t *testing.T) {
 	}
 
 	stasher := NewStasher(filter)
-	stasher.Stash()
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 
 	// Get the original values
 	originalX := make([]float64, 4)
@@ -256,7 +279,10 @@ func TestStasher_CopySemantics(t *testing.T) {
 	}
 
 	// Restore
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 
 	// Verify restoration
 	for i := 0; i < 4; i++ {
@@ -286,7 +312,10 @@ func TestStasher_FullCovarianceMatrix(t *testing.T) {
 	}
 
 	stasher := NewStasher(filter)
-	stasher.Stash()
+	err = stasher.Stash()
+	if err != nil {
+		t.Errorf("Stash() failed: %v", err)
+	}
 
 	// Modify all elements of P
 	for i := 0; i < 4; i++ {
@@ -296,7 +325,10 @@ func TestStasher_FullCovarianceMatrix(t *testing.T) {
 	}
 
 	// Restore
-	stasher.UnStash()
+	err = stasher.UnStash()
+	if err != nil {
+		t.Errorf("UnStash() failed: %v", err)
+	}
 
 	// Verify all elements restored
 	for i := 0; i < 4; i++ {

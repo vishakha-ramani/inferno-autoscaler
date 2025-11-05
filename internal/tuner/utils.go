@@ -147,14 +147,14 @@ func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, model
 			perfData.PrefillParms.Gamma = float32(tunedResults.ServiceParms.Prefill.Gamma)
 			perfData.PrefillParms.Delta = float32(tunedResults.ServiceParms.Prefill.Delta)
 
-			logger.Log.Debug("Model tuner results - ",
-				"model", modelName,
-				"accelerator", accName,
-				"alpha", perfData.DecodeParms.Alpha,
-				"beta", perfData.DecodeParms.Beta,
-				"gamma", perfData.PrefillParms.Gamma,
-				"delta", perfData.PrefillParms.Delta,
-				"NIS", tunedResults.NIS,
+			logger.Log.Debugf("Model tuner results: model=%s, accelerator=%s, alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f, NIS=%.2f",
+				modelName,
+				accName,
+				perfData.DecodeParms.Alpha,
+				perfData.DecodeParms.Beta,
+				perfData.PrefillParms.Gamma,
+				perfData.PrefillParms.Delta,
+				tunedResults.NIS,
 			)
 
 			return nil

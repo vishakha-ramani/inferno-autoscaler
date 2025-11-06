@@ -58,7 +58,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/llm-inferno/kalman-filter v0.1.0
+	github.com/llm-inferno/kalman-filter v0.1.1
 	github.com/llm-inferno/model-tuner v0.1.0
 	github.com/llm-inferno/queue-analysis v0.1.0
 	github.com/mailru/easyjson v0.7.7 // indirect

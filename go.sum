@@ -107,6 +107,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/llm-inferno/kalman-filter v0.1.0 h1:ScZP9o8ZLYleOuBe0uIDT9ilCoVSOIuNB3FOKOndtek=
 github.com/llm-inferno/kalman-filter v0.1.0/go.mod h1:dMqmiUHAJch+UvgnAROf1j3Wlw0t7Flgy3uXsUwHmVk=
+github.com/llm-inferno/kalman-filter v0.1.1 h1:ClgvEhKl7jPOfBRvrzn+eIb8lQ45PapItbKd4an6M5k=
+github.com/llm-inferno/kalman-filter v0.1.1/go.mod h1:dMqmiUHAJch+UvgnAROf1j3Wlw0t7Flgy3uXsUwHmVk=
 github.com/llm-inferno/model-tuner v0.1.0 h1:2akOXn90xfNrq5dVIWgj+flfztQB3aBAZpkgT7reJj8=
 github.com/llm-inferno/model-tuner v0.1.0/go.mod h1:QuTdT7MCZaT7veBAfbejhxIyMTIGDqVfkS1P/ZAUvzA=
 github.com/llm-inferno/queue-analysis v0.1.0 h1:1GfOZ82MVYTHVqf3szru87JWP6g6q22eaZ5lRok0JJU=

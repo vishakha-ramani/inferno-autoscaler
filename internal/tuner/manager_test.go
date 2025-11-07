@@ -91,9 +91,7 @@ func TestTunerManager_GetOrCreateTuner(t *testing.T) {
 	}
 
 	// Verify tuner was stored
-	tm.mu.RLock()
 	storedTuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists {
 		t.Error("Tuner was not stored in manager")
@@ -140,9 +138,8 @@ func TestTunerManager_TuneServer(t *testing.T) {
 	}
 
 	// Verify tuner was created
-	tm.mu.RLock()
+
 	_, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists {
 		t.Error("Tuner should exist after tuneServer() call")
@@ -176,9 +173,8 @@ func TestTunerManager_TuneModelPerfParams(t *testing.T) {
 	}
 
 	// Verify tuners were created for all servers
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	expectedCount := len(systemData.Spec.Servers.Spec)
 	if tunerCount != expectedCount {
@@ -364,9 +360,8 @@ func TestTunerManager_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Verify only one tuner was created
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if tunerCount != 1 {
 		t.Errorf("Expected exactly 1 tuner from concurrent creation, got %d", tunerCount)
@@ -406,9 +401,8 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 	}
 
 	// Verify tuner was created regardless of tuning success
-	tm.mu.RLock()
+
 	tuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists {
 		t.Fatal("Tuner should exist after tuneServer() call, even if NIS validation failed")
@@ -445,9 +439,8 @@ func TestTunerManager_SuccessfulTuneServer(t *testing.T) {
 	err2 := tm.tuneServer(systemData, server)
 
 	// Verify same tuner instance was used
-	tm.mu.RLock()
+
 	tuner2 := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if tuner2 != tuner {
 		t.Error("Should reuse the same tuner instance for subsequent calls")
@@ -487,18 +480,16 @@ func TestTunerManager_SuccessfulTuneModelPerfParams(t *testing.T) {
 	}
 
 	// Verify tuners were attempted for all servers
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	expectedCount := len(systemData.Spec.Servers.Spec)
 	t.Logf("Created %d tuners out of %d servers", tunerCount, expectedCount)
 
 	// If any tuners were created, verify they're valid
 	for _, server := range systemData.Spec.Servers.Spec {
-		tm.mu.RLock()
+
 		tuner, exists := tm.tuners[server.Name]
-		tm.mu.RUnlock()
 
 		if exists && tuner == nil {
 			t.Errorf("Tuner for server %s exists but is nil", server.Name)
@@ -558,9 +549,8 @@ func TestTunerManager_SuccessfulTunerCreation(t *testing.T) {
 			}
 
 			// Verify tuner exists (should be created on first call)
-			tm.mu.RLock()
+
 			tuner, exists := tm.tuners[server.Name]
-			tm.mu.RUnlock()
 
 			if !exists {
 				t.Error("Tuner should exist after tuneServer() call")
@@ -583,9 +573,8 @@ func TestTunerManager_SuccessfulTunerCreation(t *testing.T) {
 	}
 
 	// Verify only one tuner was created (reused across iterations)
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if tunerCount != 1 {
 		t.Errorf("Expected 1 tuner to be reused, got %d tuners", tunerCount)
@@ -621,9 +610,8 @@ func TestTunerManager_TuningRespectsDisabledState(t *testing.T) {
 	}
 
 	// Check if any tuners were created
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if tunerCount != 0 {
 		t.Errorf("No tuners should be created while disabled, got %d", tunerCount)
@@ -655,9 +643,8 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 		t.Fatalf("tuneServer() failed on environment update: %v", err)
 	}
 	// Get the tuner to verify it exists
-	tm.mu.RLock()
+
 	tuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists || tuner == nil {
 		t.Fatal("Tuner should exist after first call")
@@ -675,9 +662,8 @@ func TestTunerManager_SuccessfulEnvironmentUpdate(t *testing.T) {
 	}
 
 	// Verify same tuner was reused
-	tm.mu.RLock()
+
 	tuner2 := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if tuner2 != tuner {
 		t.Error("Should reuse same tuner instance when updating environment")
@@ -719,9 +705,8 @@ func TestTunerManager_RemoveTuners(t *testing.T) {
 	}
 
 	// Verify tuners were created
-	tm.mu.RLock()
+
 	initialCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if initialCount == 0 {
 		t.Fatal("No tuners were created")
@@ -735,10 +720,9 @@ func TestTunerManager_RemoveTuners(t *testing.T) {
 	tm.RemoveTuners(systemData)
 
 	// Verify the tuner for removed server was deleted
-	tm.mu.RLock()
+
 	_, exists := tm.tuners[removedServerName]
 	finalCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if exists {
 		t.Errorf("Tuner for removed server %s still exists", removedServerName)
@@ -797,9 +781,8 @@ func TestTunerManager_RemoveTunersMultiple(t *testing.T) {
 	}
 
 	// Verify 3 tuners were created
-	tm.mu.RLock()
+
 	initialCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if initialCount != 3 {
 		t.Errorf("Initial tuner count = %d, want 3", initialCount)
@@ -814,11 +797,10 @@ func TestTunerManager_RemoveTunersMultiple(t *testing.T) {
 	tm.RemoveTuners(systemData)
 
 	// Verify the tuners for removed servers were deleted
-	tm.mu.RLock()
+
 	_, exists1 := tm.tuners[removedServer1]
 	_, exists2 := tm.tuners[removedServer2]
 	finalCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if exists1 {
 		t.Errorf("Tuner for removed server %s still exists", removedServer1)
@@ -859,9 +841,8 @@ func TestTunerManager_RemoveTunersEmptySystemData(t *testing.T) {
 	}
 
 	// Verify tuners were created
-	tm.mu.RLock()
+
 	initialCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if initialCount == 0 {
 		t.Fatal("No tuners were created")
@@ -874,9 +855,8 @@ func TestTunerManager_RemoveTunersEmptySystemData(t *testing.T) {
 	tm.RemoveTuners(systemData)
 
 	// Verify all tuners were deleted
-	tm.mu.RLock()
+
 	finalCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if finalCount != 0 {
 		t.Errorf("After removing all servers, tuner count = %d, want 0", finalCount)
@@ -910,17 +890,15 @@ func TestTunerManager_RemoveTunersNoChange(t *testing.T) {
 	}
 
 	// Get initial tuner count
-	tm.mu.RLock()
+
 	initialCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	// Call RemoveTuners with same system data (no servers removed)
 	tm.RemoveTuners(systemData)
 
 	// Verify tuner count hasn't changed
-	tm.mu.RLock()
+
 	finalCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if finalCount != initialCount {
 		t.Errorf("Tuner count changed from %d to %d, but no servers were removed", initialCount, finalCount)
@@ -1074,9 +1052,8 @@ func TestTunerManager_SuccessfulTuneServerWithMatchingMetrics(t *testing.T) {
 	err := tm.tuneServer(systemData, server)
 
 	// Verify tuner was created
-	tm.mu.RLock()
+
 	tuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists {
 		t.Fatal("Tuner should exist after tuneServer() call")
@@ -1142,9 +1119,8 @@ func TestTunerManager_SuccessfulTuneServerWithMatchingMetrics(t *testing.T) {
 	}
 
 	// Verify same tuner was reused
-	tm.mu.RLock()
+
 	tuner2 := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if tuner2 != tuner {
 		t.Error("Should reuse the same tuner instance")
@@ -1185,9 +1161,8 @@ func TestTunerManager_SuccessfulTuneServerWithMultipleReplicas(t *testing.T) {
 	err := tm.tuneServer(systemData, server)
 
 	// Verify tuner was created
-	tm.mu.RLock()
+
 	tuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if !exists {
 		t.Fatal("Tuner should exist after tuneServer() call")
@@ -1240,9 +1215,8 @@ func TestTunerManager_SuccessfulTuneServerWithMultipleReplicas(t *testing.T) {
 	}
 
 	// Verify same tuner was reused
-	tm.mu.RLock()
+
 	tuner2 := tm.tuners[server.Name]
-	tm.mu.RUnlock()
 
 	if tuner2 != tuner {
 		t.Error("Should reuse the same tuner instance across replica changes")
@@ -1374,9 +1348,8 @@ func TestTunerManager_SuccessfulMultipleServersWithMatchingMetrics(t *testing.T)
 	}
 
 	// Verify tuners were created for all servers
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	expectedCount := len(systemData.Spec.Servers.Spec)
 	if tunerCount != expectedCount {
@@ -1385,9 +1358,8 @@ func TestTunerManager_SuccessfulMultipleServersWithMatchingMetrics(t *testing.T)
 
 	// Verify all tuners exist
 	for _, server := range systemData.Spec.Servers.Spec {
-		tm.mu.RLock()
+
 		tuner, exists := tm.tuners[server.Name]
-		tm.mu.RUnlock()
 
 		if !exists {
 			t.Errorf("Tuner for server %s should exist", server.Name)
@@ -1465,9 +1437,8 @@ func TestTunerManager_SuccessfulConvergence(t *testing.T) {
 	t.Logf("Successful tuning iterations: %d / %d", successCount, len(testCases))
 
 	// Verify only one tuner was created and reused
-	tm.mu.RLock()
+
 	tunerCount := len(tm.tuners)
-	tm.mu.RUnlock()
 
 	if tunerCount != 1 {
 		t.Errorf("Expected 1 tuner to be reused, got %d tuners", tunerCount)

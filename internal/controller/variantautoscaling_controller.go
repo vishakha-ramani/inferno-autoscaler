@@ -465,8 +465,8 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 
 	// Create Tuner Manager
 	r.TunerMgr = tuner.NewTunerManager()
-	r.TunerMgr.Enable()
-	logger.Log.Info("Tuner manager started")
+	r.TunerMgr.Enable() // TODO: Set the default through configmap or env variable.
+	logger.Log.Info("Tuner manager created")
 
 	//logger.Log.Info("Prometheus client initialized (validation skipped)")
 

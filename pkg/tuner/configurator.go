@@ -1,7 +1,6 @@
 package tuner
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 
@@ -10,47 +9,47 @@ import (
 
 // Tuner configuration data
 type TunerConfigData struct {
-	FilterData FilterData     `json:"filterData"` // filter data
-	ModelData  TunerModelData `json:"modelData"`  // model data
+	FilterData FilterData     // filter data
+	ModelData  TunerModelData // model data
 }
 
 // Filter configuration data
 type FilterData struct {
-	GammaFactor float64 `json:"gammaFactor"` // gamma factor
-	ErrorLevel  float64 `json:"errorLevel"`  // error level percentile
-	TPercentile float64 `json:"tPercentile"` // tail of student distribution
+	GammaFactor float64 // gamma factor
+	ErrorLevel  float64 // error level percentile
+	TPercentile float64 // tail of student distribution
 }
 
 // Model configuration data
 type TunerModelData struct {
-	InitState            []float64 `json:"initState"`            // initial state of model parameters
-	PercentChange        []float64 `json:"percentChange"`        // percent change in state
-	BoundedState         bool      `json:"boundedState"`         // are the state values bounded
-	MinState             []float64 `json:"minState"`             // lower bound on state
-	MaxState             []float64 `json:"maxState"`             // upper bound on state
-	ExpectedObservations []float64 `json:"expectedObservations"` // expected values of observations
+	InitState            []float64 // initial state of model parameters
+	PercentChange        []float64 // percent change in state
+	BoundedState         bool      // are the state values bounded
+	MinState             []float64 // lower bound on state
+	MaxState             []float64 // upper bound on state
+	ExpectedObservations []float64 // expected values of observations
 }
 
 // Configurator for the model tuner
 type Configurator struct {
 	// dimensions
-	nX int
-	nZ int
+	nX int // number of state parameters
+	nZ int // number of observation metrics
 
 	// matrices
-	X0 *mat.VecDense
-	P  *mat.Dense
-	Q  *mat.Dense
-	R  *mat.Dense
+	X0 *mat.VecDense // initial values of state parameters
+	P  *mat.Dense    // covariance matrix of estimation error
+	Q  *mat.Dense    // covariance matrix of noise on state
+	R  *mat.Dense    // covariance matrix of noise on observation
 
 	// functions
-	fFunc func(*mat.VecDense) *mat.VecDense
+	fFunc func(*mat.VecDense) *mat.VecDense // transition function for the state params
 
 	// other
-	percentChange []float64
-	Xbounded      bool
-	Xmin          []float64
-	Xmax          []float64
+	percentChange []float64 // expected percent change in state params
+	Xbounded      bool      // if state bounded
+	Xmin          []float64 // min values of state params
+	Xmax          []float64 // max values of state params
 }
 
 func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
@@ -132,21 +131,4 @@ func checkConfigData(cd *TunerConfigData) bool {
 
 func stateTransitionFunc(x *mat.VecDense) *mat.VecDense {
 	return x
-}
-
-func (c *Configurator) String() string {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "Configurator: ")
-	fmt.Fprintf(&b, "nX=%d; nZ=%d; ", c.nX, c.nZ)
-	fmt.Fprintf(&b, "X0=%v; ", c.X0.RawVector().Data)
-	fmt.Fprintf(&b, "Xbounded=%v; ", c.Xbounded)
-	if c.Xbounded {
-		fmt.Fprintf(&b, "Xmin=%v; ", c.Xmin)
-		fmt.Fprintf(&b, "Xmax=%v; ", c.Xmax)
-	}
-	fmt.Fprintf(&b, "P=%v; ", c.P.RawMatrix().Data)
-	fmt.Fprintf(&b, "Q=%v; ", c.Q.RawMatrix().Data)
-	fmt.Fprintf(&b, "R=%v; ", c.R.RawMatrix().Data)
-	fmt.Fprintf(&b, "change=%v; ", c.percentChange)
-	return b.String()
 }

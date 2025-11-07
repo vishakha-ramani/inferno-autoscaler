@@ -2,7 +2,6 @@ package tuner
 
 import (
 	"math"
-	"strings"
 	"testing"
 
 	"gonum.org/v1/gonum/mat"
@@ -279,40 +278,6 @@ func TestEnvironment_GetObservations(t *testing.T) {
 				t.Errorf("ITL = %f, want %f", itl, tt.expectedITL)
 			}
 		})
-	}
-}
-
-func TestEnvironment_String(t *testing.T) {
-	env := &Environment{
-		Lambda:        60.0,
-		AvgInputToks:  100,
-		AvgOutputToks: 200,
-		MaxBatchSize:  8,
-		AvgTTFT:       150.0,
-		AvgITL:        25.0,
-	}
-
-	str := env.String()
-
-	if str == "" {
-		t.Error("String() returned empty string")
-	}
-
-	// Check for expected content
-	expectedSubstrings := []string{
-		"Environment:",
-		"rpm=",
-		"avgInputToks=",
-		"avgOutputToks=",
-		"maxBatch=",
-		"avgTTFT=",
-		"avgITL=",
-	}
-
-	for _, substr := range expectedSubstrings {
-		if !strings.Contains(str, substr) {
-			t.Errorf("String() missing expected substring: %s\nGot: %s", substr, str)
-		}
 	}
 }
 

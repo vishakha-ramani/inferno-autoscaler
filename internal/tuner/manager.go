@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
@@ -16,8 +15,6 @@ import (
 type TunerManager struct {
 	// Map of server (variant) name to its tuner
 	tuners map[string]*tune.Tuner
-	// Mutex for concurrent access to tuners map
-	mu sync.RWMutex
 	// whether tuner manager is enabled
 	enabled bool
 }
@@ -43,12 +40,6 @@ func (tm *TunerManager) Disable() {
 
 // TuneModelPerfParams tunes performance model parameters for all servers in SystemData
 func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData) error {
-	// Check if tuning is disabled
-	if !tm.enabled {
-		logger.Log.Debug("Tuning is disabled, skipping parameter tuning")
-		return nil
-	}
-
 	// tune model tuner for each server
 	for i := range systemData.Spec.Servers.Spec {
 		server := &systemData.Spec.Servers.Spec[i]
@@ -65,6 +56,7 @@ func (tm *TunerManager) TuneModelPerfParams(systemData *infernoConfig.SystemData
 // tuneServer tunes parameters for a single server and updates SystemData.
 func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server *infernoConfig.ServerSpec) error {
 	// Check if we should skip tuning due to transient delay
+	// TODO: Do we need to skip tuning based on timing
 	skip, err := tm.skipIfInTransition(server)
 	if err != nil {
 		logger.Log.Info("Failed to check transition state: %w", err)
@@ -108,8 +100,6 @@ func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server 
 func (tm *TunerManager) skipIfInTransition(
 	server *infernoConfig.ServerSpec,
 ) (bool, error) {
-	tm.mu.RLock()
-	defer tm.mu.RUnlock()
 	tuner, exists := tm.tuners[server.Name]
 	if !exists {
 		return false, fmt.Errorf("no tuner found for server %s", server.Name)
@@ -135,20 +125,8 @@ func (tm *TunerManager) getOrCreateTuner(
 	server *infernoConfig.ServerSpec,
 ) (*tune.Tuner, error) {
 	// Try to get existing tuner
-	tm.mu.RLock()
 	tuner, exists := tm.tuners[server.Name]
-	tm.mu.RUnlock()
-
 	if exists {
-		return tuner, nil
-	}
-
-	// Create new (write lock)
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if tuner, exists := tm.tuners[server.Name]; exists {
 		return tuner, nil
 	}
 
@@ -207,9 +185,6 @@ func (tm *TunerManager) getOrCreateTuner(
 }
 
 func (tm *TunerManager) RemoveTuners(systemData *infernoConfig.SystemData) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-
 	activeServers := make(map[string]bool)
 	for _, server := range systemData.Spec.Servers.Spec {
 		activeServers[server.Name] = true

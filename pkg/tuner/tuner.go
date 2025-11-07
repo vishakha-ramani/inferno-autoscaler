@@ -43,7 +43,7 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 		return nil, fmt.Errorf("environment cannot be nil")
 	}
 	if !env.Valid() {
-		return nil, fmt.Errorf("invalid environment: %s", env.String())
+		return nil, fmt.Errorf("invalid environment: %v", env)
 	}
 
 	// create configurator
@@ -89,7 +89,7 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	// validate environment before running
 	if !t.env.Valid() {
-		return nil, fmt.Errorf("cannot run tuner with invalid environment: %s", t.env.String())
+		return nil, fmt.Errorf("cannot run tuner with invalid environment: %v", t.env)
 	}
 
 	// create a stasher and stash the current X and P
@@ -160,7 +160,7 @@ func (t *Tuner) UpdateEnvironment(env *Environment) error {
 		return fmt.Errorf("environment cannot be nil")
 	}
 	if !env.Valid() {
-		return fmt.Errorf("invalid environment: %s", env.String())
+		return fmt.Errorf("invalid environment: %v", env)
 	}
 	t.env = env
 	return nil

@@ -1,8 +1,6 @@
 package tuner
 
 import (
-	"bytes"
-	"fmt"
 	"math"
 	"time"
 
@@ -35,12 +33,4 @@ func (e *Environment) Valid() bool {
 
 func (e *Environment) GetObservations() *mat.VecDense {
 	return mat.NewVecDense(2, []float64{float64(e.AvgTTFT), float64(e.AvgITL)})
-}
-
-func (e *Environment) String() string {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "Environment: ")
-	fmt.Fprintf(&b, "rpm=%5.2f; avgInputToks=%d; avgOutputToks=%d; maxBatch=%d; avgTTFT=%10.6f; avgITL=%10.6f",
-		e.Lambda, e.AvgInputToks, e.AvgOutputToks, e.MaxBatchSize, e.AvgTTFT, e.AvgITL)
-	return b.String()
 }

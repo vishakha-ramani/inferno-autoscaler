@@ -1,7 +1,6 @@
 package tuner
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
@@ -289,59 +288,6 @@ func TestConfigurator_GetStateCov_InvalidDimension(t *testing.T) {
 	_, err = c.GetStateCov(x)
 	if err == nil {
 		t.Error("GetStateCov() should fail with wrong dimension")
-	}
-}
-
-func TestConfigurator_String(t *testing.T) {
-	configData := &TunerConfigData{
-		FilterData: FilterData{
-			GammaFactor: 1.0,
-			ErrorLevel:  0.05,
-			TPercentile: 1.96,
-		},
-		ModelData: TunerModelData{
-			InitState:            []float64{5.0, 2.0, 10.0, 1.5},
-			PercentChange:        []float64{0.05, 0.05, 0.05, 0.05},
-			BoundedState:         true,
-			MinState:             []float64{0.5, 0.2, 0.15, 1.0},
-			MaxState:             []float64{50.0, 20.0, 15.0, 100.0},
-			ExpectedObservations: []float64{150.0, 25.0},
-		},
-	}
-
-	c, err := NewConfigurator(configData)
-	if err != nil {
-		t.Fatalf("NewConfigurator() failed: %v", err)
-	}
-
-	str := c.String()
-	if str == "" {
-		t.Error("String() returned empty string")
-	}
-
-	// Check for expected content
-	expectedSubstrings := []string{
-		"Configurator:",
-		"nX=",
-		"nZ=",
-		"X0=",
-		"Xbounded=",
-	}
-
-	for _, substr := range expectedSubstrings {
-		if !strings.Contains(str, substr) {
-			t.Errorf("String() missing expected substring: %s", substr)
-		}
-	}
-
-	// When bounded, should also contain Xmin and Xmax
-	if configData.ModelData.BoundedState {
-		if !strings.Contains(str, "Xmin=") {
-			t.Error("String() missing Xmin for bounded state")
-		}
-		if !strings.Contains(str, "Xmax=") {
-			t.Error("String() missing Xmax for bounded state")
-		}
 	}
 }
 

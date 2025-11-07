@@ -2,12 +2,27 @@ package constants
 
 // Default tuner parameters
 const (
-	DefaultGammaFactor    = 1.0
-	DefaultErrorLevel     = 0.05
-	DefaultTPercentile    = 1.96
-	DefaultPercentChange  = 0.05
+	// scaling factor used to adjust the calculated measurement noise variance
+	DefaultGammaFactor = 1.0
+
+	/*
+		DefaultErrorLevel,  DefaultTPercentile along with DefaultGammaFactor is used in initializing the measurement noise covariance matrix R.
+		Particualrly, R is assumed to be diagonal, meaning measurement errors are independent across different measures ($z_i$).
+		The measurement of a performance metric of interest, say z_i, is expected to have a 95% Confidence Interval (CI) of +-5% of its mean value.
+		This means that the error (standard deviation) around z_i is expected to be 5% (DefaultErrorLevel).
+		However, we assume that the measurement noise (error) follows a t-distribution.
+		Under the asymptotic limit, the t-distribution converges to a standard normal distribution, the critical value of which is 1.96 (DefaultTPercentile).
+	*/
+	DefaultErrorLevel  = 0.05
+	DefaultTPercentile = 1.96
+
+	// determines the limit on the amount of change in a state value per iteration. A small number results in the filter converging relatively slowly.
+	DefaultPercentChange = 0.05
+
+	// default min and max state factors determine the lower and upper bound on the state values.
 	DefaultMinStateFactor = 0.1
 	DefaultMaxStateFactor = 10
+
 	/*
 		Under nominal conditions, the NIS (Normalized Innovations Squared) of a Kalman Filter is expected to follow
 		a Chi-Squared Distribution with degrees of freedom equal to the dimension of the measurement vector (n = 2 for [ttft, itl]).

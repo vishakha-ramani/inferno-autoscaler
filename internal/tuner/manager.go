@@ -80,7 +80,10 @@ func (tm *TunerManager) tuneServer(systemData *infernoConfig.SystemData, server 
 	}
 
 	// Update environment with latest metrics
-	tuner.UpdateEnvironment(env)
+	err = tuner.UpdateEnvironment(env)
+	if err != nil {
+		return fmt.Errorf("failed to update environment for server %s: %w", server.Name, err)
+	}
 
 	// Run Kalman filter (predict + update)
 	tunedResults, err := tuner.Run()

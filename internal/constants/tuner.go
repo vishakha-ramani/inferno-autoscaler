@@ -33,4 +33,12 @@ const (
 
 	// Transient delay to allow scaled up servers to start serving requests before tuning is applied
 	TransientDelaySeconds = 120
+
+	// State vector indices for model parameters
+	StateIndexAlpha = 0 // Decode base parameter
+	StateIndexBeta  = 1 // Decode slope parameter
+	StateIndexGamma = 2 // Prefill base parameter
+	StateIndexDelta = 3 // Prefill slope parameter
+
+	DefaultTunerEpsilon = 1e-6 // to check float equality
 )

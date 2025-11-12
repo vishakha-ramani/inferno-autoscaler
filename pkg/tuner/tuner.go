@@ -12,14 +12,6 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-// State vector indices for model parameters
-const (
-	StateIndexAlpha = 0 // Decode base parameter
-	StateIndexBeta  = 1 // Decode slope parameter
-	StateIndexGamma = 2 // Prefill base parameter
-	StateIndexDelta = 3 // Prefill slope parameter
-)
-
 type Tuner struct {
 	configurator *Configurator
 	filter       *kalman.ExtendedKalmanFilter
@@ -113,21 +105,28 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 		return nil, fmt.Errorf("failed to update filter: %w", err)
 	}
 
+	// check validity of tunedResults
+	nis, err := t.validateTunedResults()
+	if err != nil {
+		// unstash to return to previous filter state
+		if err := stasher.UnStash(); err != nil {
+			return nil, fmt.Errorf("failed to unstash filter state: %w", err)
+		}
+		// Extract OLD state after unstashing
+		tunedResults, extractErr := t.extractTunedResults()
+		if extractErr != nil {
+			return nil, fmt.Errorf("validation failed and extraction of previous state failed: %w", extractErr)
+		}
+		// Return results with previous state and the validation error
+		return tunedResults, fmt.Errorf("tuning validation failed: %w", err)
+	}
+
 	// Extract tuned parameters
 	tunedResults, err = t.extractTunedResults()
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract tuned params: %w", err)
 	}
-
-	// check validity of tunedResults
-	if err := t.validateTunedResults(tunedResults); err != nil {
-		// unstash to return to previous filter state
-		if err := stasher.UnStash(); err != nil {
-			return nil, fmt.Errorf("failed to unstash filter state: %w", err)
-		}
-		return nil, fmt.Errorf("tuned results validation failed: %w", err)
-	}
-
+	tunedResults.NIS = nis
 	return tunedResults, nil
 }
 
@@ -192,12 +191,12 @@ func (t *Tuner) makeObservationFunc() func(x *mat.VecDense) *mat.VecDense {
 			MaxQueueSize: maxQueue,
 			ServiceParms: &analyzer.ServiceParms{
 				Prefill: &analyzer.PrefillParms{
-					Gamma: float32(x.AtVec(StateIndexGamma)),
-					Delta: float32(x.AtVec(StateIndexDelta)),
+					Gamma: float32(x.AtVec(constants.StateIndexGamma)),
+					Delta: float32(x.AtVec(constants.StateIndexDelta)),
 				},
 				Decode: &analyzer.DecodeParms{
-					Alpha: float32(x.AtVec(StateIndexAlpha)),
-					Beta:  float32(x.AtVec(StateIndexBeta)),
+					Alpha: float32(x.AtVec(constants.StateIndexAlpha)),
+					Beta:  float32(x.AtVec(constants.StateIndexBeta)),
 				},
 			},
 		}
@@ -237,12 +236,12 @@ func (t *Tuner) extractTunedResults() (*TunedResults, error) {
 	return &TunedResults{
 		ServiceParms: &analyzer.ServiceParms{
 			Decode: &analyzer.DecodeParms{
-				Alpha: float32(stateVec.AtVec(StateIndexAlpha)),
-				Beta:  float32(stateVec.AtVec(StateIndexBeta)),
+				Alpha: float32(stateVec.AtVec(constants.StateIndexAlpha)),
+				Beta:  float32(stateVec.AtVec(constants.StateIndexBeta)),
 			},
 			Prefill: &analyzer.PrefillParms{
-				Gamma: float32(stateVec.AtVec(StateIndexGamma)),
-				Delta: float32(stateVec.AtVec(StateIndexDelta)),
+				Gamma: float32(stateVec.AtVec(constants.StateIndexGamma)),
+				Delta: float32(stateVec.AtVec(constants.StateIndexDelta)),
 			},
 		},
 		Innovation: innovation,
@@ -250,15 +249,18 @@ func (t *Tuner) extractTunedResults() (*TunedResults, error) {
 	}, nil
 }
 
-func (t *Tuner) validateTunedResults(tunedResults *TunedResults) error {
-	parms := tunedResults.ServiceParms
+func (t *Tuner) validateTunedResults() (float64, error) {
+	stateVec := mat.VecDenseCopyOf(t.X())
+	if stateVec == nil {
+		return -1.0, fmt.Errorf("tuner returned nil state vector")
+	}
 
 	// 1. check parms are positive
-	if parms.Decode.Alpha <= 0 || parms.Decode.Beta <= 0 {
-		return fmt.Errorf("decode parameters must be positive: alpha=%f, beta=%f", parms.Decode.Alpha, parms.Decode.Beta)
+	if stateVec.AtVec(constants.StateIndexAlpha) <= 0 || stateVec.AtVec(constants.StateIndexBeta) <= 0 {
+		return -1.0, fmt.Errorf("decode parameters must be positive: alpha=%f, beta=%f", stateVec.AtVec(constants.StateIndexAlpha), stateVec.AtVec(constants.StateIndexBeta))
 	}
-	if parms.Prefill.Gamma <= 0 || parms.Prefill.Delta <= 0 {
-		return fmt.Errorf("prefill parameters must be positive: gamma=%f, delta=%f", parms.Prefill.Gamma, parms.Prefill.Delta)
+	if stateVec.AtVec(constants.StateIndexGamma) <= 0 || stateVec.AtVec(constants.StateIndexDelta) <= 0 {
+		return -1.0, fmt.Errorf("prefill parameters must be positive: gamma=%f, delta=%f", stateVec.AtVec(constants.StateIndexGamma), stateVec.AtVec(constants.StateIndexDelta))
 	}
 
 	// 2. innovation check using Normalized Innovation Squared (NIS)
@@ -268,7 +270,7 @@ func (t *Tuner) validateTunedResults(tunedResults *TunedResults) error {
 	// Calculate NIS = y^T * S^-1 * y
 	S_inv := mat.NewDense(innovationCov.RawMatrix().Rows, innovationCov.RawMatrix().Cols, nil)
 	if err := S_inv.Inverse(innovationCov); err != nil {
-		return fmt.Errorf("singular innovation covariance matrix S encountered: %w", err)
+		return -1.0, fmt.Errorf("singular innovation covariance matrix S encountered: %w", err)
 	}
 
 	// tmp = S^-1 * y
@@ -277,15 +279,14 @@ func (t *Tuner) validateTunedResults(tunedResults *TunedResults) error {
 
 	// NIS = y^T * tmp
 	NIS := mat.Dot(innovation, tmp)
-	tunedResults.NIS = NIS
 
 	if NIS >= constants.DefaultMaxNIS {
-		return fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
+		return -1.0, fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
 			NIS, constants.DefaultMaxNIS)
 	}
 
 	// 3. estimate covariance check?
 	// TODO
 
-	return nil
+	return NIS, nil
 }

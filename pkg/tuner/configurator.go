@@ -21,13 +21,16 @@ type FilterData struct {
 }
 
 // Model configuration data
+// TODO: add P
+// TODO: change InitState name
 type TunerModelData struct {
-	InitState            []float64 // initial state of model parameters
-	PercentChange        []float64 // percent change in state
-	BoundedState         bool      // are the state values bounded
-	MinState             []float64 // lower bound on state
-	MaxState             []float64 // upper bound on state
-	ExpectedObservations []float64 // expected values of observations
+	InitState            []float64  // initial state of model parameters
+	CovarianceMatrix     *mat.Dense // covariance matrix
+	PercentChange        []float64  // percent change in state
+	BoundedState         bool       // are the state values bounded
+	MinState             []float64  // lower bound on state
+	MaxState             []float64  // upper bound on state
+	ExpectedObservations []float64  // expected values of observations
 }
 
 // Configurator for the model tuner
@@ -84,9 +87,16 @@ func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
 		Xmax:          md.MaxState,
 	}
 
-	if c.P, err = c.GetStateCov(X0); err != nil {
-		return nil, err
+	// Initialize P: use provided covariance if available, otherwise compute from state
+	if md.CovarianceMatrix != nil {
+		c.P = mat.DenseCopyOf(md.CovarianceMatrix)
+	} else {
+		c.P, err = c.GetStateCov(X0)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	if c.Q, err = c.GetStateCov(X0); err != nil {
 		return nil, err
 	}

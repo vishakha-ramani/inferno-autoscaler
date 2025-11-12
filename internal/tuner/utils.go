@@ -2,31 +2,38 @@ package controller
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
+	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	tune "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/tuner"
+	"gonum.org/v1/gonum/mat"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // build config data from defaults, init state and slos
 func BuildTunerConfig(
-	initState []float64,
+	state []float64,
+	covMatrix *mat.Dense,
 	slos []float64,
 ) (*tune.TunerConfigData, error) {
 
-	if len(initState) == 0 || len(slos) == 0 {
+	if len(state) == 0 || len(slos) == 0 {
 		return nil, fmt.Errorf("initState and slos must be non-empty")
 	}
 	return &tune.TunerConfigData{
 		FilterData: getDefaultFilterData(),
 		ModelData: tune.TunerModelData{
-			InitState:            initState,
+			InitState:            state,
+			CovarianceMatrix:     covMatrix,
 			PercentChange:        getDefaultPercentChange(),
 			BoundedState:         true,
-			MinState:             getFactoredState(initState, constants.DefaultMinStateFactor),
-			MaxState:             getFactoredState(initState, constants.DefaultMaxStateFactor),
+			MinState:             getFactoredState(state, constants.DefaultMinStateFactor),
+			MaxState:             getFactoredState(state, constants.DefaultMaxStateFactor),
 			ExpectedObservations: slos,
 		},
 	}, nil
@@ -58,9 +65,9 @@ func getFactoredState(initState []float64, multiplier float64) []float64 {
 	return multipliedNumbers
 }
 
-// ConvertAllocToEnvironment converts WVA CurrentAlloc to model-tuner Environment.
+// convertAllocToEnvironment converts WVA CurrentAlloc to model-tuner Environment.
 // This is the adapter between the WVA collector and the Kalman filter tuner.
-func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environment {
+func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environment {
 	// first get the request rate per min per replica
 	var ratePerReplica float32
 	if alloc.NumReplicas > 0 {
@@ -77,6 +84,129 @@ func ConvertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 		NumReplicas:   alloc.NumReplicas,
 		TimeStamp:     &now,
 	}
+}
+
+func getStateValsFromVA(
+	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	systemData *infernoConfig.SystemData,
+	server *infernoConfig.ServerSpec,
+) ([]float64, *mat.Dense, error) {
+	// check if VA has tuned results in status (has been tuned before)
+	if hasTunedResults(va) {
+		state, covMatrix, err := extractValsFromVAStatus(va)
+		if err == nil {
+			logger.Log.Debug("Using state vals from VA status to tune",
+				"variant", va.Name,
+				"alpha", state[constants.StateIndexAlpha],
+				"beta", state[constants.StateIndexBeta],
+				"gamma", state[constants.StateIndexGamma],
+				"delta", state[constants.StateIndexDelta])
+			return state, covMatrix, nil
+		}
+		logger.Log.Warn("Failed to extract tuned state from VA status, falling back to spec",
+			"variant", va.Name,
+			"error", err)
+	}
+
+	// in case of first time tuning or error in extracting status, fall back to spec values
+	state, err := findInitStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logger.Log.Debug("Using initial state from spec",
+		"variant", va.Name,
+		"alpha", state[constants.StateIndexAlpha],
+		"beta", state[constants.StateIndexBeta],
+		"gamma", state[constants.StateIndexGamma],
+		"delta", state[constants.StateIndexDelta])
+
+	return state, nil, nil
+}
+
+// hasTunedParams checks if VA status contains tuned parameters.
+func hasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
+	return len(va.Status.TunerPerfData.PerfParms.DecodeParms) > 0 &&
+		len(va.Status.TunerPerfData.PerfParms.PrefillParms) > 0 &&
+		len(va.Status.TunerPerfData.CovarianceMatrix) > 0
+}
+
+// extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
+func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, *mat.Dense, error) {
+	state, err := extractStateFromVAStatus(va)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract tuned state from VA status: %w", err)
+	}
+
+	covMatrix, err := extractCovMatrixFromVAStatus(va)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract covariance matrix from VA status: %w", err)
+	}
+
+	return state, covMatrix, nil
+}
+
+func extractCovMatrixFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (*mat.Dense, error) {
+	matStatus := va.Status.TunerPerfData.CovarianceMatrix
+	rows := len(matStatus)
+	cols := len(matStatus[0])
+	if rows != cols || rows != 4 {
+		return nil, fmt.Errorf("invalid covariance matrix dimensions: expected 4 rows and 4 cols, got %d x %d", rows, cols)
+	}
+
+	// Create a flat slice to hold the float64 data
+	data := make([]float64, rows*cols)
+
+	// Populate the data slice by parsing strings
+	for r := 0; r < rows; r++ {
+		if len(matStatus[r]) != cols {
+			return nil, fmt.Errorf("row %d has inconsistent column count", r)
+		}
+		for c := 0; c < cols; c++ {
+			val, err := strconv.ParseFloat(matStatus[r][c], 32)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing string '%s' to float64: %v", matStatus[r][c], err)
+			}
+			data[r*cols+c] = val
+		}
+	}
+	covMatrix := mat.NewDense(rows, cols, data)
+	if !IsSymmetric(covMatrix, constants.DefaultTunerEpsilon) {
+		return nil, fmt.Errorf("covariance matrix is not symmetric")
+	}
+	return covMatrix, nil
+}
+
+func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
+	// extract decode model (itl) parameters
+	decodeParms := va.Status.TunerPerfData.PerfParms.DecodeParms
+	if len(decodeParms) != 2 {
+		return nil, fmt.Errorf("length of tuned decode parms in VA status should be 2")
+	}
+	alpha, err := strconv.ParseFloat(decodeParms["alpha"], 32)
+	if err != nil {
+		return nil, err
+	}
+	beta, err := strconv.ParseFloat(decodeParms["beta"], 32)
+	if err != nil {
+		return nil, err
+	}
+
+	// extract prefill model (ttft) parameters
+	prefillParms := va.Status.TunerPerfData.PerfParms.PrefillParms
+	if len(prefillParms) != 2 {
+		return nil, fmt.Errorf("length of prefillParms should be 2")
+	}
+	gamma, err := strconv.ParseFloat(prefillParms["gamma"], 32)
+	if err != nil {
+		return nil, err
+	}
+	delta, err := strconv.ParseFloat(prefillParms["delta"], 32)
+	if err != nil {
+		return nil, err
+	}
+
+	return []float64{alpha, beta, gamma, delta}, nil
 }
 
 func findInitStateInSystemData(
@@ -138,6 +268,7 @@ func findSLOInSystemData(
 	return nil, fmt.Errorf("model %q not found in service class %q", modelName, serviceClassName)
 }
 
+// updates queueing model parameters in the system data
 func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, modelName, accName string, tunedResults *tune.TunedResults) error {
 	for i := range systemData.Spec.Models.PerfData {
 		perfData := &systemData.Spec.Models.PerfData[i]
@@ -161,4 +292,97 @@ func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, model
 		}
 	}
 	return fmt.Errorf("model %q with accelerator %q not found in system data", modelName, accName)
+}
+
+// updates VA status with tuner results
+func updateVAStatusWithTunedParams(
+	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	model string,
+	accelerator string,
+	tunedResults *tune.TunedResults,
+) error {
+	// convert *mat.Dense to slice of string slices to store covariance matrix in VA status
+	covMatrixStatus := denseMatrixToSliceOfStrings(tunedResults.Covariance)
+
+	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+		Model:       model,
+		Accelerator: accelerator,
+		UpdatedAt:   metav1.NewTime(time.Now()),
+		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
+			DecodeParms: map[string]string{
+				"alpha": fmt.Sprintf("%f", tunedResults.ServiceParms.Decode.Alpha),
+				"beta":  fmt.Sprintf("%f", tunedResults.ServiceParms.Decode.Beta),
+			},
+			PrefillParms: map[string]string{
+				"gamma": fmt.Sprintf("%f", tunedResults.ServiceParms.Prefill.Gamma),
+				"delta": fmt.Sprintf("%f", tunedResults.ServiceParms.Prefill.Delta),
+			},
+		},
+		NIS:              fmt.Sprintf("%f", tunedResults.NIS),
+		CovarianceMatrix: covMatrixStatus,
+	}
+	return nil
+}
+
+func denseMatrixToSliceOfStrings(m *mat.Dense) [][]string {
+	r, c := m.Dims()
+	result := make([][]string, r)
+
+	for i := 0; i < r; i++ {
+		result[i] = make([]string, c)
+		for j := 0; j < c; j++ {
+			result[i][j] = fmt.Sprintf("%v", m.At(i, j))
+		}
+	}
+	return result
+}
+
+func findServerInSystemData(systemData *infernoConfig.SystemData, serverName string) *infernoConfig.ServerSpec {
+	for i := range systemData.Spec.Servers.Spec {
+		if systemData.Spec.Servers.Spec[i].Name == serverName {
+			return &systemData.Spec.Servers.Spec[i]
+		}
+	}
+	return nil
+}
+
+// floatEqual checks if two float64 numbers are approximately equal within a given epsilon.
+func floatEqual(a, b, epsilon float64) bool {
+	// Handle the case where they are exactly equal.
+	if a == b {
+		return true
+	}
+
+	// Calculate the absolute difference.
+	diff := math.Abs(a - b)
+
+	// Compare the absolute difference with a combination of absolute and relative tolerance.
+	// This helps handle cases with very small or very large numbers.
+	if a == 0.0 || b == 0.0 || diff < math.SmallestNonzeroFloat64 {
+		return diff < (epsilon * math.SmallestNonzeroFloat64)
+	}
+	return diff/(math.Abs(a)+math.Abs(b)) < epsilon
+}
+
+// IsSymmetric checks if a given mat.Matrix is symmetric.
+func IsSymmetric(m mat.Matrix, epsilon float64) bool {
+	r, c := m.Dims()
+
+	// 1. Check if it's a square matrix
+	if r != c {
+		return false
+	}
+
+	// 2. Check if elements are equal to their transposes
+	// We only need to check the upper or lower triangle (excluding the diagonal)
+	// because if a_ij = a_ji, then a_ji = a_ij is also true.
+	for i := 0; i < r; i++ {
+		for j := i + 1; j < c; j++ { // Start from j = i + 1 to avoid checking diagonal and duplicates
+			if !floatEqual(m.At(i, j), m.At(j, i), epsilon) {
+				return false
+			}
+		}
+	}
+
+	return true
 }

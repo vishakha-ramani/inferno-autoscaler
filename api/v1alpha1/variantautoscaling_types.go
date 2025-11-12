@@ -18,6 +18,10 @@ type VariantAutoscalingSpec struct {
 	// ModelProfile provides resource and performance characteristics for the model variant.
 	// +kubebuilder:validation:Required
 	ModelProfile ModelProfile `json:"modelProfile"`
+
+	// ConsultModelTuner indicates whether to use the experimental model tuner
+	// +optional
+	ActivateModelTuner bool `json:"activateModelTuner,omitempty"`
 }
 
 // ConfigMapKeyRef references a specific key within a ConfigMap.
@@ -87,6 +91,31 @@ type VariantAutoscalingStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// TunerPerfData specifies the tuned prefill and decode parameters for ttft and itl models
+	TunerPerfData TunerPerfData `json:"tunerPerfData,omitempty"`
+}
+
+type TunerPerfData struct {
+	// Model specifies the unique identifier of the model to be tuned.
+	Model string `json:"model,omitempty"`
+
+	// Accelerator is the type of accelerator currently allocated.
+	Accelerator string `json:"accelerator,omitempty"`
+
+	// UpdateAt specifies the time last succesfull tuner update was performed
+	UpdatedAt metav1.Time `json:"updatedAt,omitempty"`
+
+	// PerParms specifies the TUNED prefill and decode parameters for ttft and itl models
+	PerfParms PerfParms `json:"perfParms,omitempty"`
+
+	// Normalized Innovaion Square value of the tuner update.
+	// NIS determines how accurately Kalman filter is able to predict the measurement.
+	NIS string `json:"nis,omitempty"`
+
+	// CovarianceMatrix contains the current covariance matrix of the tuned state.
+	// It Represents the uncertainty in the estimate.
+	CovarianceMatrix [][]string `json:"covarianceMatrix,omitempty"`
 }
 
 // Allocation describes the current resource allocation for a model variant.

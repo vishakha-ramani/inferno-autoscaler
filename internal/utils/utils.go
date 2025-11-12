@@ -189,7 +189,7 @@ func AddModelAcceleratorProfileToSystemData(
 
 	// extract decode model (itl) parameters
 	decodeParms := modelAcceleratorProfile.PerfParms.DecodeParms
-	if len(decodeParms) < 2 {
+	if len(decodeParms) != 2 {
 		return fmt.Errorf("length of decodeParms should be 2")
 	}
 
@@ -203,7 +203,7 @@ func AddModelAcceleratorProfileToSystemData(
 
 	// extract prefill model (ttft) parameters
 	prefillParms := modelAcceleratorProfile.PerfParms.PrefillParms
-	if len(prefillParms) < 2 {
+	if len(prefillParms) != 2 {
 		return fmt.Errorf("length of prefillParms should be 2")
 	}
 

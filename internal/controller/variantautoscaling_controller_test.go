@@ -36,7 +36,6 @@ import (
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
-	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
@@ -44,9 +43,8 @@ import (
 // Helper function to create a properly initialized reconciler for tests
 func createTestReconciler(k8sClient client.Client) *VariantAutoscalingReconciler {
 	return &VariantAutoscalingReconciler{
-		Client:   k8sClient,
-		Scheme:   k8sClient.Scheme(),
-		TunerMgr: tuner.NewTunerManager(),
+		Client: k8sClient,
+		Scheme: k8sClient.Scheme(),
 	}
 }
 
@@ -941,56 +939,56 @@ data:
 			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		})
 
-		It("should enable and use tuner manager during reconciliation", func() {
-			By("Setting up reconciler with tuner enabled")
-			controllerReconciler := createTestReconciler(k8sClient)
-			controllerReconciler.TunerMgr.Enable()
+		// It("should enable and use tuner manager during reconciliation", func() {
+		// 	By("Setting up reconciler with tuner enabled")
+		// 	controllerReconciler := createTestReconciler(k8sClient)
+		// 	controllerReconciler.TunerMgr.Enable()
 
-			By("Verifying tuner manager is enabled")
-			Expect(controllerReconciler.TunerMgr).NotTo(BeNil(), "TunerManager should be initialized")
+		// 	By("Verifying tuner manager is enabled")
+		// 	Expect(controllerReconciler.TunerMgr).NotTo(BeNil(), "TunerManager should be initialized")
 
-			By("Reconciling should work with tuner enabled")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-		})
+		// 	By("Reconciling should work with tuner enabled")
+		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+		// 		NamespacedName: typeNamespacedName,
+		// 	})
+		// 	Expect(err).NotTo(HaveOccurred())
+		// })
 
-		It("should work with tuner in either enable or disable state", func() {
-			By("Setting up reconciler and testing enable/disable")
-			controllerReconciler := createTestReconciler(k8sClient)
+		// It("should work with tuner in either enable or disable state", func() {
+		// 	By("Setting up reconciler and testing enable/disable")
+		// 	controllerReconciler := createTestReconciler(k8sClient)
 
-			By("Disabling tuner")
-			controllerReconciler.TunerMgr.Disable()
+		// 	By("Disabling tuner")
+		// 	controllerReconciler.TunerMgr.Disable()
 
-			By("Reconciling should work with tuner disabled")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
+		// 	By("Reconciling should work with tuner disabled")
+		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+		// 		NamespacedName: typeNamespacedName,
+		// 	})
+		// 	Expect(err).NotTo(HaveOccurred())
 
-			By("Enabling tuner")
-			controllerReconciler.TunerMgr.Enable()
+		// 	By("Enabling tuner")
+		// 	controllerReconciler.TunerMgr.Enable()
 
-			By("Reconciling should work with tuner enabled")
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-		})
+		// 	By("Reconciling should work with tuner enabled")
+		// 	_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+		// 		NamespacedName: typeNamespacedName,
+		// 	})
+		// 	Expect(err).NotTo(HaveOccurred())
+		// })
 
-		It("should handle tuner operations without crashing", func() {
-			By("Setting up reconciler with tuner enabled")
-			controllerReconciler := createTestReconciler(k8sClient)
-			controllerReconciler.TunerMgr.Enable()
+		// It("should handle tuner operations without crashing", func() {
+		// 	By("Setting up reconciler with tuner enabled")
+		// 	controllerReconciler := createTestReconciler(k8sClient)
+		// 	controllerReconciler.TunerMgr.Enable()
 
-			By("Performing multiple reconciliations")
-			for i := 0; i < 3; i++ {
-				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-					NamespacedName: typeNamespacedName,
-				})
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
+		// 	By("Performing multiple reconciliations")
+		// 	for i := 0; i < 3; i++ {
+		// 		_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+		// 			NamespacedName: typeNamespacedName,
+		// 		})
+		// 		Expect(err).NotTo(HaveOccurred())
+		// 	}
+		// })
 	})
 })

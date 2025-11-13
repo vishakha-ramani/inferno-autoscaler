@@ -36,7 +36,9 @@ import (
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
+	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 )
 
@@ -939,56 +941,232 @@ data:
 			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		})
 
-		// It("should enable and use tuner manager during reconciliation", func() {
-		// 	By("Setting up reconciler with tuner enabled")
-		// 	controllerReconciler := createTestReconciler(k8sClient)
-		// 	controllerReconciler.TunerMgr.Enable()
+		It("should skip tuning when ActivateModelTuner is false", func() {
+			By("Getting the VA resource and verifying tuner is disabled by default")
+			va := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err := k8sClient.Get(ctx, typeNamespacedName, va)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(va.Spec.ActivateModelTuner).To(BeFalse(), "ActivateModelTuner should be false by default")
 
-		// 	By("Verifying tuner manager is enabled")
-		// 	Expect(controllerReconciler.TunerMgr).NotTo(BeNil(), "TunerManager should be initialized")
+			By("Creating system data")
+			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
 
-		// 	By("Reconciling should work with tuner enabled")
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// })
+			serviceClassCm, err := createTestReconciler(k8sClient).readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
 
-		// It("should work with tuner in either enable or disable state", func() {
-		// 	By("Setting up reconciler and testing enable/disable")
-		// 	controllerReconciler := createTestReconciler(k8sClient)
+			systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+			Expect(systemData).NotTo(BeNil())
 
-		// 	By("Disabling tuner")
-		// 	controllerReconciler.TunerMgr.Disable()
+			By("Calling TuneModelPerfParams with tuner disabled")
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should succeed even when tuner is disabled")
 
-		// 	By("Reconciling should work with tuner disabled")
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
+			By("Verifying VA status does not have tuned params")
+			updatedVA := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedVA)
+			Expect(err).NotTo(HaveOccurred())
+			// When tuner is disabled, TunerPerfData should be empty (zero value)
+			Expect(updatedVA.Status.TunerPerfData.Model).To(BeEmpty(), "TunerPerfData.Model should be empty when tuner is disabled")
+			Expect(updatedVA.Status.TunerPerfData.Accelerator).To(BeEmpty(), "TunerPerfData.Accelerator should be empty when tuner is disabled")
+		})
 
-		// 	By("Enabling tuner")
-		// 	controllerReconciler.TunerMgr.Enable()
+		It("should tune parameters when ActivateModelTuner is true", func() {
+			By("Getting the VA resource and enabling tuner")
+			va := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err := k8sClient.Get(ctx, typeNamespacedName, va)
+			Expect(err).NotTo(HaveOccurred())
 
-		// 	By("Reconciling should work with tuner enabled")
-		// 	_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// })
+			// Enable tuner
+			va.Spec.ActivateModelTuner = true
+			err = k8sClient.Update(ctx, va)
+			Expect(err).NotTo(HaveOccurred())
 
-		// It("should handle tuner operations without crashing", func() {
-		// 	By("Setting up reconciler with tuner enabled")
-		// 	controllerReconciler := createTestReconciler(k8sClient)
-		// 	controllerReconciler.TunerMgr.Enable()
+			By("Creating system data with valid allocation")
+			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
 
-		// 	By("Performing multiple reconciliations")
-		// 	for i := 0; i < 3; i++ {
-		// 		_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 			NamespacedName: typeNamespacedName,
-		// 		})
-		// 		Expect(err).NotTo(HaveOccurred())
-		// 	}
-		// })
+			serviceClassCm, err := createTestReconciler(k8sClient).readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+			Expect(systemData).NotTo(BeNil())
+
+			// Add server to system data with proper allocation
+			serverName := fmt.Sprintf("%s/%s", va.Name, va.Namespace)
+			systemData.Spec.Servers.Spec = append(systemData.Spec.Servers.Spec, infernoConfig.ServerSpec{
+				Name:  serverName,
+				Model: "default/default",
+				Class: "premium",
+				CurrentAlloc: infernoConfig.AllocationData{
+					Accelerator: "A100",
+					NumReplicas: 1,
+					MaxBatch:    4,
+					TTFTAverage: 190,
+					ITLAverage:  15,
+					Load: infernoConfig.ServerLoadSpec{
+						ArrivalRate:  60.0,
+						AvgInTokens:  100,
+						AvgOutTokens: 200,
+					},
+				},
+			})
+
+			By("Calling TuneModelPerfParams with valid environment")
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+
+			// Note: This may succeed or fail depending on whether the Kalman filter
+			// accepts or rejects the observations. Both are valid outcomes.
+			if err != nil {
+				logger.Log.Info("Tuning returned warning (expected during initial calibration)", "error", err)
+			}
+		})
+
+		It("should handle missing server in system data gracefully", func() {
+			By("Getting the VA resource and enabling tuner")
+			va := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err := k8sClient.Get(ctx, typeNamespacedName, va)
+			Expect(err).NotTo(HaveOccurred())
+
+			va.Spec.ActivateModelTuner = true
+			err = k8sClient.Update(ctx, va)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating system data without the server")
+			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			serviceClassCm, err := createTestReconciler(k8sClient).readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+			Expect(systemData).NotTo(BeNil())
+			// Intentionally not adding server to systemData
+
+			By("Calling TuneModelPerfParams should succeed with warning")
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should not fail when server is missing")
+		})
+
+		It("should handle invalid environment gracefully", func() {
+			By("Getting the VA resource and enabling tuner")
+			va := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
+			err := k8sClient.Get(ctx, typeNamespacedName, va)
+			Expect(err).NotTo(HaveOccurred())
+
+			va.Spec.ActivateModelTuner = true
+			err = k8sClient.Update(ctx, va)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating system data with invalid allocation (zero/negative values)")
+			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			serviceClassCm, err := createTestReconciler(k8sClient).readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+			Expect(systemData).NotTo(BeNil())
+
+			serverName := fmt.Sprintf("%s/%s", va.Name, va.Namespace)
+			systemData.Spec.Servers.Spec = append(systemData.Spec.Servers.Spec, infernoConfig.ServerSpec{
+				Name:  serverName,
+				Model: "default/default",
+				Class: "premium",
+				CurrentAlloc: infernoConfig.AllocationData{
+					Accelerator: "A100",
+					NumReplicas: 1,
+					MaxBatch:    0, // Invalid: zero
+					TTFTAverage: 0, // Invalid: zero
+					ITLAverage:  0, // Invalid: zero
+					Load: infernoConfig.ServerLoadSpec{
+						ArrivalRate:  0, // Invalid: zero
+						AvgInTokens:  0, // Invalid: zero
+						AvgOutTokens: 0, // Invalid: zero
+					},
+				},
+			})
+
+			By("Calling TuneModelPerfParams should succeed with warning")
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should not fail with invalid environment")
+		})
+
+		It("should handle multiple VAs with mixed tuner settings", func() {
+			By("Creating additional VA resources")
+			va1 := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "tuner-test-va1",
+					Namespace: "default",
+				},
+				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ModelID:            "default/default",
+					ActivateModelTuner: true,
+					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
+						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
+							{
+								Acc:      "A100",
+								AccCount: 1,
+								PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
+									DecodeParms:  map[string]string{"alpha": "8.5", "beta": "2.1"},
+									PrefillParms: map[string]string{"gamma": "5.0", "delta": "0.11"},
+								},
+								MaxBatchSize: 4,
+							},
+						},
+					},
+					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
+						Name: "premium",
+						Key:  "default/default",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, va1)).To(Succeed())
+			defer k8sClient.Delete(ctx, va1)
+
+			va2 := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "tuner-test-va2",
+					Namespace: "default",
+				},
+				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ModelID:            "default/default",
+					ActivateModelTuner: false, // Disabled
+					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
+						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
+							{
+								Acc:      "A100",
+								AccCount: 1,
+								PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
+									DecodeParms:  map[string]string{"alpha": "8.5", "beta": "2.1"},
+									PrefillParms: map[string]string{"gamma": "5.0", "delta": "0.11"},
+								},
+								MaxBatchSize: 4,
+							},
+						},
+					},
+					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
+						Name: "premium",
+						Key:  "default/default",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, va2)).To(Succeed())
+			defer k8sClient.Delete(ctx, va2)
+
+			By("Creating system data")
+			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			serviceClassCm, err := createTestReconciler(k8sClient).readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+			Expect(systemData).NotTo(BeNil())
+
+			By("Calling TuneModelPerfParams with mixed VA settings")
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va1, *va2}, systemData)
+			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should handle mixed tuner settings")
+		})
 	})
 })

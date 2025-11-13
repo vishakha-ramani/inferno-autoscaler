@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -48,10 +47,6 @@ const (
 	TestVAName          = "test-va"
 	TestVANamespace     = "default"
 )
-
-func init() {
-	logger.InitLogger()
-}
 
 // Helper to create test SystemData for tuner.go tests
 func createTunerTestSystemData() *infernoConfig.SystemData {

@@ -2003,7 +2003,10 @@ func TestTuner_UpdateEnvironment_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tuner.UpdateEnvironment(tt.newEnv)
+			err := tuner.UpdateEnvironment(tt.newEnv)
+			if err != nil {
+				t.Errorf("UpdateEnvironment failed: %v", err)
+			}
 
 			retrievedEnv := tuner.GetEnvironment()
 			if retrievedEnv != tt.newEnv {

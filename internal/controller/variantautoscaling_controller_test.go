@@ -1122,7 +1122,10 @@ data:
 				},
 			}
 			Expect(k8sClient.Create(ctx, va1)).To(Succeed())
-			defer k8sClient.Delete(ctx, va1)
+			defer func() {
+				err := k8sClient.Delete(ctx, va1)
+				Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			}()
 
 			va2 := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1152,7 +1155,10 @@ data:
 				},
 			}
 			Expect(k8sClient.Create(ctx, va2)).To(Succeed())
-			defer k8sClient.Delete(ctx, va2)
+			defer func() {
+				err := k8sClient.Delete(ctx, va2)
+				Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			}()
 
 			By("Creating system data")
 			acceleratorCm, err := createTestReconciler(k8sClient).readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)

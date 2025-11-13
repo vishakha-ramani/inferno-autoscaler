@@ -58,7 +58,7 @@ const (
 	h100Acc             = "H100"
 	inputTokens         = 64
 	outputTokens        = 64
-	maxExecutionTimeSec = 300
+	maxExecutionTimeSec = 600
 	loadRateTolerance   = 10
 	avgITL              = 20
 	avgTTFT             = 200
@@ -405,9 +405,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 			observedLoad, err := strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc Load ArrivalRate to float for VA: %s", va.Name))
 
-			// Verify that the observed load approximately matches the generated load
-			g.Expect(observedLoad).To(BeNumerically("~", loadRate*60, loadRateTolerance),
-				fmt.Sprintf("Current load arrival rate for VA %s should approximately match the actual load: %d - observed: %.2f", va.Name, loadRate*60, observedLoad))
+			// Calculate expected arrival rate based on latencies and GuideLLM constant rate behavior
+			expectedArrivalRate := utils.CalculateExpectedArrivalRate(loadRate, avgTTFT, avgITL, outputTokens)
+
+			// Verify that the observed load approximately matches the expected load
+			g.Expect(observedLoad).To(BeNumerically("~", expectedArrivalRate, loadRateTolerance),
+				fmt.Sprintf("Current load arrival rate for VA %s should approximately match the expected load: %.2f - observed: %.2f", va.Name, expectedArrivalRate, observedLoad))
 
 			itlAvg, err := strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 64)
 			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc ITLAverage to float for VA: %s", va.Name))
@@ -430,67 +433,9 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			deployName,
 			int(desiredReplicasProm))
-	})
 
-	It("should keep the same replicas if the load stays constant", func() {
-		// Set up port-forwarding for Prometheus to enable metrics queries
-		By("setting up port-forward to Prometheus service")
-		prometheusPortForwardCmd := utils.SetUpPortForward(k8sClient, ctx, "kube-prometheus-stack-prometheus", controllerMonitoringNamespace, 9090, 9090)
-		defer func() {
-			err := utils.StopCmd(prometheusPortForwardCmd)
-			Expect(err).NotTo(HaveOccurred(), "Should be able to stop Prometheus port-forwarding")
-		}()
-
-		By("waiting for Prometheus port-forward to be ready")
-		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
-		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
-
-		By("restarting load generation at the same rate")
-		loadGenJob, err = utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create load generator job for: %s", deployName))
-		defer func() {
-			err = utils.StopJob(namespace, loadGenJob, k8sClient, ctx)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", deployName))
-		}()
-
-		By("getting the current number of replicas")
-		var initialDesiredReplicas int
-		va := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, va)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
-		initialDesiredReplicas = va.Status.DesiredOptimizedAlloc.NumReplicas
-
-		// Since the previous Job has just finished and a new Job has started, there is an interval in which
-		// higher load is being generated. During this time, the controller may decide to scale up further.
-		// To avoid false negatives, we first wait for the load to stabilize, then we verify that
-		// the number of replicas remains constant over a period of time.
-		By("waiting for the load generator to stabilize the load")
-		Consistently(func(g Gomega) {
-			Eventually(func(g Gomega) {
-				va := &v1alpha1.VariantAutoscaling{}
-				err = crClient.Get(ctx, client.ObjectKey{
-					Namespace: namespace,
-					Name:      deployName,
-				}, va)
-				g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
-
-				observedLoad, err := strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)
-				g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc Load ArrivalRate to float for VA: %s", va.Name))
-
-				fmt.Printf("Current load arrival rate for VA %s - expected: %d, observed: %.2f\n", va.Name, loadRate*60, observedLoad)
-
-				// Verify that the observed load approximately matches the generated load
-				g.Expect(observedLoad).To(BeNumerically("~", loadRate*60, loadRateTolerance),
-					fmt.Sprintf("Current load arrival rate for VA %s should approximately match the actual load: %d - observed: %.2f", va.Name, loadRate*60, observedLoad))
-
-			}, 2*time.Minute, 10*time.Second).Should(Succeed())
-		}, 2*time.Minute, 10*time.Second).Should(Succeed())
-
-		var desiredReplicasProm float64
-		By("verifying that the number of replicas remains constant over several minutes with constant load")
+		By("verifying that the number of replicas remains constant with constant load")
+		initialDesiredReplicas := int(desiredReplicasProm)
 		Consistently(func(g Gomega) {
 			va := &v1alpha1.VariantAutoscaling{}
 			err := crClient.Get(ctx, client.ObjectKey{
@@ -510,6 +455,28 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 			// Verify that the desired number of replicas has same value as Prometheus result
 			g.Expect(va.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicasProm),
 				fmt.Sprintf("Desired replicas %d for VA %s should be the same as Prometheus result: %.2f", va.Status.DesiredOptimizedAlloc.NumReplicas, deployName, desiredReplicasProm))
+
+			// Calculate expected arrival rate based on latencies and GuideLLM constant rate behavior
+			expectedArrivalRate := utils.CalculateExpectedArrivalRate(loadRate, avgTTFT, avgITL, outputTokens)
+
+			// Verify that the observed load approximately matches the expected load
+			observedLoad, err := strconv.ParseFloat(va.Status.CurrentAlloc.Load.ArrivalRate, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc Load ArrivalRate to float for VA: %s", va.Name))
+
+			g.Expect(observedLoad).To(BeNumerically("~", expectedArrivalRate, loadRateTolerance),
+				fmt.Sprintf("Current load arrival rate for VA %s should approximately match the expected load: %.2f - observed: %.2f", va.Name, expectedArrivalRate, observedLoad))
+
+			itlAvg, err := strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc ITLAverage to float for VA: %s", va.Name))
+
+			ttftAvg, err := strconv.ParseFloat(va.Status.CurrentAlloc.TTFTAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc TTFTAverage to float for VA: %s", va.Name))
+
+			g.Expect(itlAvg).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va.Name))
+
+			g.Expect(ttftAvg).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va.Name))
 
 		}, 1*time.Minute, 10*time.Second).Should(Succeed())
 

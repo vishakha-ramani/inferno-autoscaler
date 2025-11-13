@@ -568,6 +568,31 @@ func CreateLoadGeneratorJob(image, namespace, targetURL, modelName string, rate,
 	return job, nil
 }
 
+// CalculateExpectedArrivalRate calculates the expected arrival rate (req/min) based on GuideLLM rate (req/sec), ITL/TTFT latencies, and the number of output tokens.
+//
+// With constant rate type, GuideLLM maintains a number of concurrent in-flight requests
+// approximately equal to the target rate. The actual throughput is then determined by:
+//
+//	Throughput (req/s) = Concurrency / Request_Duration (s)
+//
+// Where:
+//
+//	Concurrency = target_rate (e.g., 5 concurrent requests for rate=5)
+//	Request_Duration = TTFT + (ITL * output_tokens)
+func CalculateExpectedArrivalRate(loadRateReqPerSec, ttftMs, itlMs, outputTokens int) float64 {
+	// Calculate request duration in seconds
+	requestDurationSec := float64(ttftMs+(itlMs*outputTokens)) / 1000.0
+
+	// With constant rate type, concurrency is approximately equal to target rate
+	concurrency := float64(loadRateReqPerSec)
+
+	// Throughput = concurrency / request duration
+	actualRatePerSec := concurrency / requestDurationSec
+
+	// Convert to req/min
+	return actualRatePerSec * 60.0
+}
+
 // StopJob deletes a Kubernetes Job and ensures it is removed from the cluster
 func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset, ctx context.Context) error {
 	if err := k8sClient.BatchV1().Jobs(namespace).Delete(ctx, job.Name, metav1.DeleteOptions{

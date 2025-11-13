@@ -94,7 +94,10 @@ func tuneServer(
 	}
 
 	// Update environment with latest metrics
-	tuner.UpdateEnvironment(env)
+	err = tuner.UpdateEnvironment(env)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update environment for server %s: %w", server.Name, err)
+	}
 
 	// Get previous NIS from VA status if it exists
 	var prevNIS float64

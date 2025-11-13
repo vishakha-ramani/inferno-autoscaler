@@ -232,8 +232,6 @@ func TestStasher_StateIndependence(t *testing.T) {
 }
 
 func TestStasher_UnStashWithoutStash(t *testing.T) {
-	// Test that UnStash without Stash doesn't crash
-	// (though behavior is undefined, it shouldn't panic)
 	initialX := mat.NewVecDense(4, []float64{5.0, 2.0, 1.5, 10.0})
 	initialP := mat.DenseCopyOf(mat.NewDiagDense(4, []float64{1.0, 1.0, 1.0, 1.0}))
 

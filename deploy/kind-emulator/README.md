@@ -54,6 +54,8 @@ export HF_TOKEN="hf_xxxxx"                  # Required: HuggingFace token
 export MODEL_ID="unsloth/Meta-Llama-3.1-8B" # Model to deploy
 export ACCELERATOR_TYPE="H100"              # Emulated GPU type
 export GATEWAY_PROVIDER="kgateway"          # Gateway for Kind (kgateway recommended)
+export ITL_AVERAGE_LATENCY_MS=20            # Average inter-token latency for the llm-d-inference-sim
+export TTFT_AVERAGE_LATENCY_MS=200          # Average time-to-first-token for the llm-d-inference-sim
 ```
 
 **Deployment flags**:

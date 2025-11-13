@@ -95,17 +95,17 @@ func getStateValsFromVA(
 	if hasTunedResults(va) {
 		state, covMatrix, err := extractValsFromVAStatus(va)
 		if err == nil {
-			logger.Log.Debug("Using state vals from VA status to tune",
-				"variant", va.Name,
-				"alpha", state[constants.StateIndexAlpha],
-				"beta", state[constants.StateIndexBeta],
-				"gamma", state[constants.StateIndexGamma],
-				"delta", state[constants.StateIndexDelta])
+			logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+				va.Name,
+				state[constants.StateIndexAlpha],
+				state[constants.StateIndexBeta],
+				state[constants.StateIndexGamma],
+				state[constants.StateIndexDelta])
 			return state, covMatrix, nil
 		}
-		logger.Log.Warn("Failed to extract tuned state from VA status, falling back to spec",
-			"variant", va.Name,
-			"error", err)
+		logger.Log.Warnf("Failed to extract tuned state from VA status, falling back to spec for variant %s: %v",
+			va.Name,
+			err)
 	}
 
 	// in case of first time tuning or error in extracting status, fall back to spec values
@@ -114,12 +114,12 @@ func getStateValsFromVA(
 		return nil, nil, err
 	}
 
-	logger.Log.Debug("Using initial state from spec",
-		"variant", va.Name,
-		"alpha", state[constants.StateIndexAlpha],
-		"beta", state[constants.StateIndexBeta],
-		"gamma", state[constants.StateIndexGamma],
-		"delta", state[constants.StateIndexDelta])
+	logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+		va.Name,
+		state[constants.StateIndexAlpha],
+		state[constants.StateIndexBeta],
+		state[constants.StateIndexGamma],
+		state[constants.StateIndexDelta])
 
 	return state, nil, nil
 }

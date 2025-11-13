@@ -29,42 +29,42 @@ func TuneModelPerfParams(
 		serverName := utils.FullName(va.Name, va.Namespace)
 		server := findServerInSystemData(systemData, serverName)
 		if server == nil {
-			logger.Log.Warn("Server not found in SystemData, skipping tuning",
-				"variant", va.Name,
-				"namespace", va.Namespace,
-				"serverName", serverName)
+			logger.Log.Warnf("Server not found in SystemData, skipping tuning for variant %s/%s, serverName %s",
+				va.Name,
+				va.Namespace,
+				serverName)
 			continue
 		}
 
 		// Tune the params of this server
 		tunedResults, err := tuneServer(&va, systemData, server)
 		if err != nil {
-			logger.Log.Warn("Failed to tune server, keeping original params",
-				"variant", va.Name,
-				"server", serverName,
-				"error", err)
+			logger.Log.Warnf("Failed to tune server, keeping original params for variant %s, server %s - error: %v",
+				va.Name,
+				serverName,
+				err)
 			continue
 		}
 
 		// Update SystemData with tuned parameters
 		if err := updateModelPerfDataInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator, tunedResults); err != nil {
-			logger.Log.Warn(err, "Failed to update SystemData with tuned params", "variant", va.Name)
+			logger.Log.Warnf("Failed to update SystemData with tuned params for variant %s, error %s", va.Name, err)
 			continue
 		}
 
 		// Update VA status (will be persisted by controller)
 		if err := updateVAStatusWithTunedParams(&va, server.Model, server.CurrentAlloc.Accelerator, tunedResults); err != nil {
-			logger.Log.Warn(err, "Failed to update VA status with tuned params", "variant", va.Name)
+			logger.Log.Warnf("Failed to update VA status with tuned params for variant %s, error %s", va.Name, err)
 			continue
 		}
 
-		logger.Log.Info("Tuned performance parameters",
-			"variant", va.Name,
-			"namespace", va.Namespace,
-			"alpha", tunedResults.ServiceParms.Decode.Alpha,
-			"beta", tunedResults.ServiceParms.Decode.Beta,
-			"gamma", tunedResults.ServiceParms.Prefill.Gamma,
-			"delta", tunedResults.ServiceParms.Prefill.Delta)
+		logger.Log.Infof("Tuned performance parameters: variant %s/%s - alpha: %.6f, beta: %.6f, gamma: %.6f, delta: %.6f",
+			va.Name,
+			va.Namespace,
+			tunedResults.ServiceParms.Decode.Alpha,
+			tunedResults.ServiceParms.Decode.Beta,
+			tunedResults.ServiceParms.Prefill.Gamma,
+			tunedResults.ServiceParms.Prefill.Delta)
 	}
 
 	return nil
@@ -118,12 +118,11 @@ func tuneServer(
 			// NIS validation failed, but we have previous state to use
 			tunedResults.NIS = prevNIS
 
-			logger.Log.Warn("Tuner validation failed, using previous state",
-				"variant", va.Name,
-				"server", server.Name,
-				"NIS", tunedResults.NIS,
-				"error", err)
-
+			logger.Log.Warnf("Tuner validation failed, using previous state for variant %s, server %s - NIS: %.6f, error: %v",
+				va.Name,
+				server.Name,
+				tunedResults.NIS,
+				err)
 			return tunedResults, nil
 		}
 		// Complete failure

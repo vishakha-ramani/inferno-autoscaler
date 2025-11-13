@@ -245,13 +245,11 @@ func TestStasher_UnStashWithoutStash(t *testing.T) {
 	stasher := NewStasher(filter)
 
 	// Call UnStash without calling Stash first
-	// This tests that the code handles the case gracefully
+	// This tests that an error is returned and no panic occurs
 	err = stasher.UnStash()
-	if err != nil {
-		t.Errorf("UnStash() failed: %v", err)
+	if err == nil {
+		t.Fatalf("UnStash() should have failed but did not")
 	}
-	// If we get here without panic, test passes
-	t.Log("UnStash without Stash completed without panic")
 }
 
 func TestStasher_CopySemantics(t *testing.T) {

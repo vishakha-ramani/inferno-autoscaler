@@ -127,15 +127,72 @@ func checkConfigData(cd *TunerConfigData) bool {
 	if cd == nil {
 		return false
 	}
-	md := cd.ModelData
-	n := len(md.InitState)
-	if n == 0 || len(md.PercentChange) != n ||
-		md.BoundedState && (len(md.MinState) != n || len(md.MaxState) != n) {
+
+	// Validate FilterData
+	fd := cd.FilterData
+	if fd.GammaFactor <= 0 {
 		return false
 	}
+	if fd.ErrorLevel <= 0 {
+		return false
+	}
+	if fd.TPercentile <= 0 {
+		return false
+	}
+
+	// Validate ModelData
+	md := cd.ModelData
+	n := len(md.InitState)
+	if n == 0 {
+		return false
+	}
+
+	// Check PercentChange length and values
+	if len(md.PercentChange) != n {
+		return false
+	}
+	for _, pc := range md.PercentChange {
+		if pc <= 0 || math.IsNaN(pc) || math.IsInf(pc, 0) {
+			return false
+		}
+	}
+
+	// Check InitState values are valid
+	for _, val := range md.InitState {
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return false
+		}
+	}
+
+	// Check bounded state constraints
+	if md.BoundedState {
+		if len(md.MinState) != n || len(md.MaxState) != n {
+			return false
+		}
+		// Validate MinState < MaxState for each element
+		for i := range n {
+			if md.MinState[i] >= md.MaxState[i] {
+				return false
+			}
+			if math.IsNaN(md.MinState[i]) || math.IsInf(md.MinState[i], 0) {
+				return false
+			}
+			if math.IsNaN(md.MaxState[i]) || math.IsInf(md.MaxState[i], 0) {
+				return false
+			}
+		}
+	}
+
+	// Check ExpectedObservations
 	if len(md.ExpectedObservations) == 0 {
 		return false
 	}
+	for _, obs := range md.ExpectedObservations {
+		if obs <= 0 || math.IsNaN(obs) || math.IsInf(obs, 0) {
+			return false
+		}
+	}
+
 	return true
 }
 

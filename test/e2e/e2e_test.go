@@ -409,10 +409,16 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 			g.Expect(observedLoad).To(BeNumerically("~", loadRate*60, loadRateTolerance),
 				fmt.Sprintf("Current load arrival rate for VA %s should approximately match the actual load: %d - observed: %.2f", va.Name, loadRate*60, observedLoad))
 
-			g.Expect(va.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+			itlAvg, err := strconv.ParseFloat(va.Status.CurrentAlloc.ITLAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc ITLAverage to float for VA: %s", va.Name))
+
+			ttftAvg, err := strconv.ParseFloat(va.Status.CurrentAlloc.TTFTAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc TTFTAverage to float for VA: %s", va.Name))
+
+			g.Expect(itlAvg).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va.Name))
 
-			g.Expect(va.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+			g.Expect(ttftAvg).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va.Name))
 
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
@@ -900,10 +906,16 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas1),
 				fmt.Sprintf("Current desired replicas for VA status %s should be equal to %d", va1.Name, int(desiredReplicas1)))
 
-			g.Expect(va1.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+			itlAvg1, err := strconv.ParseFloat(va1.Status.CurrentAlloc.ITLAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc ITLAverage to float for VA: %s", va1.Name))
+
+			ttftAvg1, err := strconv.ParseFloat(va1.Status.CurrentAlloc.TTFTAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc TTFTAverage to float for VA: %s", va1.Name))
+
+			g.Expect(itlAvg1).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va1.Name))
 
-			g.Expect(va1.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+			g.Expect(ttftAvg1).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va1.Name))
 
 			va2 := &v1alpha1.VariantAutoscaling{}
@@ -925,10 +937,15 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
 				fmt.Sprintf("Current desired replicas for VA status %s should be equal to %d", va2.Name, int(desiredReplicas2)))
 
-			g.Expect(va2.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+			itlAvg2, err := strconv.ParseFloat(va2.Status.CurrentAlloc.ITLAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc ITLAverage to float for VA: %s", va2.Name))
+
+			ttftAvg2, err := strconv.ParseFloat(va2.Status.CurrentAlloc.TTFTAverage, 64)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to convert CurrentAlloc TTFTAverage to float for VA: %s", va2.Name))
+			g.Expect(itlAvg2).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va2.Name))
 
-			g.Expect(va2.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+			g.Expect(ttftAvg2).To(BeNumerically(">", 0),
 				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va2.Name))
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 

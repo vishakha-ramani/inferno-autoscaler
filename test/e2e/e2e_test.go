@@ -60,6 +60,8 @@ const (
 	outputTokens        = 64
 	maxExecutionTimeSec = 300
 	loadRateTolerance   = 10
+	avgITL              = 20
+	avgTTFT             = 200
 )
 
 var (
@@ -183,7 +185,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		utils.ValidateVariantAutoscalingUniqueness(namespace, llamaModelId, a100Acc, crClient)
 
 		By("creating llm-d-sim deployment")
-		deployment := utils.CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, fmt.Sprintf("%d", port))
+		deployment := utils.CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Deployment: %s", deployName))
 
@@ -406,6 +408,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 			// Verify that the observed load approximately matches the generated load
 			g.Expect(observedLoad).To(BeNumerically("~", loadRate*60, loadRateTolerance),
 				fmt.Sprintf("Current load arrival rate for VA %s should approximately match the actual load: %d - observed: %.2f", va.Name, loadRate*60, observedLoad))
+
+			g.Expect(va.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va.Name))
+
+			g.Expect(va.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va.Name))
 
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
@@ -738,7 +746,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		utils.ValidateVariantAutoscalingUniqueness(namespace, llamaModelId, h100Acc, crClient)
 
 		By("creating resources for the first deployment")
-		firstDeployment := utils.CreateLlmdSimDeployment(namespace, firstDeployName, firstModelName, firstAppLabel, fmt.Sprintf("%d", port))
+		firstDeployment := utils.CreateLlmdSimDeployment(namespace, firstDeployName, firstModelName, firstAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, firstDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first Deployment: %s", firstDeployName))
 
@@ -768,7 +776,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first VariantAutoscaling for: %s", firstDeployName))
 
 		By("creating resources for the second deployment")
-		secondDeployment := utils.CreateLlmdSimDeployment(namespace, secondDeployName, secondModelName, secondAppLabel, fmt.Sprintf("%d", port))
+		secondDeployment := utils.CreateLlmdSimDeployment(namespace, secondDeployName, secondModelName, secondAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
 		_, err = k8sClient.AppsV1().Deployments(namespace).Create(ctx, secondDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second Deployment: %s", secondDeployName))
 
@@ -892,6 +900,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			g.Expect(va1.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas1),
 				fmt.Sprintf("Current desired replicas for VA status %s should be equal to %d", va1.Name, int(desiredReplicas1)))
 
+			g.Expect(va1.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va1.Name))
+
+			g.Expect(va1.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va1.Name))
+
 			va2 := &v1alpha1.VariantAutoscaling{}
 			err = crClient.Get(ctx, client.ObjectKey{
 				Namespace: namespace,
@@ -910,6 +924,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			// Verify that the desired number of replicas has same value as Prometheus result
 			g.Expect(va2.Status.DesiredOptimizedAlloc.NumReplicas).To(BeNumerically("==", desiredReplicas2),
 				fmt.Sprintf("Current desired replicas for VA status %s should be equal to %d", va2.Name, int(desiredReplicas2)))
+
+			g.Expect(va2.Status.CurrentAlloc.ITLAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current ITL Average for VA %s should be greater than 0 under load", va2.Name))
+
+			g.Expect(va2.Status.CurrentAlloc.TTFTAverage).To(BeNumerically(">", 0),
+				fmt.Sprintf("Current TTFT Average for VA %s should be greater than 0 under load", va2.Name))
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")

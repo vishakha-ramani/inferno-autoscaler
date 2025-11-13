@@ -813,7 +813,7 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 }
 
 // creates a llm-d-sim deployment with the specified configuration
-func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port string) *appsv1.Deployment {
+func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port string, avgTTFT, avgITL int) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
@@ -847,6 +847,9 @@ func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port st
 								modelName,
 								"--port",
 								port,
+								fmt.Sprintf("--time-to-first-token=%d", avgTTFT),
+								fmt.Sprintf("--inter-token-latency=%d", avgITL),
+								"--mode=random",
 							},
 							Env: []corev1.EnvVar{
 								{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{

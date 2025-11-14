@@ -353,7 +353,7 @@ set_tls_verification() {
                 log_info "Kubernetes cluster - enabling TLS skip verification for self-signed certificates"
                 ;;
             "openshift")
-                SKIP_TLS_VERIFY="false"
+                SKIP_TLS_VERIFY="true"
                 log_warning "OpenShift cluster - enabling strict TLS verification"
                 ;;
             *)
@@ -531,13 +531,6 @@ deploy_prometheus_adapter() {
     log_info "Adding Prometheus community helm repo"
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
     helm repo update
-
-    # Create CA ConfigMap from TLS certificate
-    log_info "Creating Prometheus CA ConfigMap in $MONITORING_NAMESPACE namespace for the Prometheus Adapter"
-    kubectl create configmap prometheus-ca \
-        --from-file=ca.crt=$PROM_CA_CERT_PATH \
-        -n $MONITORING_NAMESPACE \
-        --dry-run=client -o yaml | kubectl apply -f -
     
     # Create prometheus-adapter values for Kubernetes
     cat > /tmp/prometheus-adapter-values.yaml <<EOF

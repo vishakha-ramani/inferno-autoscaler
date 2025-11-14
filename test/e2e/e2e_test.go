@@ -368,6 +368,24 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", deployName))
 		}()
 
+		By("waiting for job pod to be running")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("job-name=%s", loadGenJob.Name),
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list job pods")
+			g.Expect(podList.Items).NotTo(BeEmpty(), "Job pod should exist")
+
+			pod := podList.Items[0]
+			// Check if pod is running or has completed initialization
+			g.Expect(pod.Status.Phase).To(Or(
+				Equal(corev1.PodRunning),
+				Equal(corev1.PodSucceeded),
+			), fmt.Sprintf("Job pod should be running or succeeded, but is in phase: %s", pod.Status.Phase))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation job is running\n")
+
 		var currentReplicasProm, desiredReplicasProm float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
@@ -710,7 +728,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		secondAppLabel = secondName
 		firstModelName = llamaModelId
 		secondModelName = llamaModelId
-		loadRate = 5 // requests per second
+		loadRate = 3 // requests per second
 
 		By("ensuring unique app labels for deployment and service")
 		utils.ValidateAppLabelUniqueness(namespace, firstAppLabel, k8sClient, crClient)
@@ -851,6 +869,37 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstServiceName))
 		}()
 
+		By("waiting for job pod to be running")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("job-name=%s", loadGenJob1.Name),
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list job pods")
+			g.Expect(podList.Items).NotTo(BeEmpty(), "Job pod should exist")
+
+			pod := podList.Items[0]
+			// Check if pod is running or has completed initialization
+			g.Expect(pod.Status.Phase).To(Or(
+				Equal(corev1.PodRunning),
+				Equal(corev1.PodSucceeded),
+			), fmt.Sprintf("Job pod should be running or succeeded, but is in phase: %s", pod.Status.Phase))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation job is running\n")
+
+		By("waiting for variantAutoscaling controller to detect metrics")
+		Eventually(func(g Gomega) {
+			va1 := &v1alpha1.VariantAutoscaling{}
+			err := crClient.Get(ctx, client.ObjectKey{
+				Namespace: namespace,
+				Name:      firstDeployName,
+			}, va1)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
+
+			g.Expect(va1.Status.Conditions).NotTo(BeEmpty(),
+				fmt.Sprintf("VariantAutoscaling %s should have non-empty conditions", va1.Name))
+		}, 3*time.Minute, 10*time.Second).Should(Succeed())
+
 		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")
 		Eventually(func(g Gomega) {
@@ -964,13 +1013,34 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic for both deployments")
-		loadRate = 10
+		loadRate = 5 // increased requests per second
 		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", firstDeployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob1, k8sClient, ctx)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstDeployName))
 		}()
+
+		By("waiting for job pod to be running")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("job-name=%s", loadGenJob1.Name),
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list job pods")
+			g.Expect(podList.Items).NotTo(BeEmpty(), "Job pod should exist")
+
+			pod := podList.Items[0]
+			// Check if pod is running or has completed initialization
+			g.Expect(pod.Status.Phase).To(Or(
+				Equal(corev1.PodRunning),
+				Equal(corev1.PodSucceeded),
+			), fmt.Sprintf("Job pod should be running or succeeded, but is in phase: %s", pod.Status.Phase))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation job is running\n")
+
+		By("waiting for load generation to ramp up again (30 seconds)")
+		time.Sleep(30 * time.Second)
 
 		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")

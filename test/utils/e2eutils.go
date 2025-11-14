@@ -593,21 +593,36 @@ func CalculateExpectedArrivalRate(loadRateReqPerSec, ttftMs, itlMs, outputTokens
 	return actualRatePerSec * 60.0
 }
 
-// StopJob deletes a Kubernetes Job and ensures it is removed from the cluster
+// StopJob deletes a Kubernetes Job and ensures it is removed from the cluster along with its Pods.
 func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset, ctx context.Context) error {
+	// Delete the Job with Foreground propagation to ensure pods are cleaned up first
+	propagationPolicy := metav1.DeletePropagationForeground
 	if err := k8sClient.BatchV1().Jobs(namespace).Delete(ctx, job.Name, metav1.DeleteOptions{
-		PropagationPolicy: func() *metav1.DeletionPropagation {
-			policy := metav1.DeletePropagationBackground
-			return &policy
-		}(),
+		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
-		return fmt.Errorf("failed to delete load generator Job: %w", err)
+		// If already deleted, consider it successful
+		if client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete job: %w", err)
+		}
 	}
 
-	// Job should not be found after deletion
-	if _, err := k8sClient.BatchV1().Jobs(namespace).Get(ctx, job.Name, metav1.GetOptions{}); err == nil {
-		return fmt.Errorf("job should be deleted: %w", err)
+	// Wait for the Job to be fully deleted (including all pods)
+	if err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		_, err := k8sClient.BatchV1().Jobs(namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		if err != nil {
+			// Job not found means it's deleted
+			if client.IgnoreNotFound(err) == nil {
+				return true, nil
+			}
+			// Other errors, keep waiting
+			return false, nil
+		}
+		// Job still exists, keep waiting
+		return false, nil
+	}); err != nil {
+		return fmt.Errorf("timed out waiting for job deletion: %w", err)
 	}
+
 	return nil
 }
 

@@ -4,7 +4,7 @@ Welcome! We're excited that you're interested in contributing to the Workload-Va
 
 ## General Contributing Guidelines
 
-For general contribution guidelines including code of conduct, commit message format, PR process, and community standards, please see the **[llm-d Contributing Guide](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md)**.
+For general contribution guidelines including code of conduct, commit message format, PR process, and community standards, please see the **llm-d Contributing Guide**.
 
 This document covers **WVA-specific** development setup and workflows.
 
@@ -281,5 +281,3 @@ By contributing, you agree that your contributions will be licensed under the Ap
 ---
 
 Thank you for contributing to Workload-Variant-Autoscaler!
-
-For general llm-d contribution guidelines, visit the [llm-d Contributing Guide](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md).

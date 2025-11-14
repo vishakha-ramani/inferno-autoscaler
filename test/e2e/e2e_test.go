@@ -351,13 +351,22 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		err := utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
-		By("verifying initial state of VariantAutoscaling")
-		initialVA := &v1alpha1.VariantAutoscaling{}
-		err = crClient.Get(ctx, client.ObjectKey{
-			Namespace: namespace,
-			Name:      deployName,
-		}, initialVA)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+		By("waiting for variantAutoscaling resource to have MetricsAvailable condition set to True")
+		Eventually(func(g Gomega) {
+			va := &v1alpha1.VariantAutoscaling{}
+			err := crClient.Get(ctx, client.ObjectKey{
+				Namespace: namespace,
+				Name:      deployName,
+			}, va)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployName))
+
+			// Check that MetricsAvailable condition exists and is True
+			metricsCondition := v1alpha1.GetCondition(va, v1alpha1.TypeMetricsAvailable)
+			g.Expect(metricsCondition).NotTo(BeNil(),
+				fmt.Sprintf("VariantAutoscaling %s should have MetricsAvailable condition", va.Name))
+			g.Expect(metricsCondition.Status).To(Equal(metav1.ConditionTrue),
+				fmt.Sprintf("VariantAutoscaling %s MetricsAvailable condition should be True", va.Name))
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("starting load generation to create traffic")
 		loadGenJob, err = utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), modelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
@@ -861,12 +870,42 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		err = utils.VerifyPortForwardReadiness(ctx, 9090, fmt.Sprintf("https://localhost:%d/api/v1/query?query=up", 9090))
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
+		By("waiting for variantAutoscaling resource to have MetricsAvailable condition set to True")
+		Eventually(func(g Gomega) {
+			va1 := &v1alpha1.VariantAutoscaling{}
+			err := crClient.Get(ctx, client.ObjectKey{
+				Namespace: namespace,
+				Name:      firstDeployName,
+			}, va1)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
+
+			// Check that MetricsAvailable condition exists and is True
+			metricsCondition := v1alpha1.GetCondition(va1, v1alpha1.TypeMetricsAvailable)
+			g.Expect(metricsCondition).NotTo(BeNil(),
+				fmt.Sprintf("VariantAutoscaling %s should have MetricsAvailable condition", va1.Name))
+			g.Expect(metricsCondition.Status).To(Equal(metav1.ConditionTrue),
+				fmt.Sprintf("VariantAutoscaling %s MetricsAvailable condition should be True", va1.Name))
+
+			va2 := &v1alpha1.VariantAutoscaling{}
+			err = crClient.Get(ctx, client.ObjectKey{
+				Namespace: namespace,
+				Name:      secondDeployName,
+			}, va2)
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", secondDeployName))
+			// Check that MetricsAvailable condition exists and is True
+			metricsCondition = v1alpha1.GetCondition(va2, v1alpha1.TypeMetricsAvailable)
+			g.Expect(metricsCondition).NotTo(BeNil(),
+				fmt.Sprintf("VariantAutoscaling %s should have MetricsAvailable condition", va2.Name))
+			g.Expect(metricsCondition.Status).To(Equal(metav1.ConditionTrue),
+				fmt.Sprintf("VariantAutoscaling %s MetricsAvailable condition should be True", va2.Name))
+		}, 4*time.Minute, 10*time.Second).Should(Succeed())
+
 		By("starting load generation to create traffic for both deployments")
 		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", firstDeployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob1, k8sClient, ctx)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstServiceName))
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstDeployName))
 		}()
 
 		By("waiting for job pod to be running")
@@ -886,19 +925,6 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
 		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation job is running\n")
-
-		By("waiting for variantAutoscaling controller to detect metrics")
-		Eventually(func(g Gomega) {
-			va1 := &v1alpha1.VariantAutoscaling{}
-			err := crClient.Get(ctx, client.ObjectKey{
-				Namespace: namespace,
-				Name:      firstDeployName,
-			}, va1)
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", firstDeployName))
-
-			g.Expect(va1.Status.Conditions).NotTo(BeEmpty(),
-				fmt.Sprintf("VariantAutoscaling %s should have non-empty conditions", va1.Name))
-		}, 3*time.Minute, 10*time.Second).Should(Succeed())
 
 		var desiredReplicas1, desiredReplicas2 float64
 		By("waiting for load to be processed and scaling decision to be made")

@@ -34,23 +34,23 @@ type TunerModelData struct {
 // Configurator for the model tuner
 type Configurator struct {
 	// dimensions
-	nX int // number of state parameters
-	nZ int // number of observation metrics
+	numStates       int // number of state parameters
+	numObservations int // number of observation metrics
 
 	// matrices
-	X *mat.VecDense // (initial or prior) values of state parameters
-	P *mat.Dense    // covariance matrix of estimation error
-	Q *mat.Dense    // covariance matrix of noise on state
-	R *mat.Dense    // covariance matrix of noise on observation
+	state                      *mat.VecDense // (initial or prior) values of state parameters
+	stateCovariance            *mat.Dense    // covariance matrix of estimation error
+	stateNoiseCovariance       *mat.Dense    // covariance matrix of noise on state
+	observationNoiseCovariance *mat.Dense    // covariance matrix of noise on observation
 
 	// functions
-	fFunc func(*mat.VecDense) *mat.VecDense // transition function for the state params
+	stateTransitionFunc func(*mat.VecDense) *mat.VecDense // transition function for the state params
 
 	// other
-	percentChange []float64 // expected percent change in state params
-	Xbounded      bool      // if state bounded
-	Xmin          []float64 // min values of state params
-	Xmax          []float64 // max values of state params
+	percentStateChange []float64 // expected percent change in state params
+	stateBounded       bool      // if state bounded
+	minState           []float64 // min values of state params
+	maxState           []float64 // max values of state params
 }
 
 func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
@@ -58,67 +58,67 @@ func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
 		return nil, fmt.Errorf("invalid config data")
 	}
 
-	md := configData.ModelData
-	n := len(md.InitState)
-	X := mat.NewVecDense(n, md.InitState)
+	modelData := configData.ModelData
+	numStates := len(modelData.InitState)
+	X := mat.NewVecDense(numStates, modelData.InitState)
 
-	fd := configData.FilterData
-	m := len(md.ExpectedObservations)
-	obsCOV := make([]float64, m)
-	factor := ((fd.ErrorLevel / fd.TPercentile) * (fd.ErrorLevel / fd.TPercentile)) / fd.GammaFactor
-	for j := range m {
-		obsCOV[j] = factor * md.ExpectedObservations[j] * md.ExpectedObservations[j]
+	filterData := configData.FilterData
+	numObservations := len(modelData.ExpectedObservations)
+	obsCOV := make([]float64, numObservations)
+	factor := ((filterData.ErrorLevel / filterData.TPercentile) * (filterData.ErrorLevel / filterData.TPercentile)) / filterData.GammaFactor
+	for j := range numObservations {
+		obsCOV[j] = factor * modelData.ExpectedObservations[j] * modelData.ExpectedObservations[j]
 	}
-	R := mat.DenseCopyOf(mat.NewDiagDense(m, obsCOV))
+	R := mat.DenseCopyOf(mat.NewDiagDense(numObservations, obsCOV))
 
 	c = &Configurator{
-		nX:            n,
-		nZ:            m,
-		X:             X,
-		P:             nil,
-		Q:             nil,
-		R:             R,
-		fFunc:         nil,
-		percentChange: md.PercentChange,
-		Xbounded:      md.BoundedState,
-		Xmin:          md.MinState,
-		Xmax:          md.MaxState,
+		numStates:                  numStates,
+		numObservations:            numObservations,
+		state:                      X,
+		stateCovariance:            nil,
+		stateNoiseCovariance:       nil,
+		observationNoiseCovariance: R,
+		stateTransitionFunc:        nil,
+		percentStateChange:         modelData.PercentChange,
+		stateBounded:               modelData.BoundedState,
+		minState:                   modelData.MinState,
+		maxState:                   modelData.MaxState,
 	}
 
 	// Initialize P: use provided covariance if available, otherwise compute from state
-	if md.InitCovarianceMatrix != nil {
-		c.P = mat.NewDense(n, n, md.InitCovarianceMatrix)
+	if modelData.InitCovarianceMatrix != nil {
+		c.stateCovariance = mat.NewDense(numStates, numStates, modelData.InitCovarianceMatrix)
 	} else {
-		c.P, err = c.GetStateCov(X)
+		c.stateCovariance, err = c.GetStateCov(X)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if c.Q, err = c.GetStateCov(X); err != nil {
+	if c.stateNoiseCovariance, err = c.GetStateCov(X); err != nil {
 		return nil, err
 	}
-	c.fFunc = stateTransitionFunc
+	c.stateTransitionFunc = stateTransitionFunc
 	return c, nil
 }
 
 func (c *Configurator) GetStateCov(x *mat.VecDense) (*mat.Dense, error) {
-	if x.Len() != c.nX {
+	if x.Len() != c.numStates {
 		return nil, mat.ErrNormOrder
 	}
-	changeCov := make([]float64, c.nX)
-	for i := 0; i < c.nX; i++ {
-		changeCov[i] = math.Pow(c.percentChange[i]*x.AtVec(i), 2)
+	changeCov := make([]float64, c.numStates)
+	for i := 0; i < c.numStates; i++ {
+		changeCov[i] = math.Pow(c.percentStateChange[i]*x.AtVec(i), 2)
 	}
-	return mat.DenseCopyOf(mat.NewDiagDense(c.nX, changeCov)), nil
+	return mat.DenseCopyOf(mat.NewDiagDense(c.numStates, changeCov)), nil
 }
 
 func (c *Configurator) NumStates() int {
-	return c.nX
+	return c.numStates
 }
 
 func (c *Configurator) NumObservations() int {
-	return c.nZ
+	return c.numObservations
 }
 
 // check validity of configuration data

@@ -44,21 +44,21 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 	}
 
 	// create filter
-	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.X, c.P)
+	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.state, c.stateCovariance)
 	if err != nil {
 		return nil, fmt.Errorf("error on filter creation: %v", err)
 	}
-	if err := f.SetQ(c.Q); err != nil {
+	if err := f.SetQ(c.stateNoiseCovariance); err != nil {
 		return nil, fmt.Errorf("error on setting Q: %v", err)
 	}
-	if err := f.SetR(c.R); err != nil {
+	if err := f.SetR(c.observationNoiseCovariance); err != nil {
 		return nil, fmt.Errorf("error on setting R: %v", err)
 	}
-	if err := f.SetfF(c.fFunc); err != nil {
+	if err := f.SetfF(c.stateTransitionFunc); err != nil {
 		return nil, fmt.Errorf("error on setting fFunc: %v", err)
 	}
-	if c.Xbounded {
-		if err := f.SetStateLimiter(c.Xmin, c.Xmax); err != nil {
+	if c.stateBounded {
+		if err := f.SetStateLimiter(c.minState, c.maxState); err != nil {
 			return nil, fmt.Errorf("error on setting state limiter: %v", err)
 		}
 	}
@@ -101,7 +101,7 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 
 	// update
 	Z := t.env.GetObservations()
-	if err := t.filter.Update(Z, t.configurator.R); err != nil {
+	if err := t.filter.Update(Z, t.configurator.observationNoiseCovariance); err != nil {
 		return nil, fmt.Errorf("failed to update filter: %w", err)
 	}
 

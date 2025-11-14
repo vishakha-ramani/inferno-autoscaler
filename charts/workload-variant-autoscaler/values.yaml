@@ -16,10 +16,9 @@ wva:
   prometheus:
     monitoringNamespace: openshift-user-workload-monitoring
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-    # Security configuration
+    # Development security configuration (relaxed for easier development)
     tls:
-      # Note: insecureSkipVerify defaults to true for backward compatibility
-      # Override to false in production deployments for strict TLS verification
+      insecureSkipVerify: true   # Development: true, Production: false
       caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
     # caCert: |  # Uncomment and provide your CA certificate
     #   -----BEGIN CERTIFICATE-----

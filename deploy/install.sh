@@ -48,6 +48,8 @@ CLIENT_PREREQ_DIR=${CLIENT_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prere
 GATEWAY_PREREQ_DIR=${GATEWAY_PREREQ_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/prereq/gateway-provider"}
 EXAMPLE_DIR=${EXAMPLE_DIR:-"$WVA_PROJECT/$LLM_D_PROJECT/guides/$WELL_LIT_PATH_NAME"}
 LLM_D_MODELSERVICE_VALUES=${LLM_D_MODELSERVICE_VALUES:-"$EXAMPLE_DIR/ms-$WELL_LIT_PATH_NAME/values.yaml"}
+ITL_AVERAGE_LATENCY_MS=${ITL_AVERAGE_LATENCY_MS:-20}
+TTFT_AVERAGE_LATENCY_MS=${TTFT_AVERAGE_LATENCY_MS:-200}
 
 # Gateway Configuration
 GATEWAY_PROVIDER=${GATEWAY_PROVIDER:-"istio"} # Options: kgateway, istio
@@ -415,7 +417,7 @@ deploy_wva_controller() {
     
     # Wait for WVA to be ready
     log_info "Waiting for WVA controller to be ready..."
-    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=60s || \
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=30s || \
         log_warning "WVA controller is not ready yet - check 'kubectl get pods -n $WVA_NS'"
     
     log_success "WVA deployment complete"
@@ -491,7 +493,11 @@ deploy_llm_d_infrastructure() {
     # Configure llm-d-inference-simulator if needed
     if [ "$DEPLOY_LLM_D_INFERENCE_SIM" == "true" ]; then
       log_info "Deploying llm-d-inference-simulator..."
-        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\"" -i "$LLM_D_MODELSERVICE_VALUES"
+        yq eval ".decode.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | \
+                 .prefill.containers[0].image = \"$LLM_D_INFERENCE_SIM_IMG_REPO:$LLM_D_INFERENCE_SIM_IMG_TAG\" | \
+                 .decode.containers[0].args = [\"--time-to-first-token=$TTFT_AVERAGE_LATENCY_MS\", \"--inter-token-latency=$ITL_AVERAGE_LATENCY_MS\"] | \
+                 .prefill.containers[0].args = [\"--time-to-first-token=$TTFT_AVERAGE_LATENCY_MS\", \"--inter-token-latency=$ITL_AVERAGE_LATENCY_MS\"]" \
+                 -i "$LLM_D_MODELSERVICE_VALUES"
     else
       log_info "Skipping llm-d-inference-simulator deployment (DEPLOY_LLM_D_INFERENCE_SIM=false)"
     fi
@@ -511,7 +517,7 @@ deploy_llm_d_infrastructure() {
     fi
     
     log_info "Waiting for llm-d components to initialize..."
-    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=60s || \
+    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=30s || \
         log_warning "llm-d components are not ready yet - check 'kubectl get pods -n $LLMD_NS'"
     
     cd "$WVA_PROJECT"

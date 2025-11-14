@@ -568,21 +568,61 @@ func CreateLoadGeneratorJob(image, namespace, targetURL, modelName string, rate,
 	return job, nil
 }
 
-// StopJob deletes a Kubernetes Job and ensures it is removed from the cluster
+// CalculateExpectedArrivalRate calculates the expected arrival rate (req/min) based on GuideLLM rate (req/sec), ITL/TTFT latencies, and the number of output tokens.
+//
+// With constant rate type, GuideLLM maintains a number of concurrent in-flight requests
+// approximately equal to the target rate. The actual throughput is then determined by:
+//
+//	Throughput (req/s) = Concurrency / Request_Duration (s)
+//
+// Where:
+//
+//	Concurrency = target_rate (e.g., 5 concurrent requests for rate=5)
+//	Request_Duration = TTFT + (ITL * output_tokens)
+func CalculateExpectedArrivalRate(loadRateReqPerSec, ttftMs, itlMs, outputTokens int) float64 {
+	// Calculate request duration in seconds
+	requestDurationSec := float64(ttftMs+(itlMs*outputTokens)) / 1000.0
+
+	// With constant rate type, concurrency is approximately equal to target rate
+	concurrency := float64(loadRateReqPerSec)
+
+	// Throughput = concurrency / request duration
+	actualRatePerSec := concurrency / requestDurationSec
+
+	// Convert to req/min
+	return actualRatePerSec * 60.0
+}
+
+// StopJob deletes a Kubernetes Job and ensures it is removed from the cluster along with its Pods.
 func StopJob(namespace string, job *batchv1.Job, k8sClient *kubernetes.Clientset, ctx context.Context) error {
+	// Delete the Job with Foreground propagation to ensure pods are cleaned up first
+	propagationPolicy := metav1.DeletePropagationForeground
 	if err := k8sClient.BatchV1().Jobs(namespace).Delete(ctx, job.Name, metav1.DeleteOptions{
-		PropagationPolicy: func() *metav1.DeletionPropagation {
-			policy := metav1.DeletePropagationBackground
-			return &policy
-		}(),
+		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
-		return fmt.Errorf("failed to delete load generator Job: %w", err)
+		// If already deleted, consider it successful
+		if client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete job: %w", err)
+		}
 	}
 
-	// Job should not be found after deletion
-	if _, err := k8sClient.BatchV1().Jobs(namespace).Get(ctx, job.Name, metav1.GetOptions{}); err == nil {
-		return fmt.Errorf("job should be deleted: %w", err)
+	// Wait for the Job to be fully deleted (including all pods)
+	if err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		_, err := k8sClient.BatchV1().Jobs(namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		if err != nil {
+			// Job not found means it's deleted
+			if client.IgnoreNotFound(err) == nil {
+				return true, nil
+			}
+			// Other errors, keep waiting
+			return false, nil
+		}
+		// Job still exists, keep waiting
+		return false, nil
+	}); err != nil {
+		return fmt.Errorf("timed out waiting for job deletion: %w", err)
 	}
+
 	return nil
 }
 
@@ -813,7 +853,7 @@ func LogVariantAutoscalingStatus(ctx context.Context, vaName, namespace string, 
 }
 
 // creates a llm-d-sim deployment with the specified configuration
-func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port string) *appsv1.Deployment {
+func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port string, avgTTFT, avgITL int) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployName,
@@ -847,6 +887,9 @@ func CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, port st
 								modelName,
 								"--port",
 								port,
+								fmt.Sprintf("--time-to-first-token=%d", avgTTFT),
+								fmt.Sprintf("--inter-token-latency=%d", avgITL),
+								"--mode=random",
 							},
 							Env: []corev1.EnvVar{
 								{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{

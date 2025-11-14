@@ -72,7 +72,6 @@ func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 	if alloc.NumReplicas > 0 {
 		ratePerReplica = alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
 	}
-	now := time.Now()
 	return &tune.Environment{
 		Lambda:        ratePerReplica,
 		AvgOutputToks: alloc.Load.AvgOutTokens,
@@ -81,7 +80,6 @@ func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 		AvgTTFT:       alloc.TTFTAverage,
 		AvgITL:        alloc.ITLAverage,
 		NumReplicas:   alloc.NumReplicas,
-		TimeStamp:     &now,
 	}
 }
 

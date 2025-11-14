@@ -571,9 +571,6 @@ func TestConvertAllocToEnvironment(t *testing.T) {
 			if env.NumReplicas != tt.wantReplicas {
 				t.Errorf("NumReplicas = %v, want %v", env.NumReplicas, tt.wantReplicas)
 			}
-			if env.TimeStamp == nil {
-				t.Error("TimeStamp is nil")
-			}
 		})
 	}
 }

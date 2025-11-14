@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 // build config data from defaults, init state and slos
 func BuildTunerConfig(
 	state []float64,
-	covMatrix *mat.Dense,
+	covMatrix []float64,
 	slos []float64,
 ) (*tune.TunerConfigData, error) {
 
@@ -29,7 +28,7 @@ func BuildTunerConfig(
 		FilterData: getDefaultFilterData(),
 		ModelData: tune.TunerModelData{
 			InitState:            state,
-			CovarianceMatrix:     covMatrix,
+			InitCovarianceMatrix: covMatrix,
 			PercentChange:        getDefaultPercentChange(),
 			BoundedState:         true,
 			MinState:             getFactoredState(state, constants.DefaultMinStateFactor),
@@ -90,10 +89,10 @@ func getStateValsFromVA(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	systemData *infernoConfig.SystemData,
 	server *infernoConfig.ServerSpec,
-) ([]float64, *mat.Dense, error) {
+) (state []float64, covMatrix []float64, err error) {
 	// check if VA has tuned results in status (has been tuned before)
 	if hasTunedResults(va) {
-		state, covMatrix, err := extractValsFromVAStatus(va)
+		state, covMatrix, err = extractValsFromVAStatus(va)
 		if err == nil {
 			logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 				va.Name,
@@ -109,7 +108,7 @@ func getStateValsFromVA(
 	}
 
 	// in case of first time tuning or error in extracting status, fall back to spec values
-	state, err := findInitStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+	state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,13 +131,13 @@ func hasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool
 }
 
 // extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
-func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, *mat.Dense, error) {
-	state, err := extractStateFromVAStatus(va)
+func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (state []float64, covMatrix []float64, err error) {
+	state, err = extractStateFromVAStatus(va)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to extract tuned state from VA status: %w", err)
 	}
 
-	covMatrix, err := extractCovMatrixFromVAStatus(va)
+	covMatrix, err = extractCovMatrixFromVAStatus(va)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to extract covariance matrix from VA status: %w", err)
 	}
@@ -146,7 +145,7 @@ func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscali
 	return state, covMatrix, nil
 }
 
-func extractCovMatrixFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (*mat.Dense, error) {
+func extractCovMatrixFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
 	matStatus := va.Status.TunerPerfData.CovarianceMatrix
 	rows := len(matStatus)
 	cols := len(matStatus[0])
@@ -170,11 +169,7 @@ func extractCovMatrixFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAuto
 			data[r*cols+c] = val
 		}
 	}
-	covMatrix := mat.NewDense(rows, cols, data)
-	if !IsSymmetric(covMatrix, constants.DefaultTunerEpsilon) {
-		return nil, fmt.Errorf("covariance matrix is not symmetric")
-	}
-	return covMatrix, nil
+	return data, nil
 }
 
 func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
@@ -209,7 +204,7 @@ func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscal
 	return []float64{alpha, beta, gamma, delta}, nil
 }
 
-func findInitStateInSystemData(
+func findStateInSystemData(
 	systemData *infernoConfig.SystemData,
 	modelName string,
 	acceleratorName string,
@@ -344,45 +339,4 @@ func findServerInSystemData(systemData *infernoConfig.SystemData, serverName str
 		}
 	}
 	return nil
-}
-
-// floatEqual checks if two float64 numbers are approximately equal within a given epsilon.
-func floatEqual(a, b, epsilon float64) bool {
-	// Handle the case where they are exactly equal.
-	if a == b {
-		return true
-	}
-
-	// Calculate the absolute difference.
-	diff := math.Abs(a - b)
-
-	// Compare the absolute difference with a combination of absolute and relative tolerance.
-	// This helps handle cases with very small or very large numbers.
-	if a == 0.0 || b == 0.0 || diff < math.SmallestNonzeroFloat64 {
-		return diff < (epsilon * math.SmallestNonzeroFloat64)
-	}
-	return diff/(math.Abs(a)+math.Abs(b)) < epsilon
-}
-
-// IsSymmetric checks if a given mat.Matrix is symmetric.
-func IsSymmetric(m mat.Matrix, epsilon float64) bool {
-	r, c := m.Dims()
-
-	// 1. Check if it's a square matrix
-	if r != c {
-		return false
-	}
-
-	// 2. Check if elements are equal to their transposes
-	// We only need to check the upper or lower triangle (excluding the diagonal)
-	// because if a_ij = a_ji, then a_ji = a_ij is also true.
-	for i := 0; i < r; i++ {
-		for j := i + 1; j < c; j++ { // Start from j = i + 1 to avoid checking diagonal and duplicates
-			if !floatEqual(m.At(i, j), m.At(j, i), epsilon) {
-				return false
-			}
-		}
-	}
-
-	return true
 }

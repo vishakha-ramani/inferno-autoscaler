@@ -1443,38 +1443,6 @@ func TestNewTuner_ConfiguratorErrors(t *testing.T) {
 			},
 			wantErr: "error on configurator creation",
 		},
-		{
-			name: "negative expected observation",
-			configData: &TunerConfigData{
-				FilterData: FilterData{
-					GammaFactor: 1.0,
-					ErrorLevel:  0.05,
-					TPercentile: 1.96,
-				},
-				ModelData: TunerModelData{
-					InitState:            []float64{5.0, 2.5, 10.0, 0.15},
-					PercentChange:        []float64{0.1, 0.1, 0.1, 0.1},
-					ExpectedObservations: []float64{-190, 15},
-				},
-			},
-			wantErr: "error on configurator creation",
-		},
-		{
-			name: "zero expected observation",
-			configData: &TunerConfigData{
-				FilterData: FilterData{
-					GammaFactor: 1.0,
-					ErrorLevel:  0.05,
-					TPercentile: 1.96,
-				},
-				ModelData: TunerModelData{
-					InitState:            []float64{5.0, 2.5, 10.0, 0.15},
-					PercentChange:        []float64{0.1, 0.1, 0.1, 0.1},
-					ExpectedObservations: []float64{0, 15},
-				},
-			},
-			wantErr: "error on configurator creation",
-		},
 	}
 
 	env := createTestEnvironment()

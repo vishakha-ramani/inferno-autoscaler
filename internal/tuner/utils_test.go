@@ -126,7 +126,7 @@ func TestExtractCovMatrixFromVAStatus(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid 4x4 symmetric matrix",
+			name: "valid 4x4 matrix",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
 					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
@@ -163,22 +163,6 @@ func TestExtractCovMatrixFromVAStatus(t *testing.T) {
 						CovarianceMatrix: [][]string{
 							{"0.1", "0", "0", "0"},
 							{"0", "invalid", "0", "0"},
-							{"0", "0", "0.1", "0"},
-							{"0", "0", "0", "0.1"},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "not symmetric",
-			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
-				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
-						CovarianceMatrix: [][]string{
-							{"0.1", "0.01", "0", "0"},
-							{"0.02", "0.1", "0", "0"},
 							{"0", "0", "0.1", "0"},
 							{"0", "0", "0", "0.1"},
 						},
@@ -296,8 +280,8 @@ func TestExtractStateFromVAStatus(t *testing.T) {
 	}
 }
 
-// TestFindInitStateInSystemData tests initial state lookup
-func TestFindInitStateInSystemData(t *testing.T) {
+// TestFindStateInSystemData tests initial state lookup
+func TestFindStateInSystemData(t *testing.T) {
 	systemData := &infernoConfig.SystemData{
 		Spec: infernoConfig.SystemSpec{
 			Models: infernoConfig.ModelData{
@@ -383,9 +367,9 @@ func TestFindInitStateInSystemData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			state, err := findInitStateInSystemData(systemData, tt.modelName, tt.acceleratorName)
+			state, err := findStateInSystemData(systemData, tt.modelName, tt.acceleratorName)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("findInitStateInSystemData() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("findStateInSystemData() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && state[constants.StateIndexAlpha] != tt.wantAlpha {
@@ -438,109 +422,6 @@ func TestDenseMatrixToSliceOfStrings(t *testing.T) {
 	}
 }
 
-// TestFloatEqual tests float comparison with epsilon
-func TestFloatEqual(t *testing.T) {
-	tests := []struct {
-		name string
-		a    float64
-		b    float64
-		want bool
-	}{
-		{
-			name: "exactly equal",
-			a:    1.0,
-			b:    1.0,
-			want: true,
-		},
-		{
-			name: "within epsilon",
-			a:    1.0,
-			b:    1.0 + 1e-10,
-			want: true,
-		},
-		{
-			name: "outside epsilon",
-			a:    1.0,
-			b:    1.1,
-			want: false,
-		},
-		{
-			name: "both zero",
-			a:    0.0,
-			b:    0.0,
-			want: true,
-		},
-		{
-			name: "very small difference - relative comparison",
-			a:    1.0,
-			b:    1.0 + math.SmallestNonzeroFloat64,
-			want: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := floatEqual(tt.a, tt.b, epsilon); got != tt.want {
-				t.Errorf("floatEqual(%v, %v, %v) = %v, want %v", tt.a, tt.b, epsilon, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestIsSymmetric tests matrix symmetry checking
-func TestIsSymmetric(t *testing.T) {
-	tests := []struct {
-		name    string
-		matrix  mat.Matrix
-		epsilon float64
-		want    bool
-	}{
-		{
-			name: "symmetric matrix",
-			matrix: mat.NewDense(3, 3, []float64{
-				1, 2, 3,
-				2, 4, 5,
-				3, 5, 6,
-			}),
-			want: true,
-		},
-		{
-			name: "identity matrix",
-			matrix: mat.NewDense(3, 3, []float64{
-				1, 0, 0,
-				0, 1, 0,
-				0, 0, 1,
-			}),
-			want: true,
-		},
-		{
-			name: "not symmetric",
-			matrix: mat.NewDense(3, 3, []float64{
-				1, 2, 3,
-				4, 5, 6,
-				7, 8, 9,
-			}),
-			want: false,
-		},
-		{
-			name: "not square",
-			matrix: mat.NewDense(2, 3, []float64{
-				1, 2, 3,
-				4, 5, 6,
-			}),
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsSymmetric(tt.matrix, tt.epsilon); got != tt.want {
-				t.Errorf("IsSymmetric() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestGetDefaultFilterData tests filter data defaults
 func TestGetDefaultFilterData(t *testing.T) {
 	filterData := getDefaultFilterData()
@@ -576,7 +457,7 @@ func TestBuildTunerConfig(t *testing.T) {
 	tests := []struct {
 		name      string
 		state     []float64
-		covMatrix *mat.Dense
+		covMatrix []float64
 		slos      []float64
 		wantErr   bool
 	}{
@@ -590,7 +471,7 @@ func TestBuildTunerConfig(t *testing.T) {
 		{
 			name:      "with covariance matrix",
 			state:     []float64{5.0, 2.5, 10.0, 0.15},
-			covMatrix: mat.NewDense(4, 4, nil),
+			covMatrix: make([]float64, 16),
 			slos:      []float64{150.0, 25.0},
 			wantErr:   false,
 		},
@@ -623,7 +504,7 @@ func TestBuildTunerConfig(t *testing.T) {
 					return
 				}
 				if len(config.ModelData.InitState) != len(tt.state) {
-					t.Errorf("InitState length = %d, want %d", len(config.ModelData.InitState), len(tt.state))
+					t.Errorf("State length = %d, want %d", len(config.ModelData.InitState), len(tt.state))
 				}
 				if len(config.ModelData.ExpectedObservations) != len(tt.slos) {
 					t.Errorf("ExpectedObservations length = %d, want %d", len(config.ModelData.ExpectedObservations), len(tt.slos))

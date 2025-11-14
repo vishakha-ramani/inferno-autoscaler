@@ -324,6 +324,71 @@ func TestConfigurator_MatrixDimensions(t *testing.T) {
 	}
 }
 
+func TestConfigurator_CovarianceMatrixSymmetry(t *testing.T) {
+	tests := []struct {
+		name                 string
+		initCovarianceMatrix []float64
+		configData           *TunerConfigData
+		wantErr              bool
+	}{
+		{
+			name: "symmetric covariance matrix",
+			configData: &TunerConfigData{
+				FilterData: FilterData{
+					GammaFactor: 1.0,
+					ErrorLevel:  0.05,
+					TPercentile: 1.96,
+				},
+				ModelData: TunerModelData{
+					InitState: []float64{5.0, 2.0, 10.0, 1.5},
+					InitCovarianceMatrix: []float64{1.0, 0.0, 0.02, 0.01,
+						0.0, 1.0, 0.0, 0.02,
+						0.02, 0.0, 1.0, 0.0,
+						0.01, 0.02, 0.0, 1.0},
+					PercentChange:        []float64{0.05, 0.05, 0.05, 0.05},
+					BoundedState:         false,
+					ExpectedObservations: []float64{150.0, 25.0},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "not symmetric covariance matrix",
+			configData: &TunerConfigData{
+				FilterData: FilterData{
+					GammaFactor: 1.0,
+					ErrorLevel:  0.05,
+					TPercentile: 1.96,
+				},
+				ModelData: TunerModelData{
+					InitState: []float64{5.0, 2.0, 10.0, 1.5},
+					InitCovarianceMatrix: []float64{0.1, 0.01, 0.0, 0.0,
+						0.02, 0.1, 0.0, 0.0,
+						0.0, 0.0, 0.1, 0.0,
+						0.0, 0.0, 0.0, 0.1},
+					PercentChange:        []float64{0.05, 0.05, 0.05, 0.05},
+					BoundedState:         false,
+					ExpectedObservations: []float64{150.0, 25.0},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := NewConfigurator(tt.configData)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewConfigurator() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && c == nil {
+				t.Error("NewConfigurator() returned nil without error")
+			}
+		})
+	}
+}
+
 func TestConfigurator_VariousStateAndObsDimensions(t *testing.T) {
 	tests := []struct {
 		name      string

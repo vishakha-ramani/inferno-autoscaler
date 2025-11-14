@@ -2,7 +2,7 @@ package constants
 
 // Default tuner parameters
 const (
-	// scaling factor used to adjust the calculated measurement noise variance
+	// scaling factor used to adjust the calculated measurement noise variance (> 0).
 	DefaultGammaFactor = 1.0
 
 	/*
@@ -39,6 +39,4 @@ const (
 	StateIndexBeta  = 1 // Decode slope parameter
 	StateIndexGamma = 2 // Prefill base parameter
 	StateIndexDelta = 3 // Prefill slope parameter
-
-	DefaultTunerEpsilon = 1e-6 // to check float equality
 )

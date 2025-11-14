@@ -44,7 +44,7 @@ func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err 
 	}
 
 	// create filter
-	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.X0, c.P)
+	f, err = kalman.NewExtendedKalmanFilter(c.NumStates(), c.NumObservations(), c.X, c.P)
 	if err != nil {
 		return nil, fmt.Errorf("error on filter creation: %v", err)
 	}

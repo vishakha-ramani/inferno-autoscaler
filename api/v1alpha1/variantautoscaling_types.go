@@ -19,7 +19,7 @@ type VariantAutoscalingSpec struct {
 	// +kubebuilder:validation:Required
 	ModelProfile ModelProfile `json:"modelProfile"`
 
-	// ConsultModelTuner indicates whether to use the experimental model tuner
+	// ActivateModelTuner indicates whether to use the experimental model tuner.
 	// +optional
 	ActivateModelTuner bool `json:"activateModelTuner,omitempty"`
 }
@@ -92,21 +92,23 @@ type VariantAutoscalingStatus struct {
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
-	// TunerPerfData specifies the tuned prefill and decode parameters for ttft and itl models
+	// TunerPerfData specifies the tuned prefill and decode parameters of the model used by the queue analyzer.
 	TunerPerfData TunerPerfData `json:"tunerPerfData,omitempty"`
 }
 
+// TunerPerfData captures data related to the status of the performance (queueing) model tuner for a variant.
+// It is used as a persistent store of the model tuner state, keeping the model tuner stateless.
 type TunerPerfData struct {
-	// Model specifies the unique identifier of the model to be tuned.
+	// Model specifies the unique identifier of the model used in tuning.
 	Model string `json:"model,omitempty"`
 
-	// Accelerator is the type of accelerator currently allocated.
+	// Accelerator is the type of accelerator used in tuning.
 	Accelerator string `json:"accelerator,omitempty"`
 
-	// UpdateAt specifies the time last succesfull tuner update was performed
+	// UpdateAt specifies the time last succesfull tuner update was performed.
 	UpdatedAt metav1.Time `json:"updatedAt,omitempty"`
 
-	// PerParms specifies the TUNED prefill and decode parameters for ttft and itl models
+	// PerParms specifies the TUNED prefill and decode parameters of the queueing model.
 	PerfParms PerfParms `json:"perfParms,omitempty"`
 
 	// Normalized Innovaion Square value of the tuner update.
@@ -114,7 +116,7 @@ type TunerPerfData struct {
 	NIS string `json:"nis,omitempty"`
 
 	// CovarianceMatrix contains the current covariance matrix of the tuned state.
-	// It Represents the uncertainty in the estimate.
+	// It represents the uncertainty in the estimate.
 	CovarianceMatrix [][]string `json:"covarianceMatrix,omitempty"`
 }
 

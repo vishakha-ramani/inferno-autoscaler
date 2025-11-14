@@ -417,7 +417,7 @@ deploy_wva_controller() {
     
     # Wait for WVA to be ready
     log_info "Waiting for WVA controller to be ready..."
-    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=60s || \
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=workload-variant-autoscaler -n $WVA_NS --timeout=30s || \
         log_warning "WVA controller is not ready yet - check 'kubectl get pods -n $WVA_NS'"
     
     log_success "WVA deployment complete"
@@ -517,7 +517,7 @@ deploy_llm_d_infrastructure() {
     fi
     
     log_info "Waiting for llm-d components to initialize..."
-    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=60s || \
+    kubectl wait --for=condition=Available deployment --all -n $LLMD_NS --timeout=30s || \
         log_warning "llm-d components are not ready yet - check 'kubectl get pods -n $LLMD_NS'"
     
     cd "$WVA_PROJECT"

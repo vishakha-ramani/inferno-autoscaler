@@ -22,8 +22,8 @@ func init() {
 
 const epsilon = 1e-6
 
-// TestGetStateValsFromVA tests state extraction from VA with fallback logic
-func TestGetStateValsFromVA(t *testing.T) {
+// TestGetStateAndCovariance tests state extraction from VA with fallback logic
+func TestGetStateAndCovariance(t *testing.T) {
 	systemData := &infernoConfig.SystemData{
 		Spec: infernoConfig.SystemSpec{
 			Models: infernoConfig.ModelData{
@@ -101,9 +101,9 @@ func TestGetStateValsFromVA(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			state, _, err := getStateValsFromVA(tt.va, systemData, server)
+			state, _, err := getStateAndCovariance(tt.va, systemData, server)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("getStateValsFromVA() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("getStateAndCovariance() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr {
@@ -118,8 +118,8 @@ func TestGetStateValsFromVA(t *testing.T) {
 	}
 }
 
-// TestExtractCovMatrixFromVAStatus tests covariance matrix extraction
-func TestExtractCovMatrixFromVAStatus(t *testing.T) {
+// TestExtractCovarianceFromVAStatus tests covariance matrix extraction
+func TestExtractCovarianceFromVAStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		va      *llmdVariantAutoscalingV1alpha1.VariantAutoscaling
@@ -175,13 +175,13 @@ func TestExtractCovMatrixFromVAStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matrix, err := extractCovMatrixFromVAStatus(tt.va)
+			matrix, err := extractCovarianceFromVAStatus(tt.va)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("extractCovMatrixFromVAStatus() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("extractCovarianceFromVAStatus() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && matrix == nil {
-				t.Error("extractCovMatrixFromVAStatus() returned nil matrix without error")
+				t.Error("extractCovarianceFromVAStatus() returned nil matrix without error")
 			}
 		})
 	}

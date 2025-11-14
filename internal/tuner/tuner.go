@@ -159,7 +159,7 @@ func createTuner(
 	*/
 
 	// Get state params and covariance matrix from VA status (if exists), otherwise return only the state params from VA spec
-	state, covMatrix, err := getStateValsFromVA(va, systemData, server)
+	state, covMatrix, err := getStateAndCovariance(va, systemData, server)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get state values from the VA")
 	}
@@ -177,13 +177,10 @@ func createTuner(
 		return nil, fmt.Errorf("failed to build config: %w", err)
 	}
 
+	// get environment
 	env := convertAllocToEnvironment(server.CurrentAlloc)
 
-	// validate environment before creating tuner
-	if !env.Valid() {
-		return nil, fmt.Errorf("invalid environment for server %s: environment validation failed", server.Name)
-	}
-
+	// create tuner
 	tuner, err := tune.NewTuner(configData, env)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tuner: %w", err)

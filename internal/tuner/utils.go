@@ -83,14 +83,15 @@ func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 	}
 }
 
-func getStateValsFromVA(
+// get state and covariance matrix from VA status (if exist), otherwise return only the state params from VA spec
+func getStateAndCovariance(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	systemData *infernoConfig.SystemData,
 	server *infernoConfig.ServerSpec,
-) (state []float64, covMatrix []float64, err error) {
+) (state, covMatrix []float64, err error) {
 	// check if VA has tuned results in status (has been tuned before)
 	if hasTunedResults(va) {
-		state, covMatrix, err = extractValsFromVAStatus(va)
+		state, covMatrix, err = extractStateAndCovarianceFromVAStatus(va)
 		if err == nil {
 			logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 				va.Name,
@@ -129,13 +130,13 @@ func hasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool
 }
 
 // extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
-func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (state []float64, covMatrix []float64, err error) {
+func extractStateAndCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (state, covMatrix []float64, err error) {
 	state, err = extractStateFromVAStatus(va)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to extract tuned state from VA status: %w", err)
 	}
 
-	covMatrix, err = extractCovMatrixFromVAStatus(va)
+	covMatrix, err = extractCovarianceFromVAStatus(va)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to extract covariance matrix from VA status: %w", err)
 	}
@@ -143,7 +144,7 @@ func extractValsFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscali
 	return state, covMatrix, nil
 }
 
-func extractCovMatrixFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
+func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
 	matStatus := va.Status.TunerPerfData.CovarianceMatrix
 	rows := len(matStatus)
 	cols := len(matStatus[0])

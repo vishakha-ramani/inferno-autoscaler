@@ -1,265 +1,497 @@
 # Guide to Offline Benchmarking for WVA's Model Analyzer
-This guide explains how to collect queueing parameters for WVA's model analyzer using offline benchmarking. We will use `vllm` for model serving and `guidellm` for benchmarking, all deployed on OpenShift.
 
+This guide explains how to collect performance parameters (alpha, beta, gamma, delta) for WVA's model analyzer using offline benchmarking. We will use `vllm` for model serving and `guidellm` for benchmarking, all deployed on OpenShift.
 
-## 1. Setting Up the Environment
-### Step 1.1: Deploying vLLM
-1. Follow the instructions at [vllm-samples](vllm-samples.md) to deploy vLLM on OpenShift.
+## Overview
 
-2. To stay away from server saturation, we want to limit the max batch size to a fixed value. In the following, we use $64$ as the max batch size for demonstration purposes.  Such a parameter can be set using `--max-num-seqs` as follows. 
-```yaml
-spec:
-  containers:
-    - name: vllm-server
-      image: <your-vllm-image>
-      args:
-        - "vllm serve unsloth/Meta-Llama-3.1-8B --trust-remote-code --download-dir /models-cache --max-num-seqs 64"
+WVA requires four performance parameters to optimize inference workloads:
+- **Alpha (α) and Beta (β)**: Decode phase parameters for ITL (Inter-Token Latency)
+- **Gamma (γ) and Delta (δ)**: Prefill phase parameters for TTFT (Time To First Token)
+
+These parameters are estimated by running two benchmark jobs:
+1. **Synchronous benchmark**: Measures ITL and TTFT at batch size = 1
+2. **Throughput benchmark**: Measures ITL and TTFT at maximum batch size (e.g., 64)
+
+---
+
+## Prerequisites
+
+1. **OpenShift Cluster**: With GPU nodes available
+2. **vLLM Deployment**: Serving your model (see [vllm-samples.md](vllm-samples.md))
+3. **Guidellm Image**: `ghcr.io/vllm-project/guidellm:latest` (publicly available)
+4. **HuggingFace Token**: If using gated models (stored as Kubernetes Secret)
+5. **Persistent Volume Claim**: For model cache (optional but recommended)
+
+---
+
+## Step 1: Deploy vLLM for Benchmarking
+
+### Option 1: Use Template from hack Folder (Recommended)
+
+A complete vLLM deployment template is available in `hack/vllm-benchmark-deployment.yaml`.
+
+1. **Copy and customize the template**:
+   ```bash
+   cp hack/vllm-benchmark-deployment.yaml vllm-benchmark-deployment.yaml
+   ```
+
+2. **Replace placeholders** in the file:
+   - `<namespace>` → Your namespace (e.g., `vllm-test`)
+   - `<vllm-service-name>` → Your service name (e.g., `vllm`)
+   - `<model-id>` → Your model (e.g., `unsloth/Meta-Llama-3.1-8B`)
+   - `<secret-name>` → Your HF token secret (e.g., `hf-token-secret`)
+   - `<pvc-name>` → Your PVC name (e.g., `vllm-models-cache`)
+
+3. **Important: Set max batch size**:
+   Ensure `--max-num-seqs` matches your desired maximum batch size (default: 64).
+   This value will be used in the throughput benchmark.
+
+4. **Deploy**:
+   ```bash
+   oc apply -f vllm-benchmark-deployment.yaml
+   ```
+
+5. **Wait for vLLM to be ready**:
+   ```bash
+   oc wait --for=condition=ready pod -n <namespace> -l app=<vllm-service-name> --timeout=2400s
+   ```
+
+   **Note**: First deployment may take 15-35 minutes for model download.
+
+### Option 2: Manual Deployment
+
+See [vllm-samples.md](vllm-samples.md) for detailed manual deployment instructions.
+
+**Key requirement**: Your vLLM deployment must include `--max-num-seqs <batch-size>` in the args (e.g., `--max-num-seqs 64`).
+
+---
+
+## Step 2: Prepare Benchmark Jobs
+
+### Use Template from hack Folder (Recommended)
+
+1. **Copy and customize the benchmark template**:
+   ```bash
+   cp hack/benchmark-jobs-template.yaml benchmark-jobs.yaml
+   ```
+
+2. **Replace placeholders** in the file:
+   - `<namespace>` → Your namespace (e.g., `vllm-test`)
+   - `<vllm-service-name>` → Your vLLM service name (e.g., `vllm`)
+   - `<model-id>` → Your model (e.g., `unsloth/Meta-Llama-3.1-8B`)
+   - `<max-batch-size>` → Must match vLLM `--max-num-seqs` value (e.g., `64`)
+
+3. **Optional: Adjust token counts**:
+   The default uses `prompt_tokens=128,output_tokens=128`. Adjust if your workload differs:
+   ```yaml
+   - "--data"
+   - "prompt_tokens=<your-input-tokens>,output_tokens=<your-output-tokens>"
+   ```
+
+---
+
+## Step 3: Understanding the Parameters
+
+### Decode Parameters (Alpha and Beta)
+
+**Formula**: `ITL = α + β × batch_size`
+
+- **Alpha (α)**: Fixed overhead per token generation (ms)
+- **Beta (β)**: Variable overhead per additional request in batch (ms)
+
+**What ITL measures**: Time between consecutive tokens during generation.
+
+### Prefill Parameters (Gamma and Delta)
+
+**Formula**: `TTFT = γ + δ × inputTokens × batch_size`
+
+- **Gamma (γ)**: Fixed overhead per prefill operation (ms)
+- **Delta (δ)**: Variable overhead per input token per batch member (ms per token per batch member)
+
+**What TTFT measures**: Time to first token, including prompt processing and queue wait time.
+
+---
+
+## Step 4: Run Synchronous Benchmark (Batch Size = 1)
+
+### Deploy Synchronous Benchmark Job
+
+```bash
+oc apply -f benchmark-jobs.yaml
 ```
 
+**Note**: Only the synchronous job will start first. The throughput job will run after the synchronous job completes.
 
-### Step 1.2: Deploying guidellm
-1. Build a guidellm image by following the instructions at [guidellm-sample](guidellm-sample.md).
+### Wait for Completion
 
-## 2. Deriving Queueing Parameters
-We'll use two separate guidellm jobs to generate the data points needed to solve for the `alpha` and `beta` parameters. `alpha` represents the fixed overhead per request, and `beta` represents the variable overhead per request.
-In the WVA's model analyzer, the ITL follows the following linear relationship
+```bash
+# Monitor the job
+oc get jobs -n <namespace> | grep sync
 
-$$ITL = \alpha + \beta \times batchsize.$$
-
-### Step 2.1: Run a Synchronous Benchmark Job
-Run the following `Job` to perform a synchronous benchmark. This will give you the baseline ITL when a request is processed alone (batch size of 1).
-```yaml
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: synchronous-job
-  namespace: vllm-test
-spec:
-  template:
-    spec:
-      containers:
-      - name: guidellm-benchmark-container
-        image: <your-guidellm-image>
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: HF_HOME
-          value: "/tmp"
-        command: ["/usr/local/bin/guidellm"]
-        args:
-        - "benchmark"
-        - "--target"
-        - "http://vllm:8000"
-        - "--rate-type"
-        - "synchronous"
-        - "--max-seconds"
-        - "360"
-        - "--model"
-        - "unsloth/Meta-Llama-3.1-8B"
-        - "--data"
-        - "prompt_tokens=128,output_tokens=128"
-        - "--output-path"
-        - "/tmp/benchmarks.json" 
-      restartPolicy: Never
-  backoffLimit: 4
+# Wait for completion
+oc wait --for=condition=complete job/<model-id>-sync-benchmark -n <namespace> --timeout=600s
 ```
 
-After the job completes, inspect the pod logs to find the benchmark results. 
+### Extract ITL and TTFT Values
 
-For example, the expected output from the logs is as follows
-```sh
-oc logs <synchronous-job-pod-name>
-Creating backend...
-Backend openai_http connected to http://vllm:8000 for model                     
-unsloth/Meta-Llama-3.1-8B.                                                      
-Creating request loader...
-Created loader with 1000 unique requests from                                   
-prompt_tokens=128,output_tokens=128.                                            
-                                                                                
-                                                                                
+```bash
+# View logs
+oc logs job/<model-id>-sync-benchmark -n <namespace>
+
+# Extract ITL value (look for "ITL (ms)" section)
+oc logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
+
+# Extract TTFT value (look for "TTFT (ms)" section)
+oc logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
+```
+
+### Expected Output Example
+
+```
 ╭─ Benchmarks ─────────────────────────────────────────────────────────────────╮
-│ [2… syn… (c… Req:    1.1 req/s,    0.91s Lat,     1.0 Conc,      65 Comp,  … │
-│              Tok:  140.7 gen/s,  423.4 tot/s,  15.0ms TTFT,    7.0ms ITL,  … │
+│ ... Tok:  140.7 gen/s,  423.4 tot/s,  15.0ms TTFT,    7.0ms ITL,  ... │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-Generating... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ (1/1) [ 0:01:00 < 0:00:00 ]                    
-                    
-Benchmarks Metadata:
-    Run id:bc5e6427-839c-45c6-9e56-90731a52c630
-    Duration:60.2 seconds
-    Profile:type=synchronous, strategies=['synchronous']
-    Args:max_number=None, max_duration=60.0, warmup_number=None,                
-    warmup_duration=None, cooldown_number=None, cooldown_duration=None          
-    Worker:type_='generative_requests_worker' backend_type='openai_http'        
-    backend_target='http://vllm:8000' backend_model='unsloth/Meta-Llama-3.1-8B' 
-    backend_info={'max_output_tokens': 16384, 'timeout': 300, 'http2': True,    
-    'authorization': False, 'organization': None, 'project': None,              
-    'text_completions_path': '/v1/completions', 'chat_completions_path':        
-    '/v1/chat/completions'}                                                     
-    Request Loader:type_='generative_request_loader'                            
-    data='prompt_tokens=128,output_tokens=128' data_args=None                   
-    processor='unsloth/Meta-Llama-3.1-8B' processor_args=None                   
-    Extras:None
-                
-                
-Benchmarks Info:
-================================================================================
-====================================================================            
-Metadata                                    |||| Requests Made  ||| Prompt      
-Tok/Req ||| Output Tok/Req ||| Prompt Tok Total  ||| Output Tok Total  ||       
-  Benchmark| Start Time| End Time| Duration (s)|  Comp|  Inc|  Err|  Comp|      
-Inc| Err|  Comp|   Inc| Err|   Comp|   Inc|   Err|   Comp|   Inc|   Err         
------------|-----------|---------|-------------|------|-----|-----|------|------
-|----|------|------|----|-------|------|------|-------|------|------            
-synchronous|   20:41:22| 20:42:22|         60.0|    65|    1|    0| 129.1|      
-128.0| 0.0| 128.0| 123.0| 0.0|   8390|   128|     0|   8320|   123|     0       
-================================================================================
-====================================================================            
-                 
-                 
+
 Benchmarks Stats:
-================================================================================
-============================================================                    
-Metadata   | Request Stats         || Out Tok/sec| Tot Tok/sec| Req Latency     
-(ms)||| TTFT (ms)       ||| ITL (ms)       ||| TPOT (ms)      ||                
-  Benchmark| Per Second| Concurrency|        mean|        mean| mean| median|   
-p99| mean| median|  p99| mean| median| p99| mean| median| p99                   
------------|-----------|------------|------------|------------|-----|-------|---
---|-----|-------|-----|-----|-------|----|-----|-------|----                    
-synchronous|       1.10|        1.00|       140.7|       423.4| 0.91|   0.91|   
-0.93| 15.0|   14.8| 17.0|  7.0|    7.0| 7.2|  7.0|    7.0| 7.1                  
-================================================================================
-============================================================                    
-                           
-Saving benchmarks report...
-Benchmarks report saved to /tmp/benchmarks.json
-                      
-Benchmarking complete.
+... | TTFT (ms)       ||| ITL (ms)        ||| ...
+... | mean| median|  p99| mean| median| p99| ...
+... | 15.0|   14.8| 17.0|  7.0|    7.0| 7.2| ...
 ```
 
-In this example, ITL = 7, thus we have $\alpha + \beta = 7.$
+**Record these values**:
+- `ITL_sync = <mean ITL value>` (e.g., 7.0 ms)
+- `TTFT_sync = <mean TTFT value>` (e.g., 15.0 ms)
 
-### Step 2.2: Run a Throughput Benchmark Job
-Now, run a second Job to measure the ITL at the maximum batch size you configured in the vLLM deployment (batch size is equal to `--max-num-seqs` = 64).
-**Ensure that GUIDELLM__MAX_CONCURRENCY matches the max-num-seqs value you set in your vLLM deployment.**
+---
+
+## Step 5: Run Throughput Benchmark (Maximum Batch Size)
+
+### Delete Throughput Job (if it auto-started)
+
+If both jobs started simultaneously, delete the throughput job to run sequentially:
+
+```bash
+oc delete job <model-id>-throughput-benchmark -n <namespace>
+```
+
+### Deploy Throughput Benchmark Job
+
+After synchronous job completes, create the throughput job:
+
+```bash
+# Edit benchmark-jobs.yaml and remove synchronous job, or create separately
+oc apply -f benchmark-jobs.yaml
+```
+
+### Wait for Completion
+
+```bash
+# Monitor the job
+oc get jobs -n <namespace> | grep throughput
+
+# Wait for completion
+oc wait --for=condition=complete job/<model-id>-throughput-benchmark -n <namespace> --timeout=600s
+```
+
+### Extract ITL and TTFT Values
+
+```bash
+# View logs
+oc logs job/<model-id>-throughput-benchmark -n <namespace>
+
+# Extract ITL value
+oc logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
+
+# Extract TTFT value
+oc logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
+```
+
+### Expected Output Example
+
+```
+╭─ Benchmarks ─────────────────────────────────────────────────────────────────╮
+│ ... Tok: 7251.6 gen/s, 21819.9 tot/s,  26.0ms TTFT,    8.7ms ITL,  ... │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Benchmarks Stats:
+... | TTFT (ms)       ||| ITL (ms)        ||| ...
+... | mean| median|  p99| mean| median| p99| ...
+... | 26.0|   25.5| 35.4|  8.7|    8.6| 8.8| ...
+```
+
+**Record these values**:
+- `ITL_throughput = <mean ITL value>` (e.g., 8.7 ms)
+- `TTFT_throughput = <mean TTFT value>` (e.g., 26.0 ms)
+- `maxBatchSize = <value from vLLM --max-num-seqs>` (e.g., 64)
+- `inputTokens = <value from --data>` (e.g., 128)
+
+---
+
+## Step 6: Calculate Alpha and Beta (Decode Parameters)
+
+### Equations
+
+You now have two data points for ITL:
+1. `ITL_sync = α + β` (batch_size = 1)
+2. `ITL_throughput = α + (β × maxBatchSize)` (batch_size = maxBatchSize)
+
+### Solving for Beta (β)
+
+$$\beta = \frac{ITL_\text{throughput} - ITL_\text{synchronous}}{maxBatchSize - 1}$$
+
+**Example**:
+```
+β = (8.7 - 7.0) / (64 - 1)
+β = 1.7 / 63
+β = 0.027 ms
+```
+
+### Solving for Alpha (α)
+
+$$\alpha = ITL_\text{synchronous} - \beta$$
+
+**Example**:
+```
+α = 7.0 - 0.027
+α = 6.973 ms
+```
+
+### Verification
+
+Verify your calculations:
+```
+ITL(batch=1)  = α + β = 6.973 + 0.027 = 7.000 ms ✓ (should match ITL_sync)
+ITL(batch=64) = α + (β × 64) = 6.973 + (0.027 × 64) = 8.701 ms ✓ (should match ITL_throughput)
+```
+
+---
+
+## Step 7: Calculate Gamma and Delta (Prefill Parameters)
+
+### Equations
+
+You now have two data points for TTFT (from the same benchmark runs):
+1. `TTFT_sync = γ + (δ × inputTokens × 1)` (batch_size = 1)
+2. `TTFT_throughput = γ + (δ × inputTokens × maxBatchSize)` (batch_size = maxBatchSize)
+
+### Solving for Delta (δ)
+
+$$\delta = \frac{TTFT_\text{throughput} - TTFT_\text{synchronous}}{inputTokens \times (maxBatchSize - 1)}$$
+
+**Example** (assuming inputTokens = 128):
+```
+δ = (26.0 - 15.0) / (128 × (64 - 1))
+δ = 11.0 / (128 × 63)
+δ = 11.0 / 8064
+δ = 0.001364 ms
+```
+
+### Solving for Gamma (γ)
+
+$$\gamma = TTFT_\text{synchronous} - (\delta \times inputTokens \times 1)$$
+
+**Example** (assuming inputTokens = 128):
+```
+γ = 15.0 - (0.001364 × 128 × 1)
+γ = 15.0 - 0.175
+γ = 14.825 ms
+```
+
+### Verification
+
+Verify your calculations:
+```
+TTFT(batch=1)  = γ + (δ × 128 × 1) = 14.825 + (0.001364 × 128) = 15.000 ms ✓
+TTFT(batch=64) = γ + (δ × 128 × 64) = 14.825 + (0.001364 × 8192) = 26.000 ms ✓
+```
+
+---
+
+## Step 8: Summary and Usage
+
+### Final Parameters
+
+After completing all steps, you should have:
+
+**Decode Parameters**:
+- **Alpha (α)**: Fixed ITL overhead (ms)
+- **Beta (β)**: Variable ITL per batch member (ms)
+
+**Prefill Parameters**:
+- **Gamma (γ)**: Fixed TTFT overhead (ms)
+- **Delta (δ)**: Variable TTFT per token per batch member (ms)
+
+### Use in VariantAutoscaling
+
+Add these parameters to your `VariantAutoscaling` resource:
 
 ```yaml
-apiVersion: batch/v1
-kind: Job
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
 metadata:
-  name: throughput-job
-  namespace: vllm-test
+  name: <your-variant-name>
+  namespace: <your-namespace>
 spec:
-  template:
-    spec:
-      containers:
-      - name: guidellm-benchmark-container
-        image: <your-guidellm-image>
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: HF_HOME
-          value: "/tmp"
-        - name: GUIDELLM__MAX_CONCURRENCY
-          value: "64"
-        command: ["/usr/local/bin/guidellm"]
-        args:
-        - "benchmark"
-        - "--target"
-        - "http://vllm:8000"
-        - "--rate-type"
-        - "throughput"
-        - "--max-seconds"
-        - "360"
-        - "--model"
-        - "unsloth/Meta-Llama-3.1-8B"
-        - "--data"
-        - "prompt_tokens=128,output_tokens=128"
-        - "--output-path"
-        - "/tmp/benchmarks.json" 
-      restartPolicy: Never
-  backoffLimit: 4
+  modelID: <your-model-id>
+  sloClassRef:
+    name: service-classes-config
+    key: premium.yaml
+  modelProfile:
+    accelerators:
+      - acc: "<accelerator-type>"  # e.g., A100
+        accCount: 1
+        perfParms:
+          decodeParms:
+            alpha: "<calculated-alpha>"  # e.g., "6.973"
+            beta: "<calculated-beta>"    # e.g., "0.027"
+          prefillParms:
+            gamma: "<calculated-gamma>"  # e.g., "14.825"
+            delta: "<calculated-delta>"  # e.g., "0.001364"
+        maxBatchSize: <max-batch-size>   # e.g., 64
 ```
 
-Again, check the pod logs after the job finishes. 
-For example, the expected logs for the throughput job are as follows:
-```sh
-oc logs <throughput-job-pod-name>
-Creating backend...
-Backend openai_http connected to http://vllm:8000 for model                     
-unsloth/Meta-Llama-3.1-8B.                                                      
-Creating request loader...
-Created loader with 1000 unique requests from                                   
-prompt_tokens=128,output_tokens=128.                                            
-                                                                                
-                                                                                
-╭─ Benchmarks ─────────────────────────────────────────────────────────────────╮
-│ [2… th… (c… Req:   56.7 req/s,    1.13s Lat,    63.9 Conc,   20353 Comp,   … │
-│             Tok: 7251.6 gen/s, 21819.9 tot/s,  26.0ms TTFT,    8.7ms ITL,  … │
-╰──────────────────────────────────────────────────────────────────────────────╯
-Generating... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ (1/1) [ 0:06:00 < 0:00:00 ]                    
-                    
-Benchmarks Metadata:
-    Run id:921345ac-fe8b-4a02-afd6-4ea6c2775a4b
-    Duration:361.1 seconds
-    Profile:type=throughput, strategies=['throughput'], max_concurrency=None
-    Args:max_number=None, max_duration=360.0, warmup_number=None,               
-    warmup_duration=None, cooldown_number=None, cooldown_duration=None          
-    Worker:type_='generative_requests_worker' backend_type='openai_http'        
-    backend_target='http://vllm:8000' backend_model='unsloth/Meta-Llama-3.1-8B' 
-    backend_info={'max_output_tokens': 16384, 'timeout': 300, 'http2': True,    
-    'authorization': False, 'organization': None, 'project': None,              
-    'text_completions_path': '/v1/completions', 'chat_completions_path':        
-    '/v1/chat/completions'}                                                     
-    Request Loader:type_='generative_request_loader'                            
-    data='prompt_tokens=128,output_tokens=128' data_args=None                   
-    processor='unsloth/Meta-Llama-3.1-8B' processor_args=None                   
-    Extras:None
-                
-                
-Benchmarks Info:
-================================================================================
-=============================================================                   
-Metadata                                   |||| Requests Made||| Prompt Tok/Req 
-||| Output Tok/Req ||| Prompt Tok Total||| Output Tok Total||                   
- Benchmark| Start Time| End Time| Duration (s)|  Comp| Inc| Err|  Comp|   Inc|  
-Err|  Comp|   Inc| Err|    Comp|  Inc| Err|    Comp|  Inc| Err                  
-----------|-----------|---------|-------------|------|----|----|------|------|--
---|------|------|----|--------|-----|----|--------|-----|----                   
-throughput|   20:09:27| 20:15:27|        360.0| 20353|  64|   0| 129.1| 128.0|  
-0.0| 128.0| 100.1| 0.0| 2627045| 8192|   0| 2605184| 6406|   0                  
-================================================================================
-=============================================================                   
-                 
-                 
-Benchmarks Stats:
-================================================================================
-===========================================================                     
-Metadata  | Request Stats         || Out Tok/sec| Tot Tok/sec| Req Latency      
-(ms)||| TTFT (ms)       ||| ITL (ms)       ||| TPOT (ms)      ||                
- Benchmark| Per Second| Concurrency|        mean|        mean| mean| median|    
-p99| mean| median|  p99| mean| median| p99| mean| median| p99                   
-----------|-----------|------------|------------|------------|-----|-------|----
--|-----|-------|-----|-----|-------|----|-----|-------|----                     
-throughput|      56.65|       63.94|      7251.6|     21819.9| 1.13|   1.12|    
-1.19| 26.0|   25.5| 35.4|  8.7|    8.6| 8.8|  8.6|    8.6| 8.7                  
-================================================================================
-===========================================================                     
-                           
-Saving benchmarks report...
-Benchmarks report saved to /tmp/benchmarks.json
-                      
-Benchmarking complete.
+---
+
+## Quick Reference
+
+### Benchmark Data Collection
+
+| Benchmark | Batch Size | Measures | Data Points |
+|-----------|------------|----------|-------------|
+| Synchronous | 1 | ITL, TTFT | ITL_sync, TTFT_sync |
+| Throughput | maxBatchSize | ITL, TTFT | ITL_throughput, TTFT_throughput |
+
+### Calculation Formulas
+
+**Beta (decode)**:
+```
+β = (ITL_throughput - ITL_sync) / (maxBatchSize - 1)
 ```
 
-In this example, ITL = 8.7, thus we have $\alpha + (\beta \times 64) = 8.7.$
+**Alpha (decode)**:
+```
+α = ITL_sync - β
+```
 
-## 3. Solving for alpha and beta
-You now have a system of two linear equations with two unknowns, `alpha` and `beta`:
-1. $ITL_\text{synchronous} = \alpha + \beta$
-2. $ITL_\text{throughput} = \alpha + \beta \times batchsize$
+**Delta (prefill)**:
+```
+δ = (TTFT_throughput - TTFT_sync) / (inputTokens × (maxBatchSize - 1))
+```
 
-Using the values you obtained from the benchmark job logs for $ITL_\text{synchronous}$ and $ITL_\text{throughput}$, you can solve for `alpha` and `beta`:
+**Gamma (prefill)**:
+```
+γ = TTFT_sync - (δ × inputTokens × 1)
+```
 
-$$\beta = \frac{ITL_\text{throughput} - ITL_\text{synchronous}}{batchsize - 1},$$
-$$\alpha=ITL_\text{synchronous} - \beta$$
+---
 
+## Troubleshooting
 
-In our example, we obtain $\alpha \approx 6.973$ and $\beta \approx 0.027$.
+### Benchmark Job Fails
+
+**Error**: `exec format error` or image architecture mismatch
+- **Solution**: Use `ghcr.io/vllm-project/guidellm:latest` (supports amd64/arm64)
+
+**Error**: Job can't connect to vLLM service
+- **Solution**: Verify vLLM service name matches job target URL
+- **Solution**: Ensure vLLM pod is ready: `oc get pods -n <namespace>`
+
+**Error**: `stat /usr/local/bin/guidellm: no such file or directory`
+- **Solution**: Use `command: ["guidellm"]` not `command: ["/usr/local/bin/guidellm"]`
+
+### vLLM Deployment Issues
+
+**Error**: Cache permission errors (`/.cache/vllm`)
+- **Solution**: Set `HOME=/models-cache` environment variable
+
+**Error**: Model download fails
+- **Solution**: Verify HF token secret exists and is correct
+- **Solution**: Check PVC has sufficient space
+
+### Parameter Calculation Issues
+
+**Values seem incorrect**:
+- Verify you extracted **mean** values (not median or p99)
+- Ensure maxBatchSize matches your vLLM `--max-num-seqs` value
+- Verify inputTokens matches your `--data prompt_tokens` value
+
+**TTFT values higher than expected**:
+- This is normal - measured TTFT includes queue wait time, not just prefill time
+- This is acceptable for WVA optimization as it reflects actual user experience
+
+---
+
+## Example: Complete Workflow
+
+```bash
+# 1. Set variables
+export NAMESPACE=vllm-test
+export MODEL_ID=unsloth/Meta-Llama-3.1-8B
+export VLLM_SERVICE=vllm
+export MAX_BATCH_SIZE=64
+export INPUT_TOKENS=128
+
+# 2. Customize and deploy vLLM
+sed "s/<namespace>/$NAMESPACE/g; s/<vllm-service-name>/$VLLM_SERVICE/g; s/<model-id>/$MODEL_ID/g" \
+  hack/vllm-benchmark-deployment.yaml > vllm-deployment.yaml
+oc apply -f vllm-deployment.yaml
+
+# 3. Wait for vLLM ready
+oc wait --for=condition=ready pod -n $NAMESPACE -l app=$VLLM_SERVICE --timeout=2400s
+
+# 4. Customize and deploy benchmark jobs
+sed "s/<namespace>/$NAMESPACE/g; s/<vllm-service-name>/$VLLM_SERVICE/g; s/<model-id>/$MODEL_ID/g; s/<max-batch-size>/$MAX_BATCH_SIZE/g" \
+  hack/benchmark-jobs-template.yaml > benchmark-jobs.yaml
+oc apply -f benchmark-jobs.yaml
+
+# 5. Delete throughput job (run sequentially)
+oc delete job ${MODEL_ID}-throughput-benchmark -n $NAMESPACE
+
+# 6. Wait for synchronous benchmark
+oc wait --for=condition=complete job/${MODEL_ID}-sync-benchmark -n $NAMESPACE --timeout=600s
+
+# 7. Extract synchronous results
+ITL_SYNC=$(oc logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+TTFT_SYNC=$(oc logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+
+# 8. Deploy throughput benchmark
+oc apply -f benchmark-jobs.yaml
+
+# 9. Wait for throughput benchmark
+oc wait --for=condition=complete job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE --timeout=600s
+
+# 10. Extract throughput results
+ITL_THROUGHPUT=$(oc logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+TTFT_THROUGHPUT=$(oc logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+
+# 11. Calculate parameters
+python3 << EOF
+itl_sync = $ITL_SYNC
+itl_throughput = $ITL_THROUGHPUT
+ttft_sync = $TTFT_SYNC
+ttft_throughput = $TTFT_THROUGHPUT
+max_batch = $MAX_BATCH_SIZE
+input_tokens = $INPUT_TOKENS
+
+# Decode parameters
+beta = (itl_throughput - itl_sync) / (max_batch - 1)
+alpha = itl_sync - beta
+
+# Prefill parameters
+delta = (ttft_throughput - ttft_sync) / (input_tokens * (max_batch - 1))
+gamma = ttft_sync - (delta * input_tokens)
+
+print(f"Alpha: {alpha:.6f}")
+print(f"Beta: {beta:.6f}")
+print(f"Gamma: {gamma:.6f}")
+print(f"Delta: {delta:.6f}")
+EOF
+```
+
+---
+
+## Additional Resources
+
+- **vLLM Deployment Guide**: [vllm-samples.md](vllm-samples.md)
+- **Guidellm Setup**: [guidellm-sample.md](guidellm-sample.md)
+- **Template Files**: `hack/vllm-benchmark-deployment.yaml`, `hack/benchmark-jobs-template.yaml`

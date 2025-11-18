@@ -31,3 +31,5 @@ data:
 
   # Option to scale variants to zero replicas (default: false)
   WVA_SCALE_TO_ZERO: "false"
+
+  EXPERIMENTAL_MODEL_TUNER_ENABLED: {{ .Values.wva.experimental.enableModelTuner | quote }}

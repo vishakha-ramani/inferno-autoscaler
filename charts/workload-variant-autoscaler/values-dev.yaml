@@ -34,6 +34,9 @@ wva:
     #   YOUR_CA_CERTIFICATE_HERE
     #   -----END CERTIFICATE-----
 
+  experimental:
+    enableModelTuner: false
+    
 llmd:
   namespace: llm-d-inference-scheduling
   modelName: ms-inference-scheduling-llm-d-modelservice

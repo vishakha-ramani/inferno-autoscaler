@@ -1,22 +1,56 @@
 # vllm with wva autoscaler
 
-
 Notes: 
 1. The following describes setting up vllm deployment on OpenShift cluster.
 2. These instructions are for standalone vllm deployments. To setup vllm with llm-d infra, refer to [Well-lit Path: Intelligent Inference Scheduling](https://github.com/llm-d/llm-d/blob/dev/guides/inference-scheduling/README.md).
 3. All vLLM components will run in the `vllm-test` namespace. If the namespace doesn't already exists, create one by running `oc create ns vllm-test`.
 
+## Quick Start: Using the Template (Recommended)
+
+For benchmarking and parameter estimation, use the ready-made template:
+
+1. **Copy the template**:
+   ```bash
+   cp hack/vllm-benchmark-deployment.yaml vllm-deployment.yaml
+   ```
+
+2. **Customize the template** by replacing placeholders:
+   - `<namespace>` → Your namespace (e.g., `vllm-test`)
+   - `<vllm-service-name>` → Your service name (e.g., `vllm`)
+   - `<model-id>` → Your model (e.g., `unsloth/Meta-Llama-3.1-8B`)
+   - `<secret-name>` → Your HF token secret name (e.g., `hf-token-secret`)
+   - `<pvc-name>` → Your PVC name (e.g., `vllm-models-cache`)
+
+3. **Deploy**:
+   ```bash
+   oc apply -f vllm-deployment.yaml
+   ```
+
+4. **Wait for readiness**:
+   ```bash
+   oc wait --for=condition=ready pod -n <namespace> -l app=<vllm-service-name> --timeout=2400s
+   ```
+
+**Note**: For parameter estimation benchmarks, ensure `--max-num-seqs` is set to your desired maximum batch size (e.g., `--max-num-seqs 64`).
+
+---
+
+## Manual Setup: Step-by-Step Guide
+
+If you prefer to create the deployment manually or need more customization, follow these steps:
 
 ## Setting up a vllm deployment and service
+
 The following is largely based on existing reference material with a few tweaks. 
 Refs:
 1. https://docs.vllm.ai/en/v0.9.2/deployment/k8s.html#deployment-with-gpus
 2. https://github.com/rh-aiservices-bu/llm-on-openshift/tree/main/llm-servers/vllm/gpu
 
 ### Step 1: Create a PVC
-Create PVC (`oc apply -f pvc.yaml`) named `vllm-models-cache` with enough space to hold all the models you want to try.
+
+Create PVC (`oc apply -f pvc.yaml`) named `vllm-models-cache` with enough space to hold all the models you want to try.
 ```yaml
-# pvc.ymal
+# pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -35,6 +69,7 @@ A storage class field is not explicitly set in the provided yaml, and therefore 
 Before proceeding to next steps, make sure that the `STATUS` of pvc is `BOUND`.
 
 ### Step 2: Create a secret
+
 Secret is optional and only required for accessing gated models, you can skip this step if you are not using gated models.
 
 Run `oc apply -f secret.yaml`
@@ -51,7 +86,8 @@ stringData:
 ```
 
 ### Step 3: Create deployment
-The following example deploys the `unsloth/Meta-Llama-3.1-8B` model with 1 replica. We use H100 GPUs for our deployments.
+
+The following example deploys the `unsloth/Meta-Llama-3.1-8B` model with 1 replica. We use H100 GPUs for our deployments.
 
 Run `oc apply -f deployment.yaml`.
 ```yaml
@@ -169,9 +205,17 @@ spec:
   progressDeadlineSeconds: 600
 ```
 
+**Important for Parameter Estimation**: If you're deploying vLLM for parameter estimation benchmarks, add `--max-num-seqs <batch-size>` to the args. For example:
+```yaml
+args: [
+  "vllm serve unsloth/Meta-Llama-3.1-8B --trust-remote-code --download-dir /models-cache --dtype float16 --max-num-seqs 64"
+]
+```
+
 Wait until the pod is in the `READY` state before proceeding to next steps.
 
 ### Create a service
+
 Create a service to expose the vllm deployment: `oc apply -f service.yaml`
 ```yaml
 # service.yaml
@@ -196,6 +240,7 @@ spec:
 Run `oc get service` to make sure that the service indeed has `CLUSTER-IP` set.
 
 ### Create a ServiceMonitor
+
 We need service monitor to let Prometheus scrape vllm metrics: `oc apply -f service-monitor.yaml `
 ```yaml
 # service-monitor.yaml
@@ -219,11 +264,11 @@ spec:
     any: true
 ```
 
+---
 
+## Next Steps
 
+Once your vLLM deployment is ready:
 
-
-
-
-
-
+- **For Parameter Estimation**: Follow the [parameter-estimation.md](parameter-estimation.md) guide to run benchmarks and calculate alpha, beta, gamma, and delta parameters.
+- **For Production Use**: Configure your VariantAutoscaling resource with performance parameters to enable WVA optimization.

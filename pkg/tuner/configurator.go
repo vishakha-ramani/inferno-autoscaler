@@ -55,7 +55,7 @@ type Configurator struct {
 
 func NewConfigurator(configData *TunerConfigData) (c *Configurator, err error) {
 	if !checkConfigData(configData) {
-		return nil, fmt.Errorf("invalid config data")
+		return nil, fmt.Errorf("invalid config data: %v", configData)
 	}
 
 	modelData := configData.ModelData

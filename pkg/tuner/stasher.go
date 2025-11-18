@@ -14,13 +14,13 @@ type Stasher struct {
 	P      *mat.Dense    // Estimate uncertainty covariance (Xdim x Xdim)
 }
 
-func NewStasher(filter *kalman.ExtendedKalmanFilter) *Stasher {
+func NewStasher(filter *kalman.ExtendedKalmanFilter) (*Stasher, error) {
 	if filter == nil {
-		return nil
+		return nil, fmt.Errorf("cannot create stasher: filter is nil")
 	}
 	return &Stasher{
 		Filter: filter,
-	}
+	}, nil
 }
 
 // copy X and P from filter to the stasher

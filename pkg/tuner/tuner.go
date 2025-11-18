@@ -85,9 +85,9 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	}
 
 	// create a stasher and stash the current X and P
-	stasher := NewStasher(t.filter)
-	if stasher == nil {
-		return nil, fmt.Errorf("failed to create stasher")
+	stasher, err := NewStasher(t.filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stasher: %w", err)
 	}
 	if err := stasher.Stash(); err != nil {
 		return nil, fmt.Errorf("failed to stash filter state: %w", err)

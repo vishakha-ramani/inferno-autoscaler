@@ -9,8 +9,8 @@ import (
 // infinitesimal value to check float equality
 const DefaultEpsilon = 1e-6
 
-// floatEqual checks if two float64 numbers are approximately equal within a given epsilon.
-func floatEqual(a, b, epsilon float64) bool {
+// FloatEqual checks if two float64 numbers are approximately equal within a given epsilon.
+func FloatEqual(a, b, epsilon float64) bool {
 	// Handle the case where they are exactly equal.
 	if a == b {
 		return true
@@ -41,7 +41,7 @@ func IsSymmetric(m mat.Matrix, epsilon float64) bool {
 	// because if a_ij = a_ji, then a_ji = a_ij is also true.
 	for i := 0; i < r; i++ {
 		for j := i + 1; j < c; j++ { // Start from j = i + 1 to avoid checking diagonal and duplicates
-			if !floatEqual(m.At(i, j), m.At(j, i), epsilon) {
+			if !FloatEqual(m.At(i, j), m.At(j, i), epsilon) {
 				return false
 			}
 		}

@@ -1,6 +1,6 @@
 # Guide to Offline Benchmarking for WVA's Model Analyzer
 
-This guide explains how to collect performance parameters (alpha, beta, gamma, delta) for WVA's model analyzer using offline benchmarking. We will use `vllm` for model serving and `guidellm` for benchmarking, all deployed on OpenShift.
+This guide explains how to collect performance parameters (alpha, beta, gamma, delta) for WVA's model analyzer using offline benchmarking. We will use `vllm` for model serving and `guidellm` for benchmarking, all deployed on a cluster.
 
 ## Overview
 
@@ -16,7 +16,7 @@ These parameters are estimated by running two benchmark jobs:
 
 ## Prerequisites
 
-1. **OpenShift Cluster**: With GPU nodes available
+1. **Cluster**: With GPU nodes available
 2. **vLLM Deployment**: Serving your model (see [vllm-samples.md](vllm-samples.md))
 3. **Guidellm Image**: `ghcr.io/vllm-project/guidellm:latest` (publicly available)
 4. **HuggingFace Token**: If using gated models (stored as Kubernetes Secret)
@@ -48,12 +48,12 @@ A complete vLLM deployment template is available in `hack/vllm-benchmark-deploym
 
 4. **Deploy**:
    ```bash
-   oc apply -f vllm-benchmark-deployment.yaml
+   kubectl apply -f vllm-benchmark-deployment.yaml
    ```
 
 5. **Wait for vLLM to be ready**:
    ```bash
-   oc wait --for=condition=ready pod -n <namespace> -l app=<vllm-service-name> --timeout=2400s
+   kubectl wait --for=condition=ready pod -n <namespace> -l app=<vllm-service-name> --timeout=2400s
    ```
 
    **Note**: First deployment may take 15-35 minutes for model download.
@@ -108,7 +108,7 @@ See [vllm-samples.md](vllm-samples.md) for detailed manual deployment instructio
 - **Gamma (γ)**: Fixed overhead per prefill operation (ms)
 - **Delta (δ)**: Variable overhead per input token per batch member (ms per token per batch member)
 
-**What TTFT measures**: Time to first token, including prompt processing and queue wait time.
+**What TTFT measures**: Time to first token, including prompt prkubectlessing and queue wait time.
 
 ---
 
@@ -117,7 +117,7 @@ See [vllm-samples.md](vllm-samples.md) for detailed manual deployment instructio
 ### Deploy Synchronous Benchmark Job
 
 ```bash
-oc apply -f benchmark-jobs.yaml
+kubectl apply -f benchmark-jobs.yaml
 ```
 
 **Note**: Only the synchronous job will start first. The throughput job will run after the synchronous job completes.
@@ -126,23 +126,23 @@ oc apply -f benchmark-jobs.yaml
 
 ```bash
 # Monitor the job
-oc get jobs -n <namespace> | grep sync
+kubectl get jobs -n <namespace> | grep sync
 
 # Wait for completion
-oc wait --for=condition=complete job/<model-id>-sync-benchmark -n <namespace> --timeout=600s
+kubectl wait --for=condition=complete job/<model-id>-sync-benchmark -n <namespace> --timeout=600s
 ```
 
 ### Extract ITL and TTFT Values
 
 ```bash
 # View logs
-oc logs job/<model-id>-sync-benchmark -n <namespace>
+kubectl logs job/<model-id>-sync-benchmark -n <namespace>
 
 # Extract ITL value (look for "ITL (ms)" section)
-oc logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
+kubectl logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
 
 # Extract TTFT value (look for "TTFT (ms)" section)
-oc logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
+kubectl logs job/<model-id>-sync-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
 ```
 
 ### Expected Output Example
@@ -171,7 +171,7 @@ Benchmarks Stats:
 If both jobs started simultaneously, delete the throughput job to run sequentially:
 
 ```bash
-oc delete job <model-id>-throughput-benchmark -n <namespace>
+kubectl delete job <model-id>-throughput-benchmark -n <namespace>
 ```
 
 ### Deploy Throughput Benchmark Job
@@ -180,30 +180,30 @@ After synchronous job completes, create the throughput job:
 
 ```bash
 # Edit benchmark-jobs.yaml and remove synchronous job, or create separately
-oc apply -f benchmark-jobs.yaml
+kubectl apply -f benchmark-jobs.yaml
 ```
 
 ### Wait for Completion
 
 ```bash
 # Monitor the job
-oc get jobs -n <namespace> | grep throughput
+kubectl get jobs -n <namespace> | grep throughput
 
 # Wait for completion
-oc wait --for=condition=complete job/<model-id>-throughput-benchmark -n <namespace> --timeout=600s
+kubectl wait --for=condition=complete job/<model-id>-throughput-benchmark -n <namespace> --timeout=600s
 ```
 
 ### Extract ITL and TTFT Values
 
 ```bash
 # View logs
-oc logs job/<model-id>-throughput-benchmark -n <namespace>
+kubectl logs job/<model-id>-throughput-benchmark -n <namespace>
 
 # Extract ITL value
-oc logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
+kubectl logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "ITL (ms)" | grep "mean"
 
 # Extract TTFT value
-oc logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
+kubectl logs job/<model-id>-throughput-benchmark -n <namespace> | grep -A 3 "TTFT (ms)" | grep "mean"
 ```
 
 ### Expected Output Example
@@ -260,8 +260,8 @@ $$\alpha = ITL_\text{synchronous} - \beta$$
 
 Verify your calculations:
 ```
-ITL(batch=1)  = α + β = 6.973 + 0.027 = 7.000 ms ✓ (should match ITL_sync)
-ITL(batch=64) = α + (β × 64) = 6.973 + (0.027 × 64) = 8.701 ms ✓ (should match ITL_throughput)
+ITL(batch=1)  = α + β = 6.973 + 0.027 = 7.000 ms (should match ITL_sync)
+ITL(batch=64) = α + (β × 64) = 6.973 + (0.027 × 64) = 8.701 ms (should match ITL_throughput)
 ```
 
 ---
@@ -301,8 +301,8 @@ $$\gamma = TTFT_\text{synchronous} - (\delta \times inputTokens \times 1)$$
 
 Verify your calculations:
 ```
-TTFT(batch=1)  = γ + (δ × 128 × 1) = 14.825 + (0.001364 × 128) = 15.000 ms ✓
-TTFT(batch=64) = γ + (δ × 128 × 64) = 14.825 + (0.001364 × 8192) = 26.000 ms ✓
+TTFT(batch=1)  = γ + (δ × 128 × 1) = 14.825 + (0.001364 × 128) = 15.000 ms
+TTFT(batch=64) = γ + (δ × 128 × 64) = 14.825 + (0.001364 × 8192) = 26.000 ms
 ```
 
 ---
@@ -385,42 +385,6 @@ spec:
 
 ---
 
-## Troubleshooting
-
-### Benchmark Job Fails
-
-**Error**: `exec format error` or image architecture mismatch
-- **Solution**: Use `ghcr.io/vllm-project/guidellm:latest` (supports amd64/arm64)
-
-**Error**: Job can't connect to vLLM service
-- **Solution**: Verify vLLM service name matches job target URL
-- **Solution**: Ensure vLLM pod is ready: `oc get pods -n <namespace>`
-
-**Error**: `stat /usr/local/bin/guidellm: no such file or directory`
-- **Solution**: Use `command: ["guidellm"]` not `command: ["/usr/local/bin/guidellm"]`
-
-### vLLM Deployment Issues
-
-**Error**: Cache permission errors (`/.cache/vllm`)
-- **Solution**: Set `HOME=/models-cache` environment variable
-
-**Error**: Model download fails
-- **Solution**: Verify HF token secret exists and is correct
-- **Solution**: Check PVC has sufficient space
-
-### Parameter Calculation Issues
-
-**Values seem incorrect**:
-- Verify you extracted **mean** values (not median or p99)
-- Ensure maxBatchSize matches your vLLM `--max-num-seqs` value
-- Verify inputTokens matches your `--data prompt_tokens` value
-
-**TTFT values higher than expected**:
-- This is normal - measured TTFT includes queue wait time, not just prefill time
-- This is acceptable for WVA optimization as it reflects actual user experience
-
----
-
 ## Example: Complete Workflow
 
 ```bash
@@ -434,38 +398,38 @@ export INPUT_TOKENS=128
 # 2. Customize and deploy vLLM
 sed "s/<namespace>/$NAMESPACE/g; s/<vllm-service-name>/$VLLM_SERVICE/g; s/<model-id>/$MODEL_ID/g" \
   hack/vllm-benchmark-deployment.yaml > vllm-deployment.yaml
-oc apply -f vllm-deployment.yaml
+kubectl apply -f vllm-deployment.yaml
 
 # 3. Wait for vLLM ready
-oc wait --for=condition=ready pod -n $NAMESPACE -l app=$VLLM_SERVICE --timeout=2400s
+kubectl wait --for=condition=ready pod -n $NAMESPACE -l app=$VLLM_SERVICE --timeout=2400s
 
 # 4. Customize and deploy benchmark jobs
 sed "s/<namespace>/$NAMESPACE/g; s/<vllm-service-name>/$VLLM_SERVICE/g; s/<model-id>/$MODEL_ID/g; s/<max-batch-size>/$MAX_BATCH_SIZE/g" \
   hack/benchmark-jobs-template.yaml > benchmark-jobs.yaml
-oc apply -f benchmark-jobs.yaml
+kubectl apply -f benchmark-jobs.yaml
 
 # 5. Delete throughput job (run sequentially)
-oc delete job ${MODEL_ID}-throughput-benchmark -n $NAMESPACE
+kubectl delete job ${MODEL_ID}-throughput-benchmark -n $NAMESPACE
 
 # 6. Wait for synchronous benchmark
-oc wait --for=condition=complete job/${MODEL_ID}-sync-benchmark -n $NAMESPACE --timeout=600s
+kubectl wait --for=condition=complete job/${MODEL_ID}-sync-benchmark -n $NAMESPACE --timeout=600s
 
 # 7. Extract synchronous results
-ITL_SYNC=$(oc logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
-TTFT_SYNC=$(oc logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+ITL_SYNC=$(kubectl logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+TTFT_SYNC=$(kubectl logs job/${MODEL_ID}-sync-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
 
 # 8. Deploy throughput benchmark
-oc apply -f benchmark-jobs.yaml
+kubectl apply -f benchmark-jobs.yaml
 
 # 9. Wait for throughput benchmark
-oc wait --for=condition=complete job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE --timeout=600s
+kubectl wait --for=condition=complete job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE --timeout=600s
 
 # 10. Extract throughput results
-ITL_THROUGHPUT=$(oc logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
-TTFT_THROUGHPUT=$(oc logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+ITL_THROUGHPUT=$(kubectl logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "ITL (ms)" | grep "mean" | awk '{print $NF}' | head -1)
+TTFT_THROUGHPUT=$(kubectl logs job/${MODEL_ID}-throughput-benchmark -n $NAMESPACE | grep -A 3 "TTFT (ms)" | grep "mean" | awk '{print $NF}' | head -1)
 
 # 11. Calculate parameters
-python3 << EOF
+python << EOF
 itl_sync = $ITL_SYNC
 itl_throughput = $ITL_THROUGHPUT
 ttft_sync = $TTFT_SYNC

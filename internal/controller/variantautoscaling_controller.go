@@ -142,7 +142,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// TODO: Whether we need a global switch EXPERIMENTAL_MODEL_TUNER_ENABLED to enable/disable autotuner for VAs.
 
 	// tune queueing model parameters for all servers using the system data and all active VAs
-	if err := tuner.TuneModelPerfParams(activeVAs, systemData); err != nil {
+	if err := tuner.TuneModelPerfParams(updateList.Items, systemData); err != nil {
 		logger.Log.Warn(err, "failed to tune system data")
 	}
 
@@ -375,6 +375,10 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 		// This ensures we don't lose the MetricsAvailable condition when fetching fresh copy from API
 		// Always copy, even if empty, to preserve conditions set during prepareVariantAutoscalings
 		updateVa.Status.Conditions = va.Status.Conditions
+
+		// Copy TunerPerfData from updateList (which was updated by tuner)
+		// The tuner handles setting initial params when ActivateModelTuner is false or tuned params when ActivateModelTuner is true
+		updateVa.Status.TunerPerfData = va.Status.TunerPerfData
 
 		// Set OptimizationReady condition to True on successful optimization
 		llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,

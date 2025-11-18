@@ -1,4 +1,4 @@
-package controller
+package tuner
 
 import (
 	"fmt"
@@ -17,11 +17,14 @@ func TuneModelPerfParams(
 	activeVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	systemData *infernoConfig.SystemData,
 ) error {
-	for _, va := range activeVAs {
+	for i := range activeVAs {
+		va := &activeVAs[i]
 		// Skip if model tuner not enabled for this VA
-		// TODO: What is the expected behavior of model tuner when activateModelTuner is false.
-		// Should we use the init values (from the spec) or the most recently updated values?
 		if !va.Spec.ActivateModelTuner {
+			logger.Log.Infof("Model tuner not activated for variant %s/%s, using fallback parameters",
+				va.Name,
+				va.Namespace)
+			setFallbackParamsInVAStatus(va)
 			continue
 		}
 
@@ -37,12 +40,10 @@ func TuneModelPerfParams(
 		}
 
 		// Tune the params of this server
-		tunedResults, err := tuneServer(&va, systemData, server)
+		tunedResults, err := tuneServer(va, systemData, server)
 		if err != nil {
-			logger.Log.Warnf("Failed to tune server, keeping original params for variant %s, server %s - error: %v",
-				va.Name,
-				serverName,
-				err)
+			logger.Log.Warnf("Failed to tune server for variant %s - error: %v. Using fallback parameters.", va.Name, err)
+			setFallbackParamsInVAStatus(va)
 			continue
 		}
 
@@ -53,7 +54,7 @@ func TuneModelPerfParams(
 		}
 
 		// Update VA status (will be persisted by controller)
-		if err := updateVAStatusWithTunedParams(&va, server.Model, server.CurrentAlloc.Accelerator, tunedResults); err != nil {
+		if err := updateVAStatusWithTunedParams(va, server.Model, server.CurrentAlloc.Accelerator, tunedResults); err != nil {
 			logger.Log.Warnf("Failed to update VA status with tuned params for variant %s, error %s", va.Name, err)
 			continue
 		}
@@ -86,7 +87,10 @@ func tuneServer(
 	}
 
 	// Convert server's CurrentAlloc to Environment
-	env := convertAllocToEnvironment(server.CurrentAlloc)
+	env, err := convertAllocToEnvironment(server.CurrentAlloc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert allocation to environment: %w", err)
+	}
 
 	// Validate environment has meaningful data
 	if !env.Valid() {
@@ -101,13 +105,14 @@ func tuneServer(
 
 	// Get previous NIS from VA status if it exists
 	var prevNIS float64
-	if hasTunedResults(va) {
+	if HasTunedResults(va) {
 		prevNISStr := va.Status.TunerPerfData.NIS
 		if prevNISStr != "" {
 			parsedNIS, err := strconv.ParseFloat(prevNISStr, 64)
-			if err == nil {
-				prevNIS = parsedNIS
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse previous NIS from VA status: %w", err)
 			}
+			prevNIS = parsedNIS
 		}
 	}
 
@@ -121,21 +126,27 @@ func tuneServer(
 			// NIS validation failed, but we have previous state to use
 			tunedResults.NIS = prevNIS
 
-			logger.Log.Warnf("Tuner validation failed, using previous state for variant %s, server %s - NIS: %.6f, error: %v",
+			logger.Log.Warnf("Tuner NIS validation failed for variant %s/%s, server %s - Keeping previous state (alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f, NIS=%.6f). Validation error: %v",
 				va.Name,
+				va.Namespace,
 				server.Name,
+				tunedResults.ServiceParms.Decode.Alpha,
+				tunedResults.ServiceParms.Decode.Beta,
+				tunedResults.ServiceParms.Prefill.Gamma,
+				tunedResults.ServiceParms.Prefill.Delta,
 				tunedResults.NIS,
 				err)
-			return tunedResults, nil
+			return tunedResults, err
 		}
-		// Complete failure
-		return nil, fmt.Errorf("tuner run failed: %w", err)
+		// Complete failure - tuner couldn't run at all
+		return nil, fmt.Errorf("tuner execution failed completely: %w", err)
 	}
-	// Valid update
-	logger.Log.Info("Tuner validation succeeded",
-		"variant", va.Name,
-		"server", server.Name,
-		"NIS", tunedResults.NIS)
+	// Valid update - NIS validation passed
+	logger.Log.Infof("Tuner validation succeeded for variant %s/%s, server %s - New NIS: %.6f",
+		va.Name,
+		va.Namespace,
+		server.Name,
+		tunedResults.NIS)
 	return tunedResults, nil
 }
 
@@ -177,8 +188,10 @@ func createTuner(
 		return nil, fmt.Errorf("failed to build config: %w", err)
 	}
 
-	// get environment
-	env := convertAllocToEnvironment(server.CurrentAlloc)
+	env, err := convertAllocToEnvironment(server.CurrentAlloc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert allocation to environment: %w", err)
+	}
 
 	// create tuner
 	tuner, err := tune.NewTuner(configData, env)

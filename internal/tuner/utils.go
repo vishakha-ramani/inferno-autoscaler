@@ -1,7 +1,8 @@
-package controller
+package tuner
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"time"
 
@@ -66,12 +67,25 @@ func getFactoredState(initState []float64, multiplier float64) []float64 {
 
 // convertAllocToEnvironment converts WVA CurrentAlloc to model-tuner Environment.
 // This is the adapter between the WVA collector and the Kalman filter tuner.
-func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environment {
-	// first get the request rate per min per replica
-	var ratePerReplica float32
-	if alloc.NumReplicas > 0 {
-		ratePerReplica = alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
+// Returns a nil Environment and error if the allocation data is invalid.
+func convertAllocToEnvironment(alloc infernoConfig.AllocationData) (*tune.Environment, error) {
+	// Validate inputs to prevent division by zero and invalid state
+	if alloc.NumReplicas <= 0 {
+		logger.Log.Warnf("Invalid allocation: NumReplicas must be positive, got %d", alloc.NumReplicas)
+		return nil, fmt.Errorf("invalid allocation: NumReplicas must be positive")
 	}
+	if alloc.Load.ArrivalRate < 0 {
+		logger.Log.Warnf("Invalid allocation: ArrivalRate must be greater or equal to 0, got %f", alloc.Load.ArrivalRate)
+		return nil, fmt.Errorf("invalid allocation: ArrivalRate must be greater or equal to 0")
+	}
+	if alloc.MaxBatch <= 0 {
+		logger.Log.Warnf("Invalid allocation: MaxBatch must be positive, got %d", alloc.MaxBatch)
+		return nil, fmt.Errorf("invalid allocation: MaxBatch must be positive")
+	}
+
+	// Calculate request rate per replica
+	ratePerReplica := alloc.Load.ArrivalRate / float32(alloc.NumReplicas)
+
 	return &tune.Environment{
 		Lambda:        ratePerReplica,
 		AvgOutputToks: alloc.Load.AvgOutTokens,
@@ -80,7 +94,7 @@ func convertAllocToEnvironment(alloc infernoConfig.AllocationData) *tune.Environ
 		AvgTTFT:       alloc.TTFTAverage,
 		AvgITL:        alloc.ITLAverage,
 		NumReplicas:   alloc.NumReplicas,
-	}
+	}, nil
 }
 
 // get state and covariance matrix from VA status (if exist), otherwise return only the state params from VA spec
@@ -90,23 +104,39 @@ func getStateAndCovariance(
 	server *infernoConfig.ServerSpec,
 ) (state, covMatrix []float64, err error) {
 	// check if VA has tuned results in status (has been tuned before)
-	if hasTunedResults(va) {
+	if HasTunedResults(va) {
 		state, covMatrix, err = extractStateAndCovarianceFromVAStatus(va)
-		if err == nil {
-			logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+		if err != nil {
+			logger.Log.Warnf("Failed to extract tuned state from VA status, falling back to spec for variant %s: %v",
+				va.Name,
+				err)
+
+			// in case of error in extracting status, fall back to spec values
+			state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 				va.Name,
 				state[constants.StateIndexAlpha],
 				state[constants.StateIndexBeta],
 				state[constants.StateIndexGamma],
 				state[constants.StateIndexDelta])
-			return state, covMatrix, nil
+
+			return state, nil, nil
 		}
-		logger.Log.Warnf("Failed to extract tuned state from VA status, falling back to spec for variant %s: %v",
+
+		logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 			va.Name,
-			err)
+			state[constants.StateIndexAlpha],
+			state[constants.StateIndexBeta],
+			state[constants.StateIndexGamma],
+			state[constants.StateIndexDelta])
+		return state, covMatrix, nil
 	}
 
-	// in case of first time tuning or error in extracting status, fall back to spec values
+	// in case the VA has not been tuned before, fall back to spec values
 	state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 	if err != nil {
 		return nil, nil, err
@@ -122,11 +152,62 @@ func getStateAndCovariance(
 	return state, nil, nil
 }
 
-// hasTunedParams checks if VA status contains tuned parameters.
-func hasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
-	return len(va.Status.TunerPerfData.PerfParms.DecodeParms) > 0 &&
-		len(va.Status.TunerPerfData.PerfParms.PrefillParms) > 0 &&
-		len(va.Status.TunerPerfData.CovarianceMatrix) > 0
+// HasTunedResults checks if VA status contains valid tuned parameters.
+func HasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
+	perfParms := va.Status.TunerPerfData.PerfParms
+
+	// Check decode parameters exist and have correct keys
+	if len(perfParms.DecodeParms) != 2 {
+		return false
+	}
+	alpha, hasAlpha := perfParms.DecodeParms["alpha"]
+	if !hasAlpha {
+		return false
+	}
+	beta, hasBeta := perfParms.DecodeParms["beta"]
+	if !hasBeta {
+		return false
+	}
+
+	if alphaVal, err := strconv.ParseFloat(alpha, 64); err != nil || alphaVal <= 0 {
+		return false
+	}
+	if betaVal, err := strconv.ParseFloat(beta, 64); err != nil || betaVal < 0 {
+		return false
+	}
+
+	// Check prefill parameters exist and have correct keys
+	if len(perfParms.PrefillParms) != 2 {
+		return false
+	}
+	gamma, hasGamma := perfParms.PrefillParms["gamma"]
+	if !hasGamma {
+		return false
+	}
+	delta, hasDelta := perfParms.PrefillParms["delta"]
+	if !hasDelta {
+		return false
+	}
+
+	if gammaVal, err := strconv.ParseFloat(gamma, 64); err != nil || gammaVal <= 0 {
+		return false
+	}
+	if deltaVal, err := strconv.ParseFloat(delta, 64); err != nil || deltaVal < 0 {
+		return false
+	}
+
+	// Check covariance matrix has correct dimensions (4x4)
+	covMatrix := va.Status.TunerPerfData.CovarianceMatrix
+	if len(covMatrix) != 4 {
+		return false
+	}
+	for _, row := range covMatrix {
+		if len(row) != 4 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
@@ -146,26 +227,26 @@ func extractStateAndCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.Va
 
 func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
 	matStatus := va.Status.TunerPerfData.CovarianceMatrix
-	rows := len(matStatus)
-	cols := len(matStatus[0])
-	if rows != cols || rows != 4 {
-		return nil, fmt.Errorf("invalid covariance matrix dimensions: expected 4 rows and 4 cols, got %d x %d", rows, cols)
+	numRows := len(matStatus)
+	numCols := len(matStatus[0])
+	if numRows != numCols || numRows != 4 {
+		return nil, fmt.Errorf("invalid covariance matrix dimensions: expected 4 rows and 4 cols, got %d x %d", numRows, numCols)
 	}
 
 	// Create a flat slice to hold the float64 data
-	data := make([]float64, rows*cols)
+	data := make([]float64, numRows*numCols)
 
 	// Populate the data slice by parsing strings
-	for r := 0; r < rows; r++ {
-		if len(matStatus[r]) != cols {
+	for r := range numRows {
+		if len(matStatus[r]) != numCols {
 			return nil, fmt.Errorf("row %d has inconsistent column count", r)
 		}
-		for c := 0; c < cols; c++ {
-			val, err := strconv.ParseFloat(matStatus[r][c], 32)
+		for c := range numCols {
+			val, err := strconv.ParseFloat(matStatus[r][c], 64)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing string '%s' to float64: %v", matStatus[r][c], err)
 			}
-			data[r*cols+c] = val
+			data[r*numCols+c] = val
 		}
 	}
 	return data, nil
@@ -177,11 +258,11 @@ func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscal
 	if len(decodeParms) != 2 {
 		return nil, fmt.Errorf("length of tuned decode parms in VA status should be 2")
 	}
-	alpha, err := strconv.ParseFloat(decodeParms["alpha"], 32)
+	alpha, err := strconv.ParseFloat(decodeParms["alpha"], 64)
 	if err != nil {
 		return nil, err
 	}
-	beta, err := strconv.ParseFloat(decodeParms["beta"], 32)
+	beta, err := strconv.ParseFloat(decodeParms["beta"], 64)
 	if err != nil {
 		return nil, err
 	}
@@ -191,11 +272,11 @@ func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscal
 	if len(prefillParms) != 2 {
 		return nil, fmt.Errorf("length of prefillParms should be 2")
 	}
-	gamma, err := strconv.ParseFloat(prefillParms["gamma"], 32)
+	gamma, err := strconv.ParseFloat(prefillParms["gamma"], 64)
 	if err != nil {
 		return nil, err
 	}
-	delta, err := strconv.ParseFloat(prefillParms["delta"], 32)
+	delta, err := strconv.ParseFloat(prefillParms["delta"], 64)
 	if err != nil {
 		return nil, err
 	}
@@ -289,12 +370,21 @@ func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, model
 }
 
 // updates VA status with tuner results
+// Only updates if values have actually changed to avoid API calls
 func updateVAStatusWithTunedParams(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	model string,
 	accelerator string,
 	tunedResults *tune.TunedResults,
 ) error {
+	// Check if we already have tuned data and if it matches the new values
+	if HasTunedResults(va) {
+		if tunedParamsMatch(va, model, accelerator, tunedResults) {
+			logger.Log.Debugf("Tuned parameters unchanged for variant %s, skipping status update", va.Name)
+			return nil
+		}
+	}
+
 	// convert *mat.Dense to slice of string slices to store covariance matrix in VA status
 	covMatrixStatus := denseMatrixToSliceOfStrings(tunedResults.Covariance)
 
@@ -304,28 +394,238 @@ func updateVAStatusWithTunedParams(
 		UpdatedAt:   metav1.NewTime(time.Now()),
 		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
 			DecodeParms: map[string]string{
-				"alpha": fmt.Sprintf("%f", tunedResults.ServiceParms.Decode.Alpha),
-				"beta":  fmt.Sprintf("%f", tunedResults.ServiceParms.Decode.Beta),
+				"alpha": fmt.Sprintf("%.6f", tunedResults.ServiceParms.Decode.Alpha),
+				"beta":  fmt.Sprintf("%.6f", tunedResults.ServiceParms.Decode.Beta),
 			},
 			PrefillParms: map[string]string{
-				"gamma": fmt.Sprintf("%f", tunedResults.ServiceParms.Prefill.Gamma),
-				"delta": fmt.Sprintf("%f", tunedResults.ServiceParms.Prefill.Delta),
+				"gamma": fmt.Sprintf("%.6f", tunedResults.ServiceParms.Prefill.Gamma),
+				"delta": fmt.Sprintf("%.6f", tunedResults.ServiceParms.Prefill.Delta),
 			},
 		},
-		NIS:              fmt.Sprintf("%f", tunedResults.NIS),
+		NIS:              fmt.Sprintf("%.6f", tunedResults.NIS),
 		CovarianceMatrix: covMatrixStatus,
 	}
+
+	logger.Log.Debugf("Updated tuner status for variant %s: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f, NIS=%.6f",
+		va.Name,
+		tunedResults.ServiceParms.Decode.Alpha,
+		tunedResults.ServiceParms.Decode.Beta,
+		tunedResults.ServiceParms.Prefill.Gamma,
+		tunedResults.ServiceParms.Prefill.Delta,
+		tunedResults.NIS)
+
 	return nil
+}
+
+// setFallbackParamsInVAStatus sets parameters in VA status with the following priority:
+// 1. Keep existing tuned parameters if they exist and are valid
+// 2. Use initial parameters from spec if available
+// 3. Set zero parameters as fallback
+func setFallbackParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
+	// If VA status already has valid tuned params, keep them
+	if HasTunedResults(va) {
+		logger.Log.Infof("Keeping previously tuned parameters for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
+			va.Name,
+			va.Namespace,
+			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
+			va.Status.TunerPerfData.PerfParms.DecodeParms["beta"],
+			va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"],
+			va.Status.TunerPerfData.PerfParms.PrefillParms["delta"])
+		return nil
+	}
+
+	// Try to use initial parameters from spec
+	logger.Log.Infof("No previous tuned parameters found for variant %s/%s, attempting to use spec parameters",
+		va.Name, va.Namespace)
+
+	return setParamsFromSpec(va)
+}
+
+// setParamsFromSpec sets parameters from the VA spec's ModelProfile
+// Falls back to zero parameters if spec is invalid or incomplete
+func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
+	// Initialize maps if nil
+	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
+		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
+	}
+	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
+		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
+	}
+
+	// Validate ModelProfile exists
+	if len(va.Spec.ModelProfile.Accelerators) == 0 {
+		logger.Log.Warnf("No accelerator profiles found in ModelProfile for variant %s/%s, setting default zero parameters",
+			va.Name, va.Namespace)
+		setZeroParams(va)
+		return fmt.Errorf("no accelerator profiles found in spec")
+	}
+
+	// Copy initial params from spec
+	for _, accProfile := range va.Spec.ModelProfile.Accelerators {
+
+		accName := va.Labels["inference.optimization/acceleratorName"]
+
+		if accProfile.Acc != accName {
+			continue
+		}
+
+		if len(accProfile.PerfParms.DecodeParms) > 0 {
+			maps.Copy(va.Status.TunerPerfData.PerfParms.DecodeParms, accProfile.PerfParms.DecodeParms)
+		}
+		if len(accProfile.PerfParms.PrefillParms) > 0 {
+			maps.Copy(va.Status.TunerPerfData.PerfParms.PrefillParms, accProfile.PerfParms.PrefillParms)
+		}
+	}
+
+	// Validate that we have all required parameters
+	alpha, hasAlpha := va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"]
+	beta, hasBeta := va.Status.TunerPerfData.PerfParms.DecodeParms["beta"]
+	gamma, hasGamma := va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"]
+	delta, hasDelta := va.Status.TunerPerfData.PerfParms.PrefillParms["delta"]
+
+	if !hasAlpha || !hasBeta || !hasGamma || !hasDelta {
+		logger.Log.Warnf("Incomplete parameters in ModelProfile for variant %s/%s (alpha=%v, beta=%v, gamma=%v, delta=%v), setting default zero parameters",
+			va.Name, va.Namespace, hasAlpha, hasBeta, hasGamma, hasDelta)
+		setZeroParams(va)
+		return fmt.Errorf("incomplete parameters in spec")
+	}
+
+	// Validate parameter values
+	// If any are invalid, setting them to zero
+	if _, err := strconv.ParseFloat(alpha, 64); err != nil {
+		logger.Log.Warnf("Invalid alpha value '%s' for variant %s/%s, setting default zero parameters: %v",
+			alpha, va.Name, va.Namespace, err)
+		setZeroParams(va)
+		return fmt.Errorf("invalid alpha value: %w", err)
+	}
+	if _, err := strconv.ParseFloat(beta, 64); err != nil {
+		logger.Log.Warnf("Invalid beta value '%s' for variant %s/%s, setting default zero parameters: %v",
+			beta, va.Name, va.Namespace, err)
+		setZeroParams(va)
+		return fmt.Errorf("invalid beta value: %w", err)
+	}
+	if _, err := strconv.ParseFloat(gamma, 64); err != nil {
+		logger.Log.Warnf("Invalid gamma value '%s' for variant %s/%s, setting default zero parameters: %v",
+			gamma, va.Name, va.Namespace, err)
+		setZeroParams(va)
+		return fmt.Errorf("invalid gamma value: %w", err)
+	}
+	if _, err := strconv.ParseFloat(delta, 64); err != nil {
+		logger.Log.Warnf("Invalid delta value '%s' for variant %s/%s, setting default zero parameters: %v",
+			delta, va.Name, va.Namespace, err)
+		setZeroParams(va)
+		return fmt.Errorf("invalid delta value: %w", err)
+	}
+
+	logger.Log.Infof("Set initial parameters for variant %s/%s from spec: alpha=%s, beta=%s, gamma=%s, delta=%s",
+		va.Name,
+		va.Namespace,
+		alpha, beta, gamma, delta)
+
+	return nil
+}
+
+// setZeroParams sets all tuned performance parameters to "0" when params from spec cannot be retrieved
+func setZeroParams(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
+	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
+		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
+	}
+	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
+		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
+	}
+
+	va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"] = "0"
+	va.Status.TunerPerfData.PerfParms.DecodeParms["beta"] = "0"
+	va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"] = "0"
+	va.Status.TunerPerfData.PerfParms.PrefillParms["delta"] = "0"
+
+	logger.Log.Infof("Set default zero parameters for variant %s/%s",
+		va.Name,
+		va.Namespace)
+}
+
+// tunedParamsMatch checks if the new tuned results match existing status
+func tunedParamsMatch(
+	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	model string,
+	accelerator string,
+	tunedResults *tune.TunedResults,
+) bool {
+	existing := va.Status.TunerPerfData
+
+	// Check model and accelerator
+	if existing.Model != model || existing.Accelerator != accelerator {
+		return false
+	}
+
+	// Compare performance parameters with epsilon for float comparison
+	alpha, err := strconv.ParseFloat(existing.PerfParms.DecodeParms["alpha"], 64)
+	if err != nil || !tune.FloatEqual(alpha, float64(tunedResults.ServiceParms.Decode.Alpha), tune.DefaultEpsilon) {
+		return false
+	}
+
+	beta, err := strconv.ParseFloat(existing.PerfParms.DecodeParms["beta"], 64)
+	if err != nil || !tune.FloatEqual(beta, float64(tunedResults.ServiceParms.Decode.Beta), tune.DefaultEpsilon) {
+		return false
+	}
+
+	gamma, err := strconv.ParseFloat(existing.PerfParms.PrefillParms["gamma"], 64)
+	if err != nil || !tune.FloatEqual(gamma, float64(tunedResults.ServiceParms.Prefill.Gamma), tune.DefaultEpsilon) {
+		return false
+	}
+
+	delta, err := strconv.ParseFloat(existing.PerfParms.PrefillParms["delta"], 64)
+	if err != nil || !tune.FloatEqual(delta, float64(tunedResults.ServiceParms.Prefill.Delta), tune.DefaultEpsilon) {
+		return false
+	}
+
+	// Compare NIS
+	nis, err := strconv.ParseFloat(existing.NIS, 64)
+	if err != nil || !tune.FloatEqual(nis, tunedResults.NIS, tune.DefaultEpsilon) {
+		return false
+	}
+
+	// Compare covariance matrix
+	if !covarianceMatrixMatches(existing.CovarianceMatrix, tunedResults.Covariance) {
+		return false
+	}
+
+	return true
+}
+
+// covarianceMatrixMatches compares stored matrix with new matrix
+func covarianceMatrixMatches(stored [][]string, newMat *mat.Dense) bool {
+	r, c := newMat.Dims()
+	if len(stored) != r {
+		return false
+	}
+
+	for i := range r {
+		if len(stored[i]) != c {
+			return false
+		}
+		for j := range c {
+			storedVal, err := strconv.ParseFloat(stored[i][j], 64)
+			if err != nil {
+				return false
+			}
+			if !tune.FloatEqual(storedVal, newMat.At(i, j), tune.DefaultEpsilon) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func denseMatrixToSliceOfStrings(m *mat.Dense) [][]string {
 	r, c := m.Dims()
 	result := make([][]string, r)
 
-	for i := 0; i < r; i++ {
+	for i := range r {
 		result[i] = make([]string, c)
-		for j := 0; j < c; j++ {
-			result[i][j] = fmt.Sprintf("%v", m.At(i, j))
+		for j := range c {
+			result[i][j] = fmt.Sprintf("%.6f", m.At(i, j))
 		}
 	}
 	return result

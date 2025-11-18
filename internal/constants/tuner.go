@@ -39,4 +39,7 @@ const (
 	StateIndexBeta  = 1 // Decode slope parameter
 	StateIndexGamma = 2 // Prefill base parameter
 	StateIndexDelta = 3 // Prefill slope parameter
+
+	// Initial parameter estimation factors
+	BaseFactor = 0.9 // fraction of metric value (ITL or TTFT) assumed base value (alpha or gamma) in range (0, 1)
 )

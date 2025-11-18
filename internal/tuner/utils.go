@@ -139,10 +139,14 @@ func getStateAndCovariance(
 	// in case the VA has not been tuned before, fall back to spec values
 	state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 	if err != nil {
-		return nil, nil, err
+		logger.Log.Infof("Failed to find perf data in VA spec, attempting to make initial guess for variant %s: %v", va.Name, err)
+		// gess an initial state, if not in spec
+		if state, err = guessInitState(server); err != nil {
+			return nil, nil, err
+		}
 	}
 
-	logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+	logger.Log.Debugf("Using initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 		va.Name,
 		state[constants.StateIndexAlpha],
 		state[constants.StateIndexBeta],
@@ -319,6 +323,42 @@ func findStateInSystemData(
 		}
 	}
 	return nil, fmt.Errorf("model %q with accelerator %q not found in system data", modelName, acceleratorName)
+}
+
+// make an initial guess of the state estimates based on observed metrics
+func guessInitState(serverSpec *infernoConfig.ServerSpec) ([]float64, error) {
+
+	// get observed data
+	allocData := &serverSpec.CurrentAlloc
+	numReplicas := allocData.NumReplicas
+	avgITL := allocData.ITLAverage
+	avgTTFT := allocData.TTFTAverage
+	rpmTotal := allocData.Load.ArrivalRate
+	inTokens := allocData.Load.AvgInTokens
+	outTokens := allocData.Load.AvgOutTokens
+
+	if numReplicas <= 0 || avgITL < 0 || avgTTFT < 0 || (avgITL+avgTTFT) == 0 ||
+		rpmTotal <= 0 || inTokens <= 0 || outTokens <= 0 {
+		return nil, fmt.Errorf("invalid allocation data for server %s: %v", serverSpec.Name, allocData)
+	}
+
+	// use msec as time unit
+	lambda := rpmTotal / float32(numReplicas) / 60 / 1000
+	avgLatency := avgTTFT + avgITL*float32(outTokens)
+	avgConcurrency := lambda * avgLatency
+
+	// make initial guess
+	alpha := constants.BaseFactor * avgITL
+	beta := (avgITL - alpha) / avgConcurrency
+	gamma := constants.BaseFactor * avgTTFT
+	delta := (avgTTFT - gamma) / avgConcurrency / float32(inTokens)
+
+	state := make([]float64, 4)
+	state[constants.StateIndexAlpha] = float64(alpha)
+	state[constants.StateIndexBeta] = float64(beta)
+	state[constants.StateIndexGamma] = float64(gamma)
+	state[constants.StateIndexDelta] = float64(delta)
+	return state, nil
 }
 
 func findSLOInSystemData(

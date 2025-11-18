@@ -156,43 +156,8 @@ func getStateAndCovariance(
 func HasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
 	perfParms := va.Status.TunerPerfData.PerfParms
 
-	// Check decode parameters exist and have correct keys
-	if len(perfParms.DecodeParms) != 2 {
-		return false
-	}
-	alpha, hasAlpha := perfParms.DecodeParms["alpha"]
-	if !hasAlpha {
-		return false
-	}
-	beta, hasBeta := perfParms.DecodeParms["beta"]
-	if !hasBeta {
-		return false
-	}
-
-	if alphaVal, err := strconv.ParseFloat(alpha, 64); err != nil || alphaVal <= 0 {
-		return false
-	}
-	if betaVal, err := strconv.ParseFloat(beta, 64); err != nil || betaVal < 0 {
-		return false
-	}
-
-	// Check prefill parameters exist and have correct keys
-	if len(perfParms.PrefillParms) != 2 {
-		return false
-	}
-	gamma, hasGamma := perfParms.PrefillParms["gamma"]
-	if !hasGamma {
-		return false
-	}
-	delta, hasDelta := perfParms.PrefillParms["delta"]
-	if !hasDelta {
-		return false
-	}
-
-	if gammaVal, err := strconv.ParseFloat(gamma, 64); err != nil || gammaVal <= 0 {
-		return false
-	}
-	if deltaVal, err := strconv.ParseFloat(delta, 64); err != nil || deltaVal < 0 {
+	// Check if all 4 parameters are valid
+	if !hasValidParams(perfParms.DecodeParms, perfParms.PrefillParms) {
 		return false
 	}
 
@@ -205,6 +170,53 @@ func HasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool
 		if len(row) != 4 {
 			return false
 		}
+	}
+
+	return true
+}
+
+// hasValidParams validates that decode and prefill parameter maps contain valid alpha, beta, gamma, delta values
+func hasValidParams(decodeParms, prefillParms map[string]string) bool {
+	// Check decode parameters exist and have correct keys
+	if len(decodeParms) != 2 {
+		return false
+	}
+	alpha, hasAlpha := decodeParms["alpha"]
+	if !hasAlpha {
+		return false
+	}
+	beta, hasBeta := decodeParms["beta"]
+	if !hasBeta {
+		return false
+	}
+
+	// Validate alpha and beta values
+	if alphaVal, err := strconv.ParseFloat(alpha, 64); err != nil || alphaVal <= 0 {
+		return false
+	}
+	if betaVal, err := strconv.ParseFloat(beta, 64); err != nil || betaVal < 0 {
+		return false
+	}
+
+	// Check prefill parameters exist and have correct keys
+	if len(prefillParms) != 2 {
+		return false
+	}
+	gamma, hasGamma := prefillParms["gamma"]
+	if !hasGamma {
+		return false
+	}
+	delta, hasDelta := prefillParms["delta"]
+	if !hasDelta {
+		return false
+	}
+
+	// Validate gamma and delta values
+	if gammaVal, err := strconv.ParseFloat(gamma, 64); err != nil || gammaVal <= 0 {
+		return false
+	}
+	if deltaVal, err := strconv.ParseFloat(delta, 64); err != nil || deltaVal < 0 {
+		return false
 	}
 
 	return true
@@ -418,11 +430,12 @@ func updateVAStatusWithTunedParams(
 }
 
 // setFallbackParamsInVAStatus sets parameters in VA status with the following priority:
-// 1. Keep existing tuned parameters if they exist and are valid
-// 2. Use initial parameters from spec if available
-// 3. Set zero parameters as fallback
+// 1. Keep existing tuned parameters if they exist and are valid (includes covariance matrix)
+// 2. Keep existing spec parameters if they exist and are valid (no covariance matrix)
+// 3. Use initial parameters from spec if available
+// 4. Set zero parameters as fallback
 func setFallbackParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
-	// If VA status already has valid tuned params, keep them
+	// If VA status already has valid tuned params and fully specified TunerPerfData, keep them
 	if HasTunedResults(va) {
 		logger.Log.Infof("Keeping previously tuned parameters for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
 			va.Name,
@@ -434,8 +447,21 @@ func setFallbackParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutos
 		return nil
 	}
 
-	// Try to use initial parameters from spec
-	logger.Log.Infof("No previous tuned parameters found for variant %s/%s, attempting to use spec parameters",
+	// Priority 2: If VA tuner status has params from spec, keep them if valids
+	perfParms := va.Status.TunerPerfData.PerfParms
+	if hasValidParams(perfParms.DecodeParms, perfParms.PrefillParms) {
+		logger.Log.Debugf("VA status already has valid tuner parameters for variant %s/%s (skipping update): alpha=%s, beta=%s, gamma=%s, delta=%s",
+			va.Name,
+			va.Namespace,
+			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
+			va.Status.TunerPerfData.PerfParms.DecodeParms["beta"],
+			va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"],
+			va.Status.TunerPerfData.PerfParms.PrefillParms["delta"])
+		return nil
+	}
+
+	// Priority 3: Try to use initial parameters from spec
+	logger.Log.Debugf("No previous parameters found for variant %s/%s, attempting to use spec parameters",
 		va.Name, va.Namespace)
 
 	return setParamsFromSpec(va)
@@ -460,62 +486,56 @@ func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) er
 		return fmt.Errorf("no accelerator profiles found in spec")
 	}
 
+	// Temporary maps to collect params from spec
+	specDecodeParms := make(map[string]string)
+	specPrefillParms := make(map[string]string)
+
 	// Copy initial params from spec
 	for _, accProfile := range va.Spec.ModelProfile.Accelerators {
 
+		// Getting accelerator name from VA labels
 		accName := va.Labels["inference.optimization/acceleratorName"]
-
 		if accProfile.Acc != accName {
 			continue
 		}
 
+		// Copy decode and prefill params from corresponding ModelProfile spec to temporary maps
 		if len(accProfile.PerfParms.DecodeParms) > 0 {
-			maps.Copy(va.Status.TunerPerfData.PerfParms.DecodeParms, accProfile.PerfParms.DecodeParms)
+			maps.Copy(specDecodeParms, accProfile.PerfParms.DecodeParms)
 		}
 		if len(accProfile.PerfParms.PrefillParms) > 0 {
-			maps.Copy(va.Status.TunerPerfData.PerfParms.PrefillParms, accProfile.PerfParms.PrefillParms)
+			maps.Copy(specPrefillParms, accProfile.PerfParms.PrefillParms)
 		}
 	}
 
-	// Validate that we have all required parameters
-	alpha, hasAlpha := va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"]
-	beta, hasBeta := va.Status.TunerPerfData.PerfParms.DecodeParms["beta"]
-	gamma, hasGamma := va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"]
-	delta, hasDelta := va.Status.TunerPerfData.PerfParms.PrefillParms["delta"]
-
-	if !hasAlpha || !hasBeta || !hasGamma || !hasDelta {
-		logger.Log.Warnf("Incomplete parameters in ModelProfile for variant %s/%s (alpha=%v, beta=%v, gamma=%v, delta=%v), setting default zero parameters",
-			va.Name, va.Namespace, hasAlpha, hasBeta, hasGamma, hasDelta)
+	// Validate that spec params are valid
+	if !hasValidParams(specDecodeParms, specPrefillParms) {
+		logger.Log.Warnf("Invalid or incomplete parameters in ModelProfile for variant %s/%s, setting default zero parameters",
+			va.Name, va.Namespace)
 		setZeroParams(va)
-		return fmt.Errorf("incomplete parameters in spec")
+		return fmt.Errorf("invalid or incomplete parameters in spec")
 	}
 
-	// Validate parameter values
-	// If any are invalid, setting them to zero
-	if _, err := strconv.ParseFloat(alpha, 64); err != nil {
-		logger.Log.Warnf("Invalid alpha value '%s' for variant %s/%s, setting default zero parameters: %v",
-			alpha, va.Name, va.Namespace, err)
-		setZeroParams(va)
-		return fmt.Errorf("invalid alpha value: %w", err)
+	// Get param values for comparison and logging
+	alpha := specDecodeParms["alpha"]
+	beta := specDecodeParms["beta"]
+	gamma := specPrefillParms["gamma"]
+	delta := specPrefillParms["delta"]
+
+	// Check if current status params already match what we're about to set
+	currentAlpha := va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"]
+	currentBeta := va.Status.TunerPerfData.PerfParms.DecodeParms["beta"]
+	currentGamma := va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"]
+	currentDelta := va.Status.TunerPerfData.PerfParms.PrefillParms["delta"]
+
+	if currentAlpha == alpha && currentBeta == beta && currentGamma == gamma && currentDelta == delta {
+		logger.Log.Debugf("Spec parameters already set in status for variant %s/%s, skipping update", va.Name, va.Namespace)
+		return nil
 	}
-	if _, err := strconv.ParseFloat(beta, 64); err != nil {
-		logger.Log.Warnf("Invalid beta value '%s' for variant %s/%s, setting default zero parameters: %v",
-			beta, va.Name, va.Namespace, err)
-		setZeroParams(va)
-		return fmt.Errorf("invalid beta value: %w", err)
-	}
-	if _, err := strconv.ParseFloat(gamma, 64); err != nil {
-		logger.Log.Warnf("Invalid gamma value '%s' for variant %s/%s, setting default zero parameters: %v",
-			gamma, va.Name, va.Namespace, err)
-		setZeroParams(va)
-		return fmt.Errorf("invalid gamma value: %w", err)
-	}
-	if _, err := strconv.ParseFloat(delta, 64); err != nil {
-		logger.Log.Warnf("Invalid delta value '%s' for variant %s/%s, setting default zero parameters: %v",
-			delta, va.Name, va.Namespace, err)
-		setZeroParams(va)
-		return fmt.Errorf("invalid delta value: %w", err)
-	}
+
+	// Parameters are different from Spec, update status
+	va.Status.TunerPerfData.PerfParms.DecodeParms = specDecodeParms
+	va.Status.TunerPerfData.PerfParms.PrefillParms = specPrefillParms
 
 	logger.Log.Infof("Set initial parameters for variant %s/%s from spec: alpha=%s, beta=%s, gamma=%s, delta=%s",
 		va.Name,

@@ -100,23 +100,29 @@ type VariantAutoscalingStatus struct {
 // It is used as a persistent store of the model tuner state, keeping the model tuner stateless.
 type TunerPerfData struct {
 	// Model specifies the unique identifier of the model used in tuning.
+	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model,omitempty"`
 
 	// Accelerator is the type of accelerator used in tuning.
+	// +kubebuilder:validation:MinLength=1
 	Accelerator string `json:"accelerator,omitempty"`
 
-	// UpdateAt specifies the time last succesfull tuner update was performed.
+	// UpdatedAt specifies the time last successful tuner update was performed.
 	UpdatedAt metav1.Time `json:"updatedAt,omitempty"`
 
-	// PerParms specifies the TUNED prefill and decode parameters of the queueing model.
+	// PerfParms specifies the TUNED prefill and decode parameters of the queueing model.
+	// +kubebuilder:validation:Required
 	PerfParms PerfParms `json:"perfParms,omitempty"`
 
-	// Normalized Innovaion Square value of the tuner update.
+	// Normalized Innovation Squared value of the tuner update.
 	// NIS determines how accurately Kalman filter is able to predict the measurement.
+	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
 	NIS string `json:"nis,omitempty"`
 
 	// CovarianceMatrix contains the current covariance matrix of the tuned state.
 	// It represents the uncertainty in the estimate.
+	// +kubebuilder:validation:MinItems=4
+	// +kubebuilder:validation:MaxItems=4
 	CovarianceMatrix [][]string `json:"covarianceMatrix,omitempty"`
 }
 

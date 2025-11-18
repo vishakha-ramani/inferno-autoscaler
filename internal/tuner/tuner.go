@@ -24,7 +24,9 @@ func TuneModelPerfParams(
 			logger.Log.Infof("Model tuner not activated for variant %s/%s, using fallback parameters",
 				va.Name,
 				va.Namespace)
-			SetFallbackTunedParamsInVAStatus(va)
+			if err := SetFallbackTunedParamsInVAStatus(va); err != nil {
+				logger.Log.Warnf("Failed to set fallback tuned parameters for variant %s/%s: %v", va.Name, va.Namespace, err)
+			}
 			continue
 		}
 
@@ -43,7 +45,9 @@ func TuneModelPerfParams(
 		tunedResults, err := tuneServer(va, systemData, server)
 		if err != nil {
 			logger.Log.Warnf("Failed to tune server for variant %s - error: %v. Using fallback parameters.", va.Name, err)
-			SetFallbackTunedParamsInVAStatus(va)
+			if err := SetFallbackTunedParamsInVAStatus(va); err != nil {
+				logger.Log.Warnf("Failed to set fallback tuned parameters for variant %s/%s: %v", va.Name, va.Namespace, err)
+			}
 			continue
 		}
 

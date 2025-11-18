@@ -18,7 +18,7 @@ These parameters are estimated by running two benchmark jobs:
 
 1. **Cluster**: With GPU nodes available
 2. **vLLM Deployment**: Serving your model (see [vllm-samples.md](vllm-samples.md))
-3. **Guidellm Image**: `ghcr.io/vllm-project/guidellm:latest` (publicly available)
+3. **Guidellm Image**: `ghcr.io/vllm-project/guidellm:latest` (publicly available - latest is fine, as long as the image has synchronous and throughput rate types.)
 4. **HuggingFace Token**: If using gated models (stored as Kubernetes Secret)
 5. **Persistent Volume Claim**: For model cache (optional but recommended)
 

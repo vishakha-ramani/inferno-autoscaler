@@ -31,6 +31,7 @@ llmd:
 
 va:
   enabled: true
+  tuned: true
   accelerator: H100
   sloTpot: 10
   sloTtft: 1000

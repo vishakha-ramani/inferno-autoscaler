@@ -21,6 +21,8 @@ spec:
     name: premium-slo
     # Key (modelID) present inside configmap
     key: opt-125m
+  # Flag to indicate if the variant is being tuned
+  activateModelTuner: {{ .Values.va.tuned }}
   # Static profiled benchmarked data for a variant running on different accelerators
   modelProfile:
     accelerators:

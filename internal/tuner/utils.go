@@ -429,12 +429,12 @@ func updateVAStatusWithTunedParams(
 	return nil
 }
 
-// setFallbackParamsInVAStatus sets parameters in VA status with the following priority:
+// SetFallbackTunedParamsInVAStatus sets parameters in VA status with the following priority:
 // 1. Keep existing tuned parameters if they exist and are valid (includes covariance matrix)
 // 2. Keep existing spec parameters if they exist and are valid (no covariance matrix)
 // 3. Use initial parameters from spec if available
 // 4. Set zero parameters as fallback
-func setFallbackParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
+func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
 	// If VA status already has valid tuned params and fully specified TunerPerfData, keep them
 	if HasTunedResults(va) {
 		logger.Log.Infof("Keeping previously tuned parameters for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",

@@ -27,6 +27,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -139,11 +140,28 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// TODO: Whether we need a global switch EXPERIMENTAL_MODEL_TUNER_ENABLED to enable/disable autotuner for VAs.
+	// Check if model tuner is enabled globally
+	tunerEnabled, err := r.isModelTunerEnabled(ctx)
+	if err != nil {
+		logger.Log.Error(err, "Failed to read model tuner configuration, defaulting to disabled")
+		tunerEnabled = false
+	}
 
-	// tune queueing model parameters for all servers using the system data and all active VAs
-	if err := tuner.TuneModelPerfParams(updateList.Items, systemData); err != nil {
-		logger.Log.Warn(err, "failed to tune system data")
+	if tunerEnabled {
+		logger.Log.Debug("Experimental model tuner is enabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=true), tuning model performance parameters for active VAs")
+		// Tune queueing model parameters for all servers using the system data and all active VAs
+		if err := tuner.TuneModelPerfParams(updateList.Items, systemData); err != nil {
+			logger.Log.Warn(err, "failed to tune system data")
+		}
+	} else {
+		logger.Log.Info("Model tuner is disabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=false), using spec parameters for all VAs")
+		// Populate TunerPerfData with spec parameters for all VAs
+		for i := range updateList.Items {
+			va := &updateList.Items[i]
+			if err := tuner.SetFallbackTunedParamsInVAStatus(va); err != nil {
+				logger.Log.Warnf("Failed to set fallback tuned parameters for variant %s/%s: %v", va.Name, va.Namespace, err)
+			}
+		}
 	}
 
 	// analyze
@@ -462,23 +480,68 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	}
 	logger.Log.Info("Prometheus client and API wrapper initialized and validated successfully")
 
-	//logger.Log.Info("Prometheus client initialized (validation skipped)")
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
-		// Watch the specific ConfigMap to trigger global reconcile
+		// Watch the specific ConfigMap to trigger reconcile for all VAs
 		Watches(
 			&corev1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-				if obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace {
-					return []reconcile.Request{{}}
+				if obj.GetName() != configMapName || obj.GetNamespace() != configMapNamespace {
+					return nil
 				}
-				return nil
+
+				// List all VariantAutoscaling resources and enqueue each one
+				var vaList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
+				if err := mgr.GetClient().List(ctx, &vaList); err != nil {
+					logger.Log.Error(err, "Failed to list VariantAutoscaling resources for ConfigMap watch")
+					return nil
+				}
+
+				var requests []reconcile.Request
+				for _, va := range vaList.Items {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      va.Name,
+							Namespace: va.Namespace,
+						},
+					})
+				}
+				logger.Log.Debugf("ConfigMap watch enqueueing requests: count=%d", len(requests))
+				return requests
 			}),
-			// Predicate to filter only the target configmap
-			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-				return obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace
-			})),
+			// Only reconcile when the target ConfigMap's Data actually changes
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					return e.Object.GetName() == configMapName && e.Object.GetNamespace() == configMapNamespace
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Only reconcile if it's our ConfigMap and the Data changed
+					if e.ObjectNew.GetName() != configMapName || e.ObjectNew.GetNamespace() != configMapNamespace {
+						return false
+					}
+					oldCM, okOld := e.ObjectOld.(*corev1.ConfigMap)
+					newCM, okNew := e.ObjectNew.(*corev1.ConfigMap)
+					if !okOld || !okNew {
+						return false
+					}
+					// Compare Data maps - reconcile only if Data changed
+					if len(oldCM.Data) != len(newCM.Data) {
+						return true
+					}
+					for k, v := range newCM.Data {
+						if oldCM.Data[k] != v {
+							return true
+						}
+					}
+					return false
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(e event.GenericEvent) bool {
+					return false
+				},
+			}),
 		).
 		Named("variantAutoscaling").
 		WithEventFilter(predicate.Funcs{
@@ -486,7 +549,9 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				return true
 			},
 			UpdateFunc: func(e event.UpdateEvent) bool {
-				return false
+				// Ignore status-only updates to prevent reconcile loops
+				// Only reconcile if generation changed (spec/metadata change)
+				return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration()
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
 				return false
@@ -602,4 +667,16 @@ func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Contex
 
 	interval = cm.Data["GLOBAL_OPT_INTERVAL"]
 	return interval, nil
+}
+
+// isModelTunerEnabled checks if the experimental model tuner feature is enabled via ConfigMap
+func (r *VariantAutoscalingReconciler) isModelTunerEnabled(ctx context.Context) (bool, error) {
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
+	if err != nil {
+		return false, fmt.Errorf("failed to get optimization configmap: %w", err)
+	}
+
+	enabled := cm.Data["EXPERIMENTAL_MODEL_TUNER_ENABLED"]
+	return strings.EqualFold(enabled, "true"), nil
 }

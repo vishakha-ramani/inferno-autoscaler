@@ -1,4 +1,4 @@
-package controller
+package tuner
 
 import (
 	"math"
@@ -561,9 +561,9 @@ func TestConvertAllocToEnvironment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env := convertAllocToEnvironment(tt.alloc)
-			if env == nil {
-				t.Fatal("convertAllocToEnvironment() returned nil")
+			env, err := convertAllocToEnvironment(tt.alloc)
+			if err != nil {
+				t.Fatalf("convertAllocToEnvironment() error = %v", err)
 			}
 			if env.Lambda != tt.wantLambda {
 				t.Errorf("Lambda = %v, want %v", env.Lambda, tt.wantLambda)

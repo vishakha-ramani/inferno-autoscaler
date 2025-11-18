@@ -19,7 +19,10 @@ func TestNewStasher(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 
 	if stasher == nil {
 		t.Fatal("NewStasher() returned nil")
@@ -29,7 +32,10 @@ func TestNewStasher(t *testing.T) {
 func TestNewStasherNilFilter(t *testing.T) {
 	// Create a nil filter
 	var filter *kalman.ExtendedKalmanFilter = nil
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 
 	if stasher != nil {
 		t.Fatal("NewStasher() returned nil")
@@ -47,7 +53,10 @@ func TestStasher_StashAndUnStash(t *testing.T) {
 	}
 
 	// Create stasher
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 
 	// Stash the current state
 	err = stasher.Stash()
@@ -96,7 +105,10 @@ func TestStasher_MultipleStashOperations(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 
 	// First stash
 	err = stasher.Stash()
@@ -198,7 +210,10 @@ func TestStasher_StateIndependence(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 	err = stasher.Stash()
 	if err != nil {
 		t.Errorf("Stash() failed: %v", err)
@@ -240,7 +255,10 @@ func TestStasher_UnStashWithoutStash(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 
 	// Call UnStash without calling Stash first
 	// This tests that an error is returned and no panic occurs
@@ -260,7 +278,10 @@ func TestStasher_CopySemantics(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 	err = stasher.Stash()
 	if err != nil {
 		t.Errorf("Stash() failed: %v", err)
@@ -310,7 +331,10 @@ func TestStasher_FullCovarianceMatrix(t *testing.T) {
 		t.Fatalf("Failed to create filter: %v", err)
 	}
 
-	stasher := NewStasher(filter)
+	stasher, err := NewStasher(filter)
+	if err != nil {
+		t.Fatalf("Failed to create stasher: %v", err)
+	}
 	err = stasher.Stash()
 	if err != nil {
 		t.Errorf("Stash() failed: %v", err)

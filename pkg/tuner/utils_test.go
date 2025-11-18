@@ -57,8 +57,8 @@ func TestFloatEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := floatEqual(tt.a, tt.b, epsilon); got != tt.want {
-				t.Errorf("floatEqual(%v, %v, %v) = %v, want %v", tt.a, tt.b, epsilon, got, tt.want)
+			if got := FloatEqual(tt.a, tt.b, epsilon); got != tt.want {
+				t.Errorf("FloatEqual(%v, %v, %v) = %v, want %v", tt.a, tt.b, epsilon, got, tt.want)
 			}
 		})
 	}

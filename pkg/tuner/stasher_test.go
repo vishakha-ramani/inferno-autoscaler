@@ -32,13 +32,9 @@ func TestNewStasher(t *testing.T) {
 func TestNewStasherNilFilter(t *testing.T) {
 	// Create a nil filter
 	var filter *kalman.ExtendedKalmanFilter = nil
-	stasher, err := NewStasher(filter)
-	if err != nil {
-		t.Fatalf("Failed to create stasher: %v", err)
-	}
-
-	if stasher != nil {
-		t.Fatal("NewStasher() returned nil")
+	_, err := NewStasher(filter)
+	if err == nil {
+		t.Fatalf("Should fail with nil filter but did not")
 	}
 }
 

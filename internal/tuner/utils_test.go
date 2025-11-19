@@ -524,6 +524,7 @@ func TestConvertAllocToEnvironment(t *testing.T) {
 		alloc        infernoConfig.AllocationData
 		wantLambda   float32
 		wantReplicas int
+		wantErr      bool
 	}{
 		{
 			name: "normal allocation",
@@ -540,6 +541,7 @@ func TestConvertAllocToEnvironment(t *testing.T) {
 			},
 			wantLambda:   60.0, // 120/2
 			wantReplicas: 2,
+			wantErr:      false,
 		},
 		{
 			name: "zero replicas",
@@ -556,14 +558,20 @@ func TestConvertAllocToEnvironment(t *testing.T) {
 			},
 			wantLambda:   0.0,
 			wantReplicas: 0,
+			wantErr:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env, err := convertAllocToEnvironment(tt.alloc)
-			if err != nil {
-				t.Fatalf("convertAllocToEnvironment() error = %v", err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("convertAllocToEnvironment() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				// If we expect an error, env should be nil, so skip field checks
+				return
 			}
 			if env.Lambda != tt.wantLambda {
 				t.Errorf("Lambda = %v, want %v", env.Lambda, tt.wantLambda)

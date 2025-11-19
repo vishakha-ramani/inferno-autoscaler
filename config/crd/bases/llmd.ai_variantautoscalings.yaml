@@ -115,15 +115,11 @@ spec:
                                 Expected keys: "gamma", "delta" for equation: ttft = gamma + delta * tokens * maxBatchSize
                               minProperties: 1
                               type: object
-                          required:
-                          - decodeParms
-                          - prefillParms
                           type: object
                       required:
                       - acc
                       - accCount
                       - maxBatchSize
-                      - perfParms
                       type: object
                     minItems: 1
                     type: array

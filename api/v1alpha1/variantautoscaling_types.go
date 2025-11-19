@@ -10,7 +10,7 @@ type VariantAutoscalingSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Required
 	ModelID string `json:"modelID"`
-
+	//TODO: remove this
 	// SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration.
 	// +kubebuilder:validation:Required
 	SLOClassRef ConfigMapKeyRef `json:"sloClassRef"`
@@ -41,10 +41,12 @@ type ModelProfile struct {
 type PerfParms struct {
 	// DecodeParms contains parameters for the decode phase (ITL calculation)
 	// Expected keys: "alpha", "beta" for equation: itl = alpha + beta * maxBatchSize
+	// +optional
 	// +kubebuilder:validation:MinProperties=1
 	DecodeParms map[string]string `json:"decodeParms"`
 	// PrefillParms contains parameters for the prefill phase (TTFT calculation)
 	// Expected keys: "gamma", "delta" for equation: ttft = gamma + delta * tokens * maxBatchSize
+	// +optional
 	// +kubebuilder:validation:MinProperties=1
 	PrefillParms map[string]string `json:"prefillParms"`
 }
@@ -61,7 +63,7 @@ type AcceleratorProfile struct {
 	AccCount int `json:"accCount"`
 
 	// PerParms specifies the prefill and decode parameters for ttft and itl models
-	PerfParms PerfParms `json:"perfParms"`
+	PerfParms PerfParms `json:"perfParms,omitempty"`
 
 	// MaxBatchSize is the maximum batch size supported by the accelerator.
 	// +kubebuilder:validation:Minimum=1

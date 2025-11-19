@@ -12,10 +12,12 @@ type VariantAutoscalingSpec struct {
 	ModelID string `json:"modelID"`
 	//TODO: remove this
 	// SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration.
+	// +optional
 	// +kubebuilder:validation:Required
 	SLOClassRef ConfigMapKeyRef `json:"sloClassRef"`
 
 	// ModelProfile provides resource and performance characteristics for the model variant.
+	// +optional
 	// +kubebuilder:validation:Required
 	ModelProfile ModelProfile `json:"modelProfile"`
 }

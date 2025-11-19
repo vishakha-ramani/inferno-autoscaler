@@ -26,7 +26,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -59,6 +62,11 @@ import (
 type VariantAutoscalingReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Recorder emits Kubernetes events for observability. We keep it to follow Kubernetes
+	// controller best practices and provide visibility into critical issues (e.g., ServiceMonitor
+	// deletion) that may not be immediately apparent from logs alone. Events are accessible via
+	// `kubectl get events` and can be monitored by cluster operators and external tooling.
+	Recorder record.EventRecorder
 
 	PromAPI promv1.API
 }
@@ -70,10 +78,23 @@ type VariantAutoscalingReconciler struct {
 // +kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;list;update;patch;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;list;watch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 const (
 	configMapName      = "workload-variant-autoscaler-variantautoscaling-config"
 	configMapNamespace = "workload-variant-autoscaler-system"
+	// ServiceMonitor constants for watching controller's own metrics ServiceMonitor
+	serviceMonitorName = "workload-variant-autoscaler-controller-manager-metrics-monitor"
+)
+
+var (
+	// ServiceMonitor GVK for watching controller's own metrics ServiceMonitor
+	serviceMonitorGVK = schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	}
 )
 
 func initMetricsEmitter() {
@@ -469,15 +490,59 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				return obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace
 			})),
 		).
+		// Watch ServiceMonitor for controller's own metrics
+		// This enables detection when ServiceMonitor is deleted, which would prevent
+		// Prometheus from scraping controller metrics (including optimized replicas).
+		Watches(
+			func() client.Object {
+				serviceMonitorSource := &unstructured.Unstructured{}
+				serviceMonitorSource.SetGroupVersionKind(serviceMonitorGVK)
+				return serviceMonitorSource
+			}(),
+			handler.EnqueueRequestsFromMapFunc(r.handleServiceMonitorEvent),
+			// Predicate to filter only the target ServiceMonitor
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == serviceMonitorName && obj.GetNamespace() == configMapNamespace
+			})),
+		).
 		Named("variantAutoscaling").
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {
 				return true
 			},
 			UpdateFunc: func(e event.UpdateEvent) bool {
+				gvk := e.ObjectNew.GetObjectKind().GroupVersionKind()
+				// Allow Update events for ConfigMap (needed to trigger reconcile on config changes)
+				if gvk.Kind == "ConfigMap" && gvk.Group == "" {
+					return true
+				}
+				// Allow Update events for ServiceMonitor when deletionTimestamp is set
+				// (finalizers cause deletion to emit Update events with deletionTimestamp)
+				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
+					// Check if deletionTimestamp was just set (deletion started)
+					if deletionTimestamp := e.ObjectNew.GetDeletionTimestamp(); deletionTimestamp != nil && !deletionTimestamp.IsZero() {
+						// Check if this is a newly set deletion timestamp
+						oldDeletionTimestamp := e.ObjectOld.GetDeletionTimestamp()
+						if oldDeletionTimestamp == nil || oldDeletionTimestamp.IsZero() {
+							return true // Deletion just started
+						}
+					}
+				}
+				// Block Update events for VariantAutoscaling resource.
+				// The controller reconciles all VariantAutoscaling resources periodically (every 60s by default),
+				// so individual resource update events would only cause unnecessary reconciles without benefit.
 				return false
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
+				gvk := e.Object.GetObjectKind().GroupVersionKind()
+				// Allow Delete events for ServiceMonitor (for immediate deletion detection)
+				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
+					return true
+				}
+				// Block Delete events for VariantAutoscaling resource.
+				// The controller reconciles all VariantAutoscaling resources periodically and filters out
+				// deleted resources in filterActiveVariantAutoscalings, so individual delete events
+				// would only cause unnecessary reconciles without benefit.
 				return false
 			},
 			GenericFunc: func(e event.GenericEvent) bool {
@@ -591,4 +656,51 @@ func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Contex
 
 	interval = cm.Data["GLOBAL_OPT_INTERVAL"]
 	return interval, nil
+}
+
+// handleServiceMonitorEvent handles events for the controller's own ServiceMonitor.
+// When ServiceMonitor is deleted, it logs an error and emits a Kubernetes event.
+// This ensures that administrators are aware when the ServiceMonitor that enables
+// Prometheus scraping of controller metrics (including optimized replicas) is missing.
+//
+// Note: This handler does not enqueue reconcile requests. ServiceMonitor deletion doesn't
+// affect the optimization logic (which reads from Prometheus), but it prevents future
+// metrics from being scraped. The handler exists solely for observability - logging and
+// emitting Kubernetes events to alert operators of the issue.
+func (r *VariantAutoscalingReconciler) handleServiceMonitorEvent(ctx context.Context, obj client.Object) []reconcile.Request {
+	serviceMonitor, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil
+	}
+
+	name := serviceMonitor.GetName()
+	namespace := serviceMonitor.GetNamespace()
+
+	// Check if ServiceMonitor is being deleted
+	if !serviceMonitor.GetDeletionTimestamp().IsZero() {
+		logger.Log.Errorw("ServiceMonitor being deleted - Prometheus will not scrape controller metrics",
+			"servicemonitor", name,
+			"namespace", namespace,
+			"impact", "Actuator will not be able to access optimized replicas metrics",
+			"action", "ServiceMonitor must be recreated for metrics scraping to resume")
+
+		// Emit Kubernetes event for observability
+		if r.Recorder != nil {
+			r.Recorder.Eventf(
+				serviceMonitor,
+				corev1.EventTypeWarning,
+				"ServiceMonitorDeleted",
+				"ServiceMonitor %s/%s is being deleted. Prometheus will not scrape controller metrics. Actuator will not be able to access optimized replicas metrics. Please recreate the ServiceMonitor.",
+				namespace,
+				name,
+			)
+		}
+
+		// Don't trigger reconciliation - ServiceMonitor deletion doesn't affect optimization logic
+		return nil
+	}
+
+	// For create/update events, no action needed
+	// Don't trigger reconciliation - ServiceMonitor changes don't affect optimization logic
+	return nil
 }

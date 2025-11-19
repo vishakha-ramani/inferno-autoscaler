@@ -511,10 +511,13 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				return true
 			},
 			UpdateFunc: func(e event.UpdateEvent) bool {
+				gvk := e.ObjectNew.GetObjectKind().GroupVersionKind()
+				// Allow Update events for ConfigMap (needed to trigger reconcile on config changes)
+				if gvk.Kind == "ConfigMap" && gvk.Group == "" {
+					return true
+				}
 				// Allow Update events for ServiceMonitor when deletionTimestamp is set
 				// (finalizers cause deletion to emit Update events with deletionTimestamp)
-				// but block Update events for VariantAutoscaling resource
-				gvk := e.ObjectNew.GetObjectKind().GroupVersionKind()
 				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
 					// Check if deletionTimestamp was just set (deletion started)
 					if deletionTimestamp := e.ObjectNew.GetDeletionTimestamp(); deletionTimestamp != nil && !deletionTimestamp.IsZero() {
@@ -525,15 +528,21 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 						}
 					}
 				}
+				// Block Update events for VariantAutoscaling resource.
+				// The controller reconciles all VariantAutoscaling resources periodically (every 60s by default),
+				// so individual resource update events would only cause unnecessary reconciles without benefit.
 				return false
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
-				// Allow Delete events for ServiceMonitor (for immediate deletion detection)
-				// but block Delete events for VariantAutoscaling resource
 				gvk := e.Object.GetObjectKind().GroupVersionKind()
+				// Allow Delete events for ServiceMonitor (for immediate deletion detection)
 				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
 					return true
 				}
+				// Block Delete events for VariantAutoscaling resource.
+				// The controller reconciles all VariantAutoscaling resources periodically and filters out
+				// deleted resources in filterActiveVariantAutoscalings, so individual delete events
+				// would only cause unnecessary reconciles without benefit.
 				return false
 			},
 			GenericFunc: func(e event.GenericEvent) bool {
@@ -650,9 +659,14 @@ func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Contex
 }
 
 // handleServiceMonitorEvent handles events for the controller's own ServiceMonitor.
-// When ServiceMonitor is deleted, it logs a critical warning and emits a Kubernetes event.
+// When ServiceMonitor is deleted, it logs an error and emits a Kubernetes event.
 // This ensures that administrators are aware when the ServiceMonitor that enables
 // Prometheus scraping of controller metrics (including optimized replicas) is missing.
+//
+// Note: This handler does not enqueue reconcile requests. ServiceMonitor deletion doesn't
+// affect the optimization logic (which reads from Prometheus), but it prevents future
+// metrics from being scraped. The handler exists solely for observability - logging and
+// emitting Kubernetes events to alert operators of the issue.
 func (r *VariantAutoscalingReconciler) handleServiceMonitorEvent(ctx context.Context, obj client.Object) []reconcile.Request {
 	serviceMonitor, ok := obj.(*unstructured.Unstructured)
 	if !ok {
@@ -664,7 +678,7 @@ func (r *VariantAutoscalingReconciler) handleServiceMonitorEvent(ctx context.Con
 
 	// Check if ServiceMonitor is being deleted
 	if !serviceMonitor.GetDeletionTimestamp().IsZero() {
-		logger.Log.Errorw("CRITICAL: ServiceMonitor being deleted - Prometheus will not scrape controller metrics",
+		logger.Log.Errorw("ServiceMonitor being deleted - Prometheus will not scrape controller metrics",
 			"servicemonitor", name,
 			"namespace", namespace,
 			"impact", "Actuator will not be able to access optimized replicas metrics",

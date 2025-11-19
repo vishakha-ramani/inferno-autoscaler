@@ -115,6 +115,9 @@ spec:
                                 Expected keys: "gamma", "delta" for equation: ttft = gamma + delta * tokens * maxBatchSize
                               minProperties: 1
                               type: object
+                          required:
+                          - decodeParms
+                          - prefillParms
                           type: object
                       required:
                       - acc
@@ -144,8 +147,6 @@ spec:
                 type: object
             required:
             - modelID
-            - modelProfile
-            - sloClassRef
             type: object
           status:
             description: Status represents the current status of autoscaling for the

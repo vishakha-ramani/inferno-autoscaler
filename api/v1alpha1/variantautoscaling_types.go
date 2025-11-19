@@ -12,13 +12,11 @@ type VariantAutoscalingSpec struct {
 	ModelID string `json:"modelID"`
 	//TODO: remove this
 	// SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration.
-	// +optional
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	SLOClassRef ConfigMapKeyRef `json:"sloClassRef"`
 
 	// ModelProfile provides resource and performance characteristics for the model variant.
-	// +optional
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	ModelProfile ModelProfile `json:"modelProfile"`
 }
 
@@ -43,12 +41,10 @@ type ModelProfile struct {
 type PerfParms struct {
 	// DecodeParms contains parameters for the decode phase (ITL calculation)
 	// Expected keys: "alpha", "beta" for equation: itl = alpha + beta * maxBatchSize
-	// +optional
 	// +kubebuilder:validation:MinProperties=1
 	DecodeParms map[string]string `json:"decodeParms"`
 	// PrefillParms contains parameters for the prefill phase (TTFT calculation)
 	// Expected keys: "gamma", "delta" for equation: ttft = gamma + delta * tokens * maxBatchSize
-	// +optional
 	// +kubebuilder:validation:MinProperties=1
 	PrefillParms map[string]string `json:"prefillParms"`
 }
@@ -65,6 +61,7 @@ type AcceleratorProfile struct {
 	AccCount int `json:"accCount"`
 
 	// PerParms specifies the prefill and decode parameters for ttft and itl models
+	// +kubebuilder:validation:Optional
 	PerfParms PerfParms `json:"perfParms,omitempty"`
 
 	// MaxBatchSize is the maximum batch size supported by the accelerator.
@@ -76,6 +73,7 @@ type AcceleratorProfile struct {
 // including the current allocation, desired optimized allocation, and actuation status.
 type VariantAutoscalingStatus struct {
 	// CurrentAlloc specifies the current resource allocation for the variant.
+	// +kubebuilder:validation:Optional
 	CurrentAlloc Allocation `json:"currentAlloc,omitempty"`
 
 	// DesiredOptimizedAlloc indicates the target optimized allocation based on autoscaling logic.
@@ -85,7 +83,7 @@ type VariantAutoscalingStatus struct {
 	Actuation ActuationStatus `json:"actuation,omitempty"`
 
 	// Conditions represent the latest available observations of the VariantAutoscaling's state
-	// +optional
+	// +kubebuilder:validation:Optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

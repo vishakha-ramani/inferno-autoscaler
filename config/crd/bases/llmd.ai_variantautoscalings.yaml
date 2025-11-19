@@ -123,7 +123,6 @@ spec:
                       - acc
                       - accCount
                       - maxBatchSize
-                      - perfParms
                       type: object
                     minItems: 1
                     type: array
@@ -148,8 +147,6 @@ spec:
                 type: object
             required:
             - modelID
-            - modelProfile
-            - sloClassRef
             type: object
           status:
             description: Status represents the current status of autoscaling for the

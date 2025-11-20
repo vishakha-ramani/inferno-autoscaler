@@ -106,6 +106,8 @@ func initMetricsEmitter() {
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	//TODO: move interval to manager.yaml
+
 	interval, err := r.readOptimizationConfig(ctx)
 	if err != nil {
 		logger.Log.Error(err, "Unable to read optimization config")
@@ -123,6 +125,12 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	if strings.EqualFold(os.Getenv("WVA_SCALE_TO_ZERO"), "true") {
 		logger.Log.Info("Scaling to zero is enabled!")
+	}
+
+	experimentalProactiveModel := os.Getenv("WVA_EXPERIMENTAL_PROACTIVE_MODEL")
+
+	if strings.EqualFold(experimentalProactiveModel, "true") {
+		logger.Log.Info("experimental proactive model is enabled!")
 	}
 
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
@@ -150,6 +158,29 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Info("No active VariantAutoscalings found, skipping optimization")
 		return ctrl.Result{}, nil
 	}
+
+	switch experimentalProactiveModel {
+	case "true":
+		logger.Log.Info("Experimental proactive model is enabled!")
+		if ctrlResult, err := r.runExperimentalProactiveModel(ctx, activeVAs, acceleratorCm, serviceClassCm, requeueDuration); err != nil {
+			logger.Log.Error(err, "Experimental optimization failed")
+			return ctrlResult, err
+		}
+
+	default:
+		// Add saturation based reactive scaling
+		logger.Log.Debug("Running in saturation based scaling")
+	}
+
+	return ctrl.Result{RequeueAfter: requeueDuration}, nil
+}
+
+func (r *VariantAutoscalingReconciler) runExperimentalProactiveModel(
+	ctx context.Context,
+	activeVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	acceleratorCm map[string]map[string]string, serviceClassCm map[string]string,
+	requeueDuration time.Duration,
+) (ctrl.Result, error) {
 
 	// WVA operates in unlimited mode - no cluster inventory collection needed
 	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
@@ -219,7 +250,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
-	return ctrl.Result{RequeueAfter: requeueDuration}, nil
+	return ctrl.Result{}, nil
 }
 
 // filterActiveVariantAutoscalings returns only those VAs not marked for deletion.

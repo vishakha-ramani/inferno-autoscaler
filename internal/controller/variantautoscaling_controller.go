@@ -25,7 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -576,6 +578,94 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 		out[acc] = accInfoMap
 	}
 	return out, nil
+}
+
+// readCapacityScalingConfig reads capacity scaling configuration from ConfigMap.
+// Returns default config with warning if ConfigMap is not found.
+// Returns a map with key "default" and optional per-model override entries.
+// TODO: Call this method when implementing capacity-based scaling logic
+//
+//nolint:unused // Reserved for capacity scaling implementation
+func (r *VariantAutoscalingReconciler) readCapacityScalingConfig(ctx context.Context, cmName, cmNamespace string) (map[string]interfaces.CapacityScalingConfig, error) {
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Log.Warn("Capacity scaling ConfigMap not found, using hardcoded defaults",
+				"configmap", cmName,
+				"namespace", cmNamespace)
+			// Return default config only
+			return map[string]interfaces.CapacityScalingConfig{
+				"default": interfaces.DefaultCapacityScalingConfig(),
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
+	}
+
+	configs := make(map[string]interfaces.CapacityScalingConfig)
+
+	// Parse all entries
+	for key, yamlStr := range cm.Data {
+		var config interfaces.CapacityScalingConfig
+		if err := yaml.Unmarshal([]byte(yamlStr), &config); err != nil {
+			logger.Log.Warn("Failed to parse capacity scaling config entry, skipping",
+				"key", key,
+				"error", err)
+			continue
+		}
+
+		// Validate configuration
+		if err := config.Validate(); err != nil {
+			logger.Log.Warn("Invalid capacity scaling config entry, skipping",
+				"key", key,
+				"error", err)
+			continue
+		}
+
+		configs[key] = config
+	}
+
+	// Ensure default exists
+	if _, ok := configs["default"]; !ok {
+		logger.Log.Warn("No 'default' entry in capacity scaling ConfigMap, using hardcoded defaults")
+		configs["default"] = interfaces.DefaultCapacityScalingConfig()
+	}
+
+	return configs, nil
+}
+
+// getCapacityScalingConfigForVariant retrieves config for specific model/namespace with fallback to default.
+// It searches for an override entry matching both model_id and namespace fields.
+// TODO: Call this method when implementing capacity-based scaling logic
+//
+//nolint:unused // Reserved for capacity scaling implementation
+func (r *VariantAutoscalingReconciler) getCapacityScalingConfigForVariant(
+	configs map[string]interfaces.CapacityScalingConfig,
+	modelID, namespace string,
+) interfaces.CapacityScalingConfig {
+	// Start with default
+	config := configs["default"]
+
+	// Search for matching override
+	for key, override := range configs {
+		if key == "default" {
+			continue
+		}
+
+		// Check if this override matches our model_id and namespace
+		if override.ModelID == modelID && override.Namespace == namespace {
+			config.Merge(override)
+			logger.Log.Debug("Applied capacity scaling override",
+				"key", key,
+				"modelID", modelID,
+				"namespace", namespace,
+				"config", config)
+			break
+		}
+	}
+
+	return config
 }
 
 func (r *VariantAutoscalingReconciler) getPrometheusConfig(ctx context.Context) (*interfaces.PrometheusConfig, error) {

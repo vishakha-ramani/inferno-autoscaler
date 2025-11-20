@@ -169,7 +169,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// Group VAs by model for per-model capacity analysis
-	modelGroups := r.groupVAsByModel(ctx, activeVAs)
+	modelGroups := r.groupVAsByModel(activeVAs)
 	logger.Log.Info("Grouped VAs by model", "modelCount", len(modelGroups), "totalVAs", len(activeVAs))
 
 	// Process each model independently
@@ -430,34 +430,13 @@ func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.Vari
 }
 
 // groupVAsByModel groups VariantAutoscalings by ModelID for per-model capacity analysis.
-// Sets status conditions on VAs that are skipped due to invalid configuration.
+// CRD validation ensures ModelID is not empty and all required fields are valid.
 func (r *VariantAutoscalingReconciler) groupVAsByModel(
-	ctx context.Context,
 	vas []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 ) map[string][]llmdVariantAutoscalingV1alpha1.VariantAutoscaling {
 	groups := make(map[string][]llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
 	for _, va := range vas {
 		modelID := va.Spec.ModelID
-		if modelID == "" {
-			logger.Log.Warn("VA missing ModelID, skipping and setting status condition", "name", va.Name)
-
-			// Set condition on the VA to indicate invalid configuration
-			llmdVariantAutoscalingV1alpha1.SetCondition(&va,
-				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
-				metav1.ConditionFalse,
-				llmdVariantAutoscalingV1alpha1.ReasonInvalidConfiguration,
-				"ModelID is required but not specified in spec")
-
-			// Update status asynchronously (don't block on errors)
-			go func(vaToUpdate llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
-				if err := r.Status().Update(ctx, &vaToUpdate); err != nil {
-					logger.Log.Error(err, "Failed to update status condition for VA with missing ModelID",
-						"name", vaToUpdate.Name, "namespace", vaToUpdate.Namespace)
-				}
-			}(va)
-
-			continue
-		}
 		groups[modelID] = append(groups[modelID], va)
 	}
 	return groups

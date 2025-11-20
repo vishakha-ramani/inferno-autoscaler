@@ -159,8 +159,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	switch {
-	case experimentalProactiveModel == "true":
+	switch experimentalProactiveModel {
+	case "true":
 		logger.Log.Info("Experimental proactive model is enabled!")
 		if ctrlResult, err := r.runExperimentalProactiveModel(ctx, activeVAs, acceleratorCm, serviceClassCm, requeueDuration); err != nil {
 			logger.Log.Error(err, "Experimental optimization failed")

@@ -264,8 +264,13 @@ func TestTuner_Run(t *testing.T) {
 				AvgTTFT:       10000.0, // Extremely high, should trigger NIS rejection
 				AvgITL:        5000.0,  // Extremely high
 			},
-			wantErr:    true, // Run() should fail NIS validation
+			wantErr:    false, // Run() returns nil error but sets ValidationFailed flag
 			wantNewErr: false,
+			checkFunc: func(t *testing.T, results *TunedResults) {
+				if !results.ValidationFailed {
+					t.Error("Expected ValidationFailed to be true for extreme observations")
+				}
+			},
 		},
 	}
 
@@ -991,13 +996,16 @@ func TestTuner_RunWithStasherFailures(t *testing.T) {
 		}
 
 		// Run should fail validation and attempt to unstash
-		_, err = tuner.Run()
-		if err == nil {
-			t.Error("Expected error for extreme observations")
+		results, err := tuner.Run()
+		if err != nil {
+			t.Errorf("Run() should not return error, got: %v", err)
 		}
-		// The error should be about validation, not unstashing
-		if err != nil && !strings.Contains(err.Error(), "validation failed") {
-			t.Errorf("Expected validation error, got: %v", err)
+		// Verify validation failed flag is set
+		if results == nil {
+			t.Fatal("Expected results to be non-nil")
+		}
+		if !results.ValidationFailed {
+			t.Error("Expected ValidationFailed to be true for extreme observations")
 		}
 	})
 }
@@ -1908,15 +1916,18 @@ func TestTuner_Run_WithHighInnovation(t *testing.T) {
 		t.Fatalf("NewTuner failed: %v", err)
 	}
 
-	// Run should fail because the observations are outliers (high NIS)
-	_, err = tuner.Run()
-	if err == nil {
-		t.Fatal("Run should have failed with outlier rejection, but succeeded")
+	// Run should detect outliers (high NIS) and set ValidationFailed flag
+	results, err := tuner.Run()
+	if err != nil {
+		t.Fatalf("Run should not return error, got: %v", err)
 	}
 
-	// Verify it's the expected NIS rejection error from the error message
-	if !strings.Contains(err.Error(), "normalized innovation squared") {
-		t.Errorf("Expected NIS outlier rejection error, got: %v", err)
+	// Verify validation failed flag is set for outlier rejection
+	if results == nil {
+		t.Fatal("Expected results to be non-nil")
+	}
+	if !results.ValidationFailed {
+		t.Error("Expected ValidationFailed to be true for outlier observations")
 	}
 }
 

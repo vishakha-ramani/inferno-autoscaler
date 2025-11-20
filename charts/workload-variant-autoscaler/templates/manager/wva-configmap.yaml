@@ -30,7 +30,7 @@ data:
   GLOBAL_OPT_INTERVAL: {{ .Values.wva.reconcileInterval | quote }}
 
   # Option to scale variants to zero replicas (default: false)
-  WVA_SCALE_TO_ZERO: {{ .Values.wva.scaleToZero | quote }}
+  WVA_SCALE_TO_ZERO: {{ .Values.wva.scaleToZero | default "false" | quote }}
 
   # Option to use experimental proactive scaling model (default: false)
-  WVA_EXPERIMENTAL_PROACTIVE_MODEL: {{ .Values.wva.experimentalProactiveModel | quote }}
+  WVA_EXPERIMENTAL_PROACTIVE_MODEL: {{ .Values.wva.experimentalProactiveModel | default "false" | quote }}

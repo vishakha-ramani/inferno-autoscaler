@@ -20,10 +20,11 @@ type Tuner struct {
 
 // TunedResults holds the results of parameter tuning
 type TunedResults struct {
-	ServiceParms *analyzer.ServiceParms
-	Innovation   *mat.VecDense
-	Covariance   *mat.Dense
-	NIS          float64
+	ServiceParms     *analyzer.ServiceParms
+	Innovation       *mat.VecDense
+	Covariance       *mat.Dense
+	NIS              float64
+	ValidationFailed bool // Indicates if NIS validation failed (but previous state is returned)
 }
 
 func NewTuner(configData *TunerConfigData, env *Environment) (tuner *Tuner, err error) {
@@ -110,15 +111,18 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	if err != nil {
 		// unstash to return to previous filter state
 		if err := stasher.UnStash(); err != nil {
-			return nil, fmt.Errorf("failed to unstash filter state: %w", err)
+			return nil, fmt.Errorf("failed to unstash filter state after validation failure: %w", err)
 		}
 		// Extract OLD state after unstashing
-		tunedResults, extractErr := t.extractTunedResults()
-		if extractErr != nil {
-			return nil, fmt.Errorf("validation failed and extraction of previous state failed: %w", extractErr)
+		tunedResults, err := t.extractTunedResults()
+		if err != nil {
+			return nil, fmt.Errorf("validation failed and extraction of previous state failed: %w", err)
 		}
-		// Return results with previous state and the validation error
-		return tunedResults, fmt.Errorf("tuning validation failed: %w", err)
+		// Mark validation as failed but return previous valid state
+		tunedResults.ValidationFailed = true
+		tunedResults.NIS = nis // Include the failed NIS for debugging
+		logger.Log.Warnf("Tuner validation failed (NIS=%.2f), returning previous state: %v", nis, err)
+		return tunedResults, nil // Return nil error and previous state with ValidationFailed set to true
 	}
 
 	// Extract tuned parameters
@@ -127,6 +131,7 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 		return nil, fmt.Errorf("failed to extract tuned params: %w", err)
 	}
 	tunedResults.NIS = nis
+	tunedResults.ValidationFailed = false
 	return tunedResults, nil
 }
 

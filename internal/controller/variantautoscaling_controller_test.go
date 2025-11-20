@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,9 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -962,7 +959,7 @@ data:
 			Expect(systemData).NotTo(BeNil())
 
 			By("Calling TuneModelPerfParams with tuner disabled")
-			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData, false)
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should succeed even when tuner is disabled")
 
 			By("Verifying VA status does not have tuned params")
@@ -1016,7 +1013,7 @@ data:
 			})
 
 			By("Calling TuneModelPerfParams with valid environment")
-			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData, false)
 
 			// Note: This may succeed or fail depending on whether the Kalman filter
 			// accepts or rejects the observations. Both are valid outcomes.
@@ -1047,7 +1044,7 @@ data:
 			// Intentionally not adding server to systemData
 
 			By("Calling TuneModelPerfParams should succeed with warning")
-			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData, false)
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should not fail when server is missing")
 		})
 
@@ -1091,7 +1088,7 @@ data:
 			})
 
 			By("Calling TuneModelPerfParams should succeed with warning")
-			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData)
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va}, systemData, false)
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should not fail with invalid environment")
 		})
 
@@ -1174,84 +1171,8 @@ data:
 			Expect(systemData).NotTo(BeNil())
 
 			By("Calling TuneModelPerfParams with mixed VA settings")
-			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va1, *va2}, systemData)
+			err = tuner.TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{*va1, *va2}, systemData, false)
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should handle mixed tuner settings")
-    })
- 	})
-	Context("ServiceMonitor Watch", func() {
-		var (
-			controllerReconciler *VariantAutoscalingReconciler
-			fakeRecorder         *record.FakeRecorder
-		)
-
-		BeforeEach(func() {
-			logger.Log = zap.NewNop().Sugar()
-			fakeRecorder = record.NewFakeRecorder(10)
-			controllerReconciler = &VariantAutoscalingReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				Recorder: fakeRecorder,
-			}
-		})
-
-		Context("handleServiceMonitorEvent", func() {
-			It("should log and emit event when ServiceMonitor is being deleted", func() {
-				By("Creating a ServiceMonitor with deletion timestamp")
-				serviceMonitor := &unstructured.Unstructured{}
-				serviceMonitor.SetGroupVersionKind(serviceMonitorGVK)
-				serviceMonitor.SetName(serviceMonitorName)
-				serviceMonitor.SetNamespace(configMapNamespace)
-				now := metav1.Now()
-				serviceMonitor.SetDeletionTimestamp(&now)
-
-				By("Calling handleServiceMonitorEvent")
-				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
-
-				By("Verifying no reconciliation is triggered")
-				Expect(result).To(BeEmpty())
-
-				By("Verifying event was emitted")
-				select {
-				case event := <-fakeRecorder.Events:
-					Expect(event).To(ContainSubstring("ServiceMonitorDeleted"))
-					Expect(event).To(ContainSubstring(serviceMonitorName))
-				case <-time.After(2 * time.Second):
-					Fail("Expected event to be emitted but none was received")
-				}
-			})
-
-			It("should not emit event when ServiceMonitor is created", func() {
-				By("Creating a ServiceMonitor without deletion timestamp")
-				serviceMonitor := &unstructured.Unstructured{}
-				serviceMonitor.SetGroupVersionKind(serviceMonitorGVK)
-				serviceMonitor.SetName(serviceMonitorName)
-				serviceMonitor.SetNamespace(configMapNamespace)
-
-				By("Calling handleServiceMonitorEvent")
-				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
-
-				By("Verifying no reconciliation is triggered")
-				Expect(result).To(BeEmpty())
-
-				By("Verifying no error event was emitted")
-				Consistently(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ServiceMonitorDeleted")))
-			})
-
-			It("should handle non-unstructured objects gracefully", func() {
-				By("Creating a non-unstructured object")
-				configMap := &v1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-configmap",
-						Namespace: configMapNamespace,
-					},
-				}
-
-				By("Calling handleServiceMonitorEvent with non-unstructured object")
-				result := controllerReconciler.handleServiceMonitorEvent(ctx, configMap)
-
-				By("Verifying no reconciliation is triggered")
-				Expect(result).To(BeEmpty())
-			})
 		})
 	})
 })

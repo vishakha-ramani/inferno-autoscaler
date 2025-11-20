@@ -28,8 +28,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -201,9 +201,16 @@ func (r *VariantAutoscalingReconciler) runExperimentalProactiveModel(
 	}
 
 	if tunerEnabled {
-		logger.Log.Debug("Experimental model tuner is enabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=true), tuning model performance parameters for active VAs")
+		logger.Log.Debug("Experimental model tuner is enabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=true) tuning model performance parameters for active VAs")
+
+		// Check if auto-guess initial state is enabled globally
+		autoGuessInitStateEnabled, err := r.isAutoGuessInitialStateEnabled(ctx)
+		if err != nil {
+			logger.Log.Debugf("Failed to read auto-guess configuration, defaulting to false: %v", err)
+			autoGuessInitStateEnabled = false
+		}
 		// Tune queueing model parameters for all servers using the system data and all active VAs
-		if err := tuner.TuneModelPerfParams(updateList.Items, systemData); err != nil {
+		if err := tuner.TuneModelPerfParams(updateList.Items, systemData, autoGuessInitStateEnabled); err != nil {
 			logger.Log.Warn(err, "failed to tune system data")
 		}
 	} else {
@@ -821,4 +828,16 @@ func (r *VariantAutoscalingReconciler) handleServiceMonitorEvent(ctx context.Con
 	// For create/update events, no action needed
 	// Don't trigger reconciliation - ServiceMonitor changes don't affect optimization logic
 	return nil
+}
+
+// isAutoGuessInitialStateEnabled checks if auto-guess initial state is enabled via ConfigMap
+func (r *VariantAutoscalingReconciler) isAutoGuessInitialStateEnabled(ctx context.Context) (bool, error) {
+	cm := corev1.ConfigMap{}
+	err := utils.GetConfigMapWithBackoff(ctx, r.Client, configMapName, configMapNamespace, &cm)
+	if err != nil {
+		return false, fmt.Errorf("failed to get optimization configmap: %w", err)
+	}
+
+	enabled := cm.Data["EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE"]
+	return strings.EqualFold(enabled, "true"), nil
 }

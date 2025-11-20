@@ -101,7 +101,7 @@ func TestGetStateAndCovariance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			state, _, err := getStateAndCovariance(tt.va, systemData, server)
+			state, _, err := getStateAndCovariance(tt.va, systemData, server, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getStateAndCovariance() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -126,8 +126,9 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid 4x4 matrix",
+			name: "valid 4x4 symmetric matrix",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
 					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
@@ -142,8 +143,26 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "invalid - not symmetric",
+			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
+				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
+					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+						CovarianceMatrix: [][]string{
+							{"0.1", "0.02", "0", "0"}, // Note: 0.02 here
+							{"0.01", "0.1", "0", "0"}, // but 0.01 here - asymmetric!
+							{"0", "0", "0.1", "0.01"},
+							{"0", "0", "0.01", "0.1"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid dimensions - not square",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
 					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
@@ -158,6 +177,7 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 		{
 			name: "invalid format - non-numeric string",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
 					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{

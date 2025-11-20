@@ -35,7 +35,8 @@ wva:
     #   -----END CERTIFICATE-----
 
   experimental:
-    enableModelTuner: false
+    enableModelTuner: false  # Enable experimental model tuner feature
+    autoGuessInitialState: false  # When true: prefer metrics-based guessing over spec parameters
     
   experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)

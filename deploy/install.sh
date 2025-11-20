@@ -39,6 +39,7 @@ SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"false"}
 WVA_LOG_LEVEL=${WVA_LOG_LEVEL:-"info"}
 VALUES_FILE=${VALUES_FILE:-"$WVA_PROJECT/charts/workload-variant-autoscaler/values.yaml"}
 EXPERIMENTAL_TUNER_ENABLED=${EXPERIMENTAL_TUNER_ENABLED:-"false"}
+EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE=${EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE:-"false"}
 
 # llm-d Configuration
 LLM_D_OWNER=${LLM_D_OWNER:-"llm-d"}
@@ -418,7 +419,8 @@ deploy_wva_controller() {
         --set vllmService.nodePort=$VLLM_SVC_NODEPORT \
         --set wva.logging.level=$WVA_LOG_LEVEL \
         --set wva.prometheus.tls.insecureSkipVerify=$SKIP_TLS_VERIFY \
-        --set wva.experimental.enableModelTuner=$EXPERIMENTAL_TUNER_ENABLED
+        --set wva.experimental.enableModelTuner=$EXPERIMENTAL_TUNER_ENABLED \
+        --set wva.experimental.autoGuessInitialState=$EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE
     
     # Wait for WVA to be ready
     log_info "Waiting for WVA controller to be ready..."

@@ -141,7 +141,7 @@ func TestTuneModelPerfParams_TunerDisabled(t *testing.T) {
 	systemData := createTunerTestSystemData()
 	va := createTunerTestVA(TestVAName, TestVANamespace, false)
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams should not fail when tuner is disabled: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestTuneModelPerfParams_ServerNotFound(t *testing.T) {
 
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams should not fail when server not found: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestTuneModelPerfParams_InvalidEnvironment(t *testing.T) {
 
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams should not fail with invalid environment: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestTuneModelPerfParams_ValidTuning(t *testing.T) {
 	systemData := createTunerTestSystemData()
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 	// NIS validation should pass
 	if err != nil {
 		t.Fatalf("Tuning returned error (may be expected during initial calibration): %v", err)
@@ -240,7 +240,7 @@ func TestTuneModelPerfParams_SuccessfulTuningPath(t *testing.T) {
 	systemData.Spec.Servers.Spec[0].CurrentAlloc.TTFTAverage = 188.0 // Close to predicted 186.7
 	systemData.Spec.Servers.Spec[0].CurrentAlloc.ITLAverage = 15.2   // Close to predicted 14.9
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 	if err != nil {
 		t.Logf("Tuning with adjusted metrics returned error: %v", err)
 		// Even with adjusted metrics, NIS rejection is possible
@@ -289,7 +289,7 @@ func TestTuneModelPerfParams_MultipleVAs(t *testing.T) {
 	va1 := createTunerTestVA(TestVAName, TestVANamespace, true)
 	va2 := createTunerTestVA("test-va2", "default", false)
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va1, va2}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va1, va2}, systemData, false)
 	if err != nil {
 		t.Fatalf("TuneModelPerfParams should handle multiple VAs: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestTuneServer_InvalidEnvironment(t *testing.T) {
 		},
 	}
 
-	_, err := tuneServer(&va, systemData, server)
+	_, err := tuneServer(&va, systemData, server, false)
 	if err == nil {
 		t.Error("tuneServer should fail with invalid environment")
 	}
@@ -324,7 +324,7 @@ func TestTuneServer_ValidEnvironment(t *testing.T) {
 
 	server := &systemData.Spec.Servers.Spec[0]
 
-	_, err := tuneServer(&va, systemData, server)
+	_, err := tuneServer(&va, systemData, server, false)
 	// May succeed or fail depending on NIS validation
 	if err != nil {
 		t.Logf("tuneServer returned error (may be expected): %v", err)
@@ -339,7 +339,7 @@ func TestTuneServer_MissingSLO(t *testing.T) {
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 	server := &systemData.Spec.Servers.Spec[0]
 
-	_, err := tuneServer(&va, systemData, server)
+	_, err := tuneServer(&va, systemData, server, false)
 	if err == nil {
 		t.Error("tuneServer should fail when SLO not found")
 	}
@@ -368,7 +368,7 @@ func TestTuneServer_WithExistingTunedResults(t *testing.T) {
 
 	server := &systemData.Spec.Servers.Spec[0]
 
-	_, err := tuneServer(&va, systemData, server)
+	_, err := tuneServer(&va, systemData, server, false)
 	// May succeed or fail depending on NIS validation
 	if err != nil {
 		t.Logf("tuneServer with existing results returned error: %v", err)
@@ -380,7 +380,7 @@ func TestCreateTuner_Success(t *testing.T) {
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 	server := &systemData.Spec.Servers.Spec[0]
 
-	tuner, err := createTuner(&va, systemData, server)
+	tuner, err := createTuner(&va, systemData, server, false)
 	if err != nil {
 		t.Fatalf("createTuner should succeed with valid inputs: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestCreateTuner_MissingSLO(t *testing.T) {
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 	server := &systemData.Spec.Servers.Spec[0]
 
-	_, err := createTuner(&va, systemData, server)
+	_, err := createTuner(&va, systemData, server, false)
 	if err == nil {
 		t.Error("createTuner should fail when SLO not found")
 	}
@@ -421,7 +421,7 @@ func TestCreateTuner_InvalidEnvironment(t *testing.T) {
 		},
 	}
 
-	_, err := createTuner(&va, systemData, server)
+	_, err := createTuner(&va, systemData, server, false)
 	if err == nil {
 		t.Error("createTuner should fail with invalid environment")
 	}
@@ -449,7 +449,7 @@ func TestCreateTuner_WithExistingState(t *testing.T) {
 
 	server := &systemData.Spec.Servers.Spec[0]
 
-	tuner, err := createTuner(&va, systemData, server)
+	tuner, err := createTuner(&va, systemData, server, false)
 	if err != nil {
 		t.Fatalf("createTuner should succeed with existing state: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestCreateTuner_ExtremelyHighLambda(t *testing.T) {
 		},
 	}
 
-	_, err := createTuner(&va, systemData, server)
+	_, err := createTuner(&va, systemData, server, false)
 	if err == nil {
 		t.Error("createTuner should fail with extremely high lambda")
 	}
@@ -522,7 +522,7 @@ func TestTuneModelPerfParams_NISValidationFailure(t *testing.T) {
 	originalGamma := systemData.Spec.Models.PerfData[0].PrefillParms.Gamma
 	originalDelta := systemData.Spec.Models.PerfData[0].PrefillParms.Delta
 
-	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData)
+	err := TuneModelPerfParams([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling{va}, systemData, false)
 
 	// Should not return error - NIS failure is handled gracefully
 	if err != nil {

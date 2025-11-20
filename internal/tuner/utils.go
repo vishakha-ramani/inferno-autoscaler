@@ -102,62 +102,85 @@ func getStateAndCovariance(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	systemData *infernoConfig.SystemData,
 	server *infernoConfig.ServerSpec,
+	autoGuessInitialState bool,
 ) (state, covMatrix []float64, err error) {
-	// check if VA has tuned results in status (has been tuned before)
-	if HasTunedResults(va) {
+	// 1. Check if VA has tuned results in status (has been tuned before)
+	if HasFullTunedResults(va) {
 		state, covMatrix, err = extractStateAndCovarianceFromVAStatus(va)
 		if err != nil {
-			logger.Log.Warnf("Failed to extract tuned state from VA status, falling back to spec for variant %s: %v",
+			logger.Log.Warnf("Failed to extract tuned state from VA status, falling back for variant %s: %v",
 				va.Name,
 				err)
-
-			// in case of error in extracting status, fall back to spec values
-			state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+		} else {
+			// Status extracted: using it for tuning
+			logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 				va.Name,
 				state[constants.StateIndexAlpha],
 				state[constants.StateIndexBeta],
 				state[constants.StateIndexGamma],
 				state[constants.StateIndexDelta])
+			return state, covMatrix, nil
+		}
+	}
 
+	// No previously tuned results in status, or extraction failed
+	if autoGuessInitialState {
+		// If the flag is enabled: prioritize metrics-based estimation of the initial state
+		state, err = guessInitState(server)
+		if err == nil {
+			logger.Log.Debugf("Using guessed initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+				va.Name,
+				state[constants.StateIndexAlpha],
+				state[constants.StateIndexBeta],
+				state[constants.StateIndexGamma],
+				state[constants.StateIndexDelta])
 			return state, nil, nil
 		}
+		logger.Log.Infof("Failed to guess initial state for variant %s: %v. Trying spec.", va.Name, err)
 
-		logger.Log.Debugf("Using state vals from VA status to tune variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+		state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get state from all sources (status/guess/spec): %w", err)
+		}
+		logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 			va.Name,
 			state[constants.StateIndexAlpha],
 			state[constants.StateIndexBeta],
 			state[constants.StateIndexGamma],
 			state[constants.StateIndexDelta])
-		return state, covMatrix, nil
+		return state, nil, nil
 	}
 
-	// in case the VA has not been tuned before, fall back to spec values
+	// If the flag is not enabled: prioritize parameters in spec
 	state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-	if err != nil {
-		logger.Log.Infof("Failed to find perf data in VA spec, attempting to make initial guess for variant %s: %v", va.Name, err)
-		// gess an initial state, if not in spec
-		if state, err = guessInitState(server); err != nil {
-			return nil, nil, err
-		}
+	if err == nil {
+		logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+			va.Name,
+			state[constants.StateIndexAlpha],
+			state[constants.StateIndexBeta],
+			state[constants.StateIndexGamma],
+			state[constants.StateIndexDelta])
+		return state, nil, nil
 	}
+	logger.Log.Infof("Failed to find perf data in SystemData for variant %s: %v. Trying new initial parameters.", va.Name, err)
 
-	logger.Log.Debugf("Using initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
+	state, err = guessInitState(server)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get state from all sources (status/spec/guess): %w", err)
+	}
+	logger.Log.Debugf("Using guessed initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
 		va.Name,
 		state[constants.StateIndexAlpha],
 		state[constants.StateIndexBeta],
 		state[constants.StateIndexGamma],
 		state[constants.StateIndexDelta])
-
 	return state, nil, nil
+
 }
 
-// HasTunedResults checks if VA status contains valid tuned parameters.
-func HasTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
+// HasFullTunedResults checks if VA status contains both valid tuned parameters and the covariance matrix.
+// Used when we need to continue tuning with the full state (including covariance).
+func HasFullTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
 	perfParms := va.Status.TunerPerfData.PerfParms
 
 	// Check if all 4 parameters are valid
@@ -244,6 +267,9 @@ func extractStateAndCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.Va
 func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
 	matStatus := va.Status.TunerPerfData.CovarianceMatrix
 	numRows := len(matStatus)
+	if numRows == 0 {
+		return nil, fmt.Errorf("empty covariance matrix")
+	}
 	numCols := len(matStatus[0])
 	if numRows != numCols || numRows != 4 {
 		return nil, fmt.Errorf("invalid covariance matrix dimensions: expected 4 rows and 4 cols, got %d x %d", numRows, numCols)
@@ -265,6 +291,15 @@ func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAut
 			data[r*numCols+c] = val
 		}
 	}
+
+	// Validate that the covariance matrix is symmetric
+	covMat := mat.NewDense(numRows, numCols, data)
+	if !tune.IsSymmetric(covMat, tune.DefaultEpsilon) {
+		logger.Log.Warnf("Covariance matrix from VA status %s/%s is not symmetric, rejecting",
+			va.Name, va.Namespace)
+		return nil, fmt.Errorf("covariance matrix is not symmetric (tolerance=%.2e)", tune.DefaultEpsilon)
+	}
+
 	return data, nil
 }
 
@@ -421,8 +456,8 @@ func updateModelPerfDataInSystemData(systemData *infernoConfig.SystemData, model
 	return fmt.Errorf("model %q with accelerator %q not found in system data", modelName, accName)
 }
 
-// updates VA status with tuner results
-// Only updates if values have actually changed to avoid API calls
+// updateVAStatusWithTunedParams updates VA status with tuner results
+// Only updates if values have actually changed to avoid unnecessary API calls
 func updateVAStatusWithTunedParams(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	model string,
@@ -430,7 +465,7 @@ func updateVAStatusWithTunedParams(
 	tunedResults *tune.TunedResults,
 ) error {
 	// Check if we already have tuned data and if it matches the new values
-	if HasTunedResults(va) {
+	if hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
 		if tunedParamsMatch(va, model, accelerator, tunedResults) {
 			logger.Log.Debugf("Tuned parameters unchanged for variant %s, skipping status update", va.Name)
 			return nil
@@ -470,14 +505,13 @@ func updateVAStatusWithTunedParams(
 }
 
 // SetFallbackTunedParamsInVAStatus sets parameters in VA status with the following priority:
-// 1. Keep existing tuned parameters if they exist and are valid (includes covariance matrix)
-// 2. Keep existing spec parameters if they exist and are valid (no covariance matrix)
-// 3. Use initial parameters from spec if available
-// 4. Set zero parameters as fallback
+// 1. Keep existing parameters if they exist and are valid
+// 2. Use initial parameters from spec if available
+// 3. Set zero parameters as fallback
 func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
-	// If VA status already has valid tuned params and fully specified TunerPerfData, keep them
-	if HasTunedResults(va) {
-		logger.Log.Infof("Keeping previously tuned parameters for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
+	// Priority 1: If VA status already has valid params, keep them
+	if hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
+		logger.Log.Infof("Keeping existing parameters in status for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
 			va.Name,
 			va.Namespace,
 			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
@@ -487,21 +521,8 @@ func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.Variant
 		return nil
 	}
 
-	// Priority 2: If VA tuner status has params from spec, keep them if valids
-	perfParms := va.Status.TunerPerfData.PerfParms
-	if hasValidParams(perfParms.DecodeParms, perfParms.PrefillParms) {
-		logger.Log.Debugf("VA status already has valid tuner parameters for variant %s/%s (skipping update): alpha=%s, beta=%s, gamma=%s, delta=%s",
-			va.Name,
-			va.Namespace,
-			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
-			va.Status.TunerPerfData.PerfParms.DecodeParms["beta"],
-			va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"],
-			va.Status.TunerPerfData.PerfParms.PrefillParms["delta"])
-		return nil
-	}
-
-	// Priority 3: Try to use initial parameters from spec
-	logger.Log.Debugf("No previous parameters found for variant %s/%s, attempting to use spec parameters",
+	// Priority 2: Try to use initial parameters from spec
+	logger.Log.Debugf("No valid parameters found in status for variant %s/%s, attempting to use spec parameters",
 		va.Name, va.Namespace)
 
 	return setParamsFromSpec(va)
@@ -530,22 +551,18 @@ func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) er
 	specDecodeParms := make(map[string]string)
 	specPrefillParms := make(map[string]string)
 
+	// Getting accelerator name from VA labels
+	accName := va.Labels["inference.optimization/acceleratorName"]
+
 	// Copy initial params from spec
 	for _, accProfile := range va.Spec.ModelProfile.Accelerators {
-
-		// Getting accelerator name from VA labels
-		accName := va.Labels["inference.optimization/acceleratorName"]
 		if accProfile.Acc != accName {
 			continue
 		}
 
 		// Copy decode and prefill params from corresponding ModelProfile spec to temporary maps
-		if len(accProfile.PerfParms.DecodeParms) > 0 {
-			maps.Copy(specDecodeParms, accProfile.PerfParms.DecodeParms)
-		}
-		if len(accProfile.PerfParms.PrefillParms) > 0 {
-			maps.Copy(specPrefillParms, accProfile.PerfParms.PrefillParms)
-		}
+		maps.Copy(specDecodeParms, accProfile.PerfParms.DecodeParms)
+		maps.Copy(specPrefillParms, accProfile.PerfParms.PrefillParms)
 	}
 
 	// Validate that spec params are valid
@@ -697,5 +714,80 @@ func findServerInSystemData(systemData *infernoConfig.SystemData, serverName str
 			return &systemData.Spec.Servers.Spec[i]
 		}
 	}
+	return nil
+}
+
+// updateSystemDataWithState updates SystemData with the given state parameters
+func updateSystemDataWithState(
+	systemData *infernoConfig.SystemData,
+	modelName, accName string,
+	state []float64,
+) error {
+	if len(state) != 4 {
+		return fmt.Errorf("invalid state length: expected 4, got %d", len(state))
+	}
+
+	for i := range systemData.Spec.Models.PerfData {
+		perfData := &systemData.Spec.Models.PerfData[i]
+		if perfData.Name == modelName && perfData.Acc == accName {
+			perfData.DecodeParms.Alpha = float32(state[constants.StateIndexAlpha])
+			perfData.DecodeParms.Beta = float32(state[constants.StateIndexBeta])
+			perfData.PrefillParms.Gamma = float32(state[constants.StateIndexGamma])
+			perfData.PrefillParms.Delta = float32(state[constants.StateIndexDelta])
+
+			logger.Log.Debugf("Updated SystemData for model=%s, accelerator=%s: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f",
+				modelName,
+				accName,
+				perfData.DecodeParms.Alpha,
+				perfData.DecodeParms.Beta,
+				perfData.PrefillParms.Gamma,
+				perfData.PrefillParms.Delta)
+
+			return nil
+		}
+	}
+	return fmt.Errorf("model %q with accelerator %q not found in system data", modelName, accName)
+}
+
+// updateVAStatusWithState updates VA status with the given state parameters
+func updateVAStatusWithState(
+	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	model, accelerator string,
+	state []float64,
+) error {
+	if len(state) != 4 {
+		return fmt.Errorf("invalid state length: expected 4, got %d", len(state))
+	}
+
+	// Initialize maps if nil
+	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
+		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
+	}
+	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
+		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
+	}
+
+	// Update parameters
+	va.Status.TunerPerfData.Model = model
+	va.Status.TunerPerfData.Accelerator = accelerator
+	va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"] = fmt.Sprintf("%.6f", state[constants.StateIndexAlpha])
+	va.Status.TunerPerfData.PerfParms.DecodeParms["beta"] = fmt.Sprintf("%.6f", state[constants.StateIndexBeta])
+	va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"] = fmt.Sprintf("%.6f", state[constants.StateIndexGamma])
+	va.Status.TunerPerfData.PerfParms.PrefillParms["delta"] = fmt.Sprintf("%.6f", state[constants.StateIndexDelta])
+
+	// Clear covariance matrix and NIS since this is not from tuning
+	va.Status.TunerPerfData.CovarianceMatrix = nil
+	va.Status.TunerPerfData.NIS = ""
+
+	logger.Log.Debugf("Updated VA status for variant %s/%s, model %s, accelerator %s: state=[%.6f, %.6f, %.6f, %.6f]",
+		va.Name,
+		va.Namespace,
+		model,
+		accelerator,
+		state[constants.StateIndexAlpha],
+		state[constants.StateIndexBeta],
+		state[constants.StateIndexGamma],
+		state[constants.StateIndexDelta])
+
 	return nil
 }

@@ -35,4 +35,10 @@ data:
   # Option to use experimental proactive scaling model (default: false)
   WVA_EXPERIMENTAL_PROACTIVE_MODEL: "false"
   
+  # Experimental model tuner settings
   EXPERIMENTAL_MODEL_TUNER_ENABLED: "false"
+  
+  # Auto-guess initial state controls the fallback priority for parameter estimation when tuning is enabled
+  # When true: prioritize metrics-based estimation
+  # When false (default): prioritize spec parameters
+  EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE: "false"

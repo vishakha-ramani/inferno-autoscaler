@@ -95,10 +95,11 @@ const (
 	configMapNamespace = "workload-variant-autoscaler-system"
 	// ServiceMonitor constants for watching controller's own metrics ServiceMonitor
 	serviceMonitorName = "workload-variant-autoscaler-controller-manager-metrics-monitor"
-	// Environment variable to enable experimental proactive model-based optimization
-	// When "true", runs both capacity analyzer and model-based optimizer with arbitration
-	// When "false" or unset, runs capacity analyzer only (default, reactive mode)
-	EnvExperimentalProactiveModel = "EXPERIMENTAL_PROACTIVE_MODEL"
+	// Environment variable to enable experimental hybrid-based optimization
+	// When "on", runs both capacity analyzer and model-based optimizer with arbitration
+	// When "model-only" runs model-based optimizer only
+	// When "off" or unset, runs capacity analyzer only (default, reactive mode)
+	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
 )
 
 var (
@@ -140,12 +141,21 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Info("Scaling to zero is enabled!")
 	}
 
-	// Check experimental proactive model flag
-	enableModelBased := strings.EqualFold(os.Getenv(EnvExperimentalProactiveModel), "true")
-	if enableModelBased {
+	// Check experimental hybrid optimization flag
+	optimizationMode := os.Getenv(EnvExperimentalHybridOptimization)
+	enableModelOptimizer := optimizationMode == "on" || optimizationMode == "model-only"
+	enableCapacityAnalyzer := optimizationMode == "" || optimizationMode == "on"
+
+	if enableModelOptimizer && enableCapacityAnalyzer {
 		logger.Log.Info("Operating in HYBRID mode: capacity analyzer + model-based optimizer with arbitration")
-	} else {
+	} else if enableModelOptimizer && !enableCapacityAnalyzer {
+		logger.Log.Info("Operating in MODEL-ONLY mode: model-based optimization only")
+	} else if !enableModelOptimizer && enableCapacityAnalyzer {
 		logger.Log.Info("Operating in CAPACITY-ONLY mode: reactive capacity-based scaling only")
+	} else {
+		// Invalid environment variable, default to capacity-only
+		logger.Log.Info("No optimization mode enabled, defaulting to CAPACITY-ONLY mode")
+		enableCapacityAnalyzer = true
 	}
 
 	// Get list of all VAs
@@ -186,32 +196,39 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	for modelID, modelVAs := range modelGroups {
 		logger.Log.Info("Processing model", "modelID", modelID, "variantCount", len(modelVAs))
 
-		// Get capacity config for this model (with fallback to default)
-		capacityConfig := interfaces.DefaultCapacityScalingConfig()
-		if len(modelVAs) > 0 {
-			modelConfig := r.getCapacityScalingConfigForVariant(capacityConfigMap, modelID, modelVAs[0].Namespace)
-			capacityConfig.Merge(modelConfig)
-		}
+		// PHASE 1: compute capacity analysis and/or model-based optimization
 
-		// STEP 1: Run capacity analysis (always, regardless of mode)
-		capacityTargets, capacityAnalysis, variantStates, err := r.runCapacityAnalysis(ctx, modelID, modelVAs, capacityConfig)
-		if err != nil {
-			logger.Log.Error(err, "Capacity analysis failed for model, continuing with model-based if enabled", "modelID", modelID)
-			// Continue with model-based approach if enabled, as per requirement #1
-			if !enableModelBased {
-				// In capacity-only mode, if capacity fails, skip this model
-				accumulatedErrors = append(accumulatedErrors, fmt.Errorf("capacity analysis failed for model %s: %w", modelID, err))
-				continue
+		// STEP 1: Run capacity analysis (if enabled)
+		var capacityTargets map[string]int
+		var capacityAnalysis *interfaces.ModelCapacityAnalysis
+		var variantStates []interfaces.VariantReplicaState
+
+		if enableCapacityAnalyzer {
+			// Get capacity config for this model (with fallback to default)
+			capacityConfig := interfaces.DefaultCapacityScalingConfig()
+			if len(modelVAs) > 0 {
+				modelConfig := r.getCapacityScalingConfigForVariant(capacityConfigMap, modelID, modelVAs[0].Namespace)
+				capacityConfig.Merge(modelConfig)
 			}
-			// In hybrid mode, continue to run model-based (capacity failed but we can still run optimizer)
-			accumulatedErrors = append(accumulatedErrors, fmt.Errorf("capacity analysis failed for model %s (continuing with model-based): %w", modelID, err))
+
+			capacityTargets, capacityAnalysis, variantStates, err = r.runCapacityAnalysis(ctx, modelID, modelVAs, capacityConfig)
+			if err != nil {
+				logger.Log.Error(err, "Capacity analysis failed for model, continuing with model-based if enabled", "modelID", modelID)
+				// Continue with model-based approach if enabled, as per requirement #1
+				if !enableModelOptimizer {
+					// In capacity-only mode, if capacity fails, skip this model
+					accumulatedErrors = append(accumulatedErrors, fmt.Errorf("capacity analysis failed for model %s: %w", modelID, err))
+					continue
+				}
+				// In hybrid mode, continue to run model-based (capacity failed but we can still run optimizer)
+				accumulatedErrors = append(accumulatedErrors, fmt.Errorf("capacity analysis failed for model %s (continuing with model-based): %w", modelID, err))
+			}
 		}
 
 		var finalDecisions []interfaces.VariantDecision
 
-		if enableModelBased {
-			// HYBRID MODE: Run model-based optimizer and arbitrate
-
+		modelBasedTargets := make(map[string]int)
+		if enableModelOptimizer {
 			// Read configs needed for model-based optimizer
 			acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
 			if err != nil {
@@ -296,7 +313,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 
 			// Extract model-based targets for this model's variants
-			modelBasedTargets := make(map[string]int)
+
 			for _, va := range modelVAs {
 				if alloc, ok := optimizedAllocation[va.Name]; ok {
 					modelBasedTargets[va.Name] = alloc.NumReplicas
@@ -307,49 +324,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				"modelID", modelID,
 				"modelBasedTargets", modelBasedTargets)
 
-			// STEP 2: Arbitrate between capacity and model-based targets
-			if capacityAnalysis != nil && len(capacityTargets) > 0 {
-				capacityAnalyzer := capacity.NewAnalyzer()
-				finalDecisions = capacityAnalyzer.ArbitrateWithModelBased(
-					capacityAnalysis,
-					capacityTargets,
-					modelBasedTargets,
-					variantStates,
-				)
-				logger.Log.Info("Arbitration completed",
-					"modelID", modelID,
-					"decisionCount", len(finalDecisions))
-			} else {
-				// Capacity failed but model-based succeeded - use model-based only
-				logger.Log.Warn("Capacity analysis unavailable, using model-based targets only", "modelID", modelID)
-				for _, va := range modelVAs {
-					if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
-						state := interfaces.VariantReplicaState{VariantName: va.Name, CurrentReplicas: va.Status.CurrentAlloc.NumReplicas}
-						var action interfaces.CapacityAction
-						if targetReplicas > state.CurrentReplicas {
-							action = interfaces.ActionScaleUp
-						} else if targetReplicas < state.CurrentReplicas {
-							action = interfaces.ActionScaleDown
-						} else {
-							action = interfaces.ActionNoChange
-						}
+		}
 
-						finalDecisions = append(finalDecisions, interfaces.VariantDecision{
-							VariantName:        va.Name,
-							Namespace:          va.Namespace,
-							ModelID:            modelID,
-							CurrentReplicas:    state.CurrentReplicas,
-							TargetReplicas:     targetReplicas,
-							Action:             action,
-							ModelBasedDecision: true,
-							CapacityBased:      false,
-							Reason:             "model-based only (capacity unavailable)",
-						})
-					}
-				}
-			}
-		} else {
+		// PHASE 2: Accumulate final decisions
+
+		if enableCapacityAnalyzer && !enableModelOptimizer {
 			// CAPACITY-ONLY MODE
+
 			if capacityAnalysis != nil {
 				finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
 				logger.Log.Info("Capacity-only decisions made",
@@ -362,6 +343,52 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				r.emitSafetyNetMetrics(ctx, modelVAs, vaMap)
 				continue
 			}
+		} else if enableCapacityAnalyzer && enableModelOptimizer && capacityAnalysis != nil && len(capacityTargets) > 0 {
+			// HYBRID MODE: Arbitrate between capacity and model-based targets - only if capacity analysis succeeded
+			if capacityAnalysis != nil && len(capacityTargets) > 0 {
+				capacityAnalyzer := capacity.NewAnalyzer()
+				finalDecisions = capacityAnalyzer.ArbitrateWithModelBased(
+					capacityAnalysis,
+					capacityTargets,
+					modelBasedTargets,
+					variantStates,
+				)
+				logger.Log.Info("Arbitration completed",
+					"modelID", modelID,
+					"decisionCount", len(finalDecisions))
+			} else {
+
+			}
+		} else if enableModelOptimizer {
+			// MODEL-ONLY MODE: Capacity failed but model-based succeeded, or capacity analysis unavailable - use model-based only
+			logger.Log.Warn("Capacity analysis unavailable, using model-based targets only", "modelID", modelID)
+			for _, va := range modelVAs {
+				if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
+					state := interfaces.VariantReplicaState{VariantName: va.Name, CurrentReplicas: va.Status.CurrentAlloc.NumReplicas}
+					var action interfaces.CapacityAction
+					if targetReplicas > state.CurrentReplicas {
+						action = interfaces.ActionScaleUp
+					} else if targetReplicas < state.CurrentReplicas {
+						action = interfaces.ActionScaleDown
+					} else {
+						action = interfaces.ActionNoChange
+					}
+
+					finalDecisions = append(finalDecisions, interfaces.VariantDecision{
+						VariantName:        va.Name,
+						Namespace:          va.Namespace,
+						ModelID:            modelID,
+						CurrentReplicas:    state.CurrentReplicas,
+						TargetReplicas:     targetReplicas,
+						Action:             action,
+						ModelBasedDecision: true,
+						CapacityBased:      false,
+						Reason:             "model-based only (capacity unavailable)",
+					})
+				}
+			}
+		} else {
+			// not possible. Skip
 		}
 
 		allDecisions = append(allDecisions, finalDecisions...)
@@ -379,7 +406,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Error(finalError, "Some models failed during reconciliation", "failureCount", len(accumulatedErrors))
 	}
 
-	// STEP 3: Apply all decisions
+	// PHASE 3: Apply all decisions
 	if len(allDecisions) > 0 {
 		logger.Log.Info("Applying scaling decisions", "totalDecisions", len(allDecisions))
 		if err := r.applyCapacityDecisions(ctx, allDecisions, vaMap); err != nil {
@@ -393,8 +420,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if finalError == nil {
 		logger.Log.Info("Reconciliation completed successfully",
 			"mode", func() string {
-				if enableModelBased {
+
+				if enableModelOptimizer && enableCapacityAnalyzer {
 					return "hybrid"
+				} else if enableModelOptimizer {
+					return "model-only"
 				}
 				return "capacity-only"
 			}(),
@@ -403,8 +433,10 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	} else {
 		logger.Log.Warn("Reconciliation completed with errors",
 			"mode", func() string {
-				if enableModelBased {
+				if enableModelOptimizer && enableCapacityAnalyzer {
 					return "hybrid"
+				} else if enableModelOptimizer {
+					return "model-only"
 				}
 				return "capacity-only"
 			}(),

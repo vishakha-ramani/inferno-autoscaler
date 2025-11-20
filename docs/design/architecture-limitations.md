@@ -4,7 +4,7 @@
 
 WVA is currently designed and optimized for **dense transformer architectures** (e.g., Llama, GPT variants) when using the predictive scaling. WVA supports two scaling approaches:
 
-1. **Predictive Scaling** (optional): Uses performance parameters (α, β, γ, δ) to predict future performance and proactively scale. Requires accurate performance parameters and assumes linear batch size scaling, which works well for dense transformers but may not accurately predict behavior for other architectures.
+1. **Predictive Scaling** (optional): Uses performance parameters (α, β, γ, δ) to predict future performance and proactively scale. Requires accurate performance parameters (see [Parameter Estimation Guide](../tutorials/parameter-estimation.md)) and assumes linear batch size scaling, which works well for dense transformers but may not accurately predict behavior for other architectures.
 
 2. **Saturation-Based Scaling** (default for v0.4): Reactively scales when observed arrival rate exceeds current capacity. Architecture-agnostic and doesn't require performance parameters.
 
@@ -22,15 +22,16 @@ WVA is currently designed and optimized for **dense transformer architectures** 
 
 **Benefits:**
 - Doesn't require performance parameters (α, β, γ, δ)
-- Scales reactively based on observed metrics (arrival rate vs. capacity)
+- Scales reactively based on observed metrics (resource utilization and queue length vs. capacity)
 - Less sensitive to architecture-specific behavior differences
 
 **Limitations:**
 - Reactive only (scales after saturation, not proactively)
 - May be less cost-efficient than accurate predictive scaling
+- May scale incrementally (+1 per cycle) rather than calculating exact replica needs, potentially taking multiple cycles to reach optimal capacity
 
 **How to use:**
-- WVA will detect saturation based on observed arrival rates
+- WVA will detect saturation based on utilization
 
 ## Supported Architectures
 

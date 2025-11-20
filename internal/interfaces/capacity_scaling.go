@@ -16,13 +16,13 @@ type CapacityScalingConfig struct {
 	KvCacheThreshold float64 `yaml:"kvCacheThreshold"`
 
 	// QueueLengthThreshold: Replica is saturated if queue length >= this threshold
-	QueueLengthThreshold int `yaml:"queueLengthThreshold"`
+	QueueLengthThreshold float64 `yaml:"queueLengthThreshold"`
 
 	// KvSpareTrigger: Scale-up if average spare KV cache capacity < this value (0.0-1.0)
 	KvSpareTrigger float64 `yaml:"kvSpareTrigger"`
 
 	// QueueSpareTrigger: Scale-up if average spare queue capacity < this value
-	QueueSpareTrigger int `yaml:"queueSpareTrigger"`
+	QueueSpareTrigger float64 `yaml:"queueSpareTrigger"`
 }
 
 // DefaultCapacityScalingConfig returns hardcoded default configuration.
@@ -61,13 +61,13 @@ func (c *CapacityScalingConfig) Validate() error {
 		return fmt.Errorf("kvCacheThreshold must be between 0 and 1, got %.2f", c.KvCacheThreshold)
 	}
 	if c.QueueLengthThreshold < 0 {
-		return fmt.Errorf("queueLengthThreshold must be >= 0, got %d", c.QueueLengthThreshold)
+		return fmt.Errorf("queueLengthThreshold must be >= 0, got %.1f", c.QueueLengthThreshold)
 	}
 	if c.KvSpareTrigger < 0 || c.KvSpareTrigger > 1 {
 		return fmt.Errorf("kvSpareTrigger must be between 0 and 1, got %.2f", c.KvSpareTrigger)
 	}
 	if c.QueueSpareTrigger < 0 {
-		return fmt.Errorf("queueSpareTrigger must be >= 0, got %d", c.QueueSpareTrigger)
+		return fmt.Errorf("queueSpareTrigger must be >= 0, got %.1f", c.QueueSpareTrigger)
 	}
 	// KV cache threshold should be greater than spare trigger (otherwise contradictory)
 	if c.KvCacheThreshold < c.KvSpareTrigger {

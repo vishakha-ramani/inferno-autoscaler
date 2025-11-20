@@ -11,13 +11,13 @@ func TestDefaultCapacityScalingConfig(t *testing.T) {
 		t.Errorf("Expected KvCacheThreshold 0.80, got %.2f", config.KvCacheThreshold)
 	}
 	if config.QueueLengthThreshold != 5 {
-		t.Errorf("Expected QueueLengthThreshold 5, got %d", config.QueueLengthThreshold)
+		t.Errorf("Expected QueueLengthThreshold 5, got %.1f", config.QueueLengthThreshold)
 	}
 	if config.KvSpareTrigger != 0.10 {
 		t.Errorf("Expected KvSpareTrigger 0.10, got %.2f", config.KvSpareTrigger)
 	}
 	if config.QueueSpareTrigger != 3 {
-		t.Errorf("Expected QueueSpareTrigger 3, got %d", config.QueueSpareTrigger)
+		t.Errorf("Expected QueueSpareTrigger 3, got %.1f", config.QueueSpareTrigger)
 	}
 }
 
@@ -211,13 +211,13 @@ func TestCapacityScalingConfigMerge(t *testing.T) {
 				t.Errorf("KvCacheThreshold = %.2f, want %.2f", result.KvCacheThreshold, tt.expected.KvCacheThreshold)
 			}
 			if result.QueueLengthThreshold != tt.expected.QueueLengthThreshold {
-				t.Errorf("QueueLengthThreshold = %d, want %d", result.QueueLengthThreshold, tt.expected.QueueLengthThreshold)
+				t.Errorf("QueueLengthThreshold = %.1f, want %.1f", result.QueueLengthThreshold, tt.expected.QueueLengthThreshold)
 			}
 			if result.KvSpareTrigger != tt.expected.KvSpareTrigger {
 				t.Errorf("KvSpareTrigger = %.2f, want %.2f", result.KvSpareTrigger, tt.expected.KvSpareTrigger)
 			}
 			if result.QueueSpareTrigger != tt.expected.QueueSpareTrigger {
-				t.Errorf("QueueSpareTrigger = %d, want %d", result.QueueSpareTrigger, tt.expected.QueueSpareTrigger)
+				t.Errorf("QueueSpareTrigger = %.1f, want %.1f", result.QueueSpareTrigger, tt.expected.QueueSpareTrigger)
 			}
 		})
 	}

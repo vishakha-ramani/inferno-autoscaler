@@ -1,0 +1,803 @@
+package capacity
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	"go.uber.org/zap"
+)
+
+func init() {
+	// Initialize logger for tests
+	zapLogger, _ := zap.NewDevelopment()
+	logger.Log = zapLogger.Sugar()
+}
+
+func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	tests := []struct {
+		name                string
+		replicaMetrics      []interfaces.ReplicaMetrics
+		expectScaleUp       bool
+		expectScaleUpReason string
+	}{
+		{
+			name: "scale up due to low KV spare capacity",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.75, QueueLength: 2},
+				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.76, QueueLength: 2},
+			},
+			expectScaleUp: true, // avg spare KV = 0.045 < 0.1
+		},
+		{
+			name: "scale up due to low queue spare capacity",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 3},
+				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 3},
+			},
+			expectScaleUp: true, // avg spare queue = 2 < 3
+		},
+		{
+			name: "no scale up - healthy capacity",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 1},
+				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 1},
+			},
+			expectScaleUp: false, // avg spare KV = 0.30, avg spare queue = 4
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis, err := analyzer.AnalyzeModelCapacity(
+				context.Background(),
+				"test-model",
+				"test-ns",
+				tt.replicaMetrics,
+				config,
+			)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if analysis.ShouldScaleUp != tt.expectScaleUp {
+				t.Errorf("expected ShouldScaleUp=%v, got %v (reason: %s)",
+					tt.expectScaleUp, analysis.ShouldScaleUp, analysis.ScaleUpReason)
+			}
+		})
+	}
+}
+
+func TestAnalyzeModelCapacity_ScaleDownSafety(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	tests := []struct {
+		name                string
+		replicaMetrics      []interfaces.ReplicaMetrics
+		expectScaleDownSafe bool
+	}{
+		{
+			name: "scale down safe - adequate headroom",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.20, QueueLength: 1},
+				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.30, QueueLength: 1},
+				{PodName: "pod-3", VariantName: "v1", KvCacheUsage: 0.25, QueueLength: 1},
+			},
+			expectScaleDownSafe: true,
+		},
+		{
+			name: "scale down unsafe - insufficient headroom",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.70, QueueLength: 2},
+				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.75, QueueLength: 2},
+			},
+			expectScaleDownSafe: false,
+		},
+		{
+			name: "scale down unsafe - only one non-saturated replica",
+			replicaMetrics: []interfaces.ReplicaMetrics{
+				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 2},
+			},
+			expectScaleDownSafe: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis, err := analyzer.AnalyzeModelCapacity(
+				context.Background(),
+				"test-model",
+				"test-ns",
+				tt.replicaMetrics,
+				config,
+			)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if analysis.ScaleDownSafe != tt.expectScaleDownSafe {
+				t.Errorf("expected ScaleDownSafe=%v, got %v",
+					tt.expectScaleDownSafe, analysis.ScaleDownSafe)
+			}
+		})
+	}
+}
+
+func TestAnalyzeModelCapacity_MultiVariant(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	// Test with metrics from multiple variants
+	replicaMetrics := []interfaces.ReplicaMetrics{
+		// Variant 1
+		{PodName: "v1-pod-1", VariantName: "variant-1", ModelID: "model-a", KvCacheUsage: 0.70, QueueLength: 2},
+		{PodName: "v1-pod-2", VariantName: "variant-1", ModelID: "model-a", KvCacheUsage: 0.75, QueueLength: 3},
+		// Variant 2
+		{PodName: "v2-pod-1", VariantName: "variant-2", ModelID: "model-a", KvCacheUsage: 0.60, QueueLength: 1},
+		{PodName: "v2-pod-2", VariantName: "variant-2", ModelID: "model-a", KvCacheUsage: 0.65, QueueLength: 2},
+	}
+
+	analysis, err := analyzer.AnalyzeModelCapacity(
+		context.Background(),
+		"model-a",
+		"test-ns",
+		replicaMetrics,
+		config,
+	)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify aggregation across variants
+	if analysis.TotalReplicas != 4 {
+		t.Errorf("expected TotalReplicas=4, got %d", analysis.TotalReplicas)
+	}
+
+	if analysis.NonSaturatedCount != 4 {
+		t.Errorf("expected NonSaturatedCount=4, got %d", analysis.NonSaturatedCount)
+	}
+
+	if len(analysis.VariantAnalyses) != 2 {
+		t.Errorf("expected 2 variant analyses, got %d", len(analysis.VariantAnalyses))
+	}
+
+	// Verify per-variant breakdown
+	for _, va := range analysis.VariantAnalyses {
+		if va.ReplicaCount != 2 {
+			t.Errorf("expected ReplicaCount=2 for variant %s, got %d", va.VariantName, va.ReplicaCount)
+		}
+	}
+}
+
+func TestAnalyzeModelCapacity_EmptyMetrics(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	analysis, err := analyzer.AnalyzeModelCapacity(
+		context.Background(),
+		"test-model",
+		"test-ns",
+		[]interfaces.ReplicaMetrics{},
+		config,
+	)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if analysis.TotalReplicas != 0 {
+		t.Errorf("expected TotalReplicas=0, got %d", analysis.TotalReplicas)
+	}
+
+	if analysis.ShouldScaleUp {
+		t.Errorf("expected ShouldScaleUp=false for empty metrics")
+	}
+
+	if analysis.ScaleDownSafe {
+		t.Errorf("expected ScaleDownSafe=false for empty metrics")
+	}
+}
+
+func TestAnalyzeVariant_SaturatedReplicas(t *testing.T) {
+	analyzer := &Analyzer{}
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	metrics := []interfaces.ReplicaMetrics{
+		{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.85, QueueLength: 2}, // Saturated (KV)
+		{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 6}, // Saturated (Queue)
+		{PodName: "pod-3", VariantName: "v1", KvCacheUsage: 0.60, QueueLength: 2}, // Not saturated
+	}
+
+	analysis := analyzer.analyzeVariant("v1", metrics, config)
+
+	if analysis.ReplicaCount != 3 {
+		t.Errorf("expected ReplicaCount=3, got %d", analysis.ReplicaCount)
+	}
+
+	if analysis.NonSaturatedCount != 1 {
+		t.Errorf("expected NonSaturatedCount=1, got %d", analysis.NonSaturatedCount)
+	}
+
+	if len(analysis.SaturatedReplicas) != 2 {
+		t.Errorf("expected 2 saturated replicas, got %d", len(analysis.SaturatedReplicas))
+	}
+
+	// Verify saturated pods are tracked
+	saturatedSet := make(map[string]bool)
+	for _, pod := range analysis.SaturatedReplicas {
+		saturatedSet[pod] = true
+	}
+
+	if !saturatedSet["pod-1"] || !saturatedSet["pod-2"] {
+		t.Errorf("expected pod-1 and pod-2 to be saturated, got: %v", analysis.SaturatedReplicas)
+	}
+}
+
+func TestAnalyzeModelCapacity_AllSaturated(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	// All replicas are saturated
+	replicaMetrics := []interfaces.ReplicaMetrics{
+		{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.85, QueueLength: 2}, // Saturated (KV)
+		{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 6}, // Saturated (Queue)
+		{PodName: "pod-3", VariantName: "v1", KvCacheUsage: 0.90, QueueLength: 7}, // Saturated (both)
+	}
+
+	analysis, err := analyzer.AnalyzeModelCapacity(
+		context.Background(),
+		"test-model",
+		"test-ns",
+		replicaMetrics,
+		config,
+	)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// When all replicas are saturated
+	if analysis.TotalReplicas != 3 {
+		t.Errorf("expected TotalReplicas=3, got %d", analysis.TotalReplicas)
+	}
+
+	if analysis.NonSaturatedCount != 0 {
+		t.Errorf("expected NonSaturatedCount=0, got %d", analysis.NonSaturatedCount)
+	}
+
+	// With no non-saturated replicas, average spare capacity should be 0
+	if analysis.AvgSpareKvCapacity != 0 {
+		t.Errorf("expected AvgSpareKvCapacity=0, got %.3f", analysis.AvgSpareKvCapacity)
+	}
+
+	if analysis.AvgSpareQueueLength != 0 {
+		t.Errorf("expected AvgSpareQueueLength=0, got %.1f", analysis.AvgSpareQueueLength)
+	}
+
+	// Should scale up when all replicas are saturated (0 spare capacity < triggers)
+	if !analysis.ShouldScaleUp {
+		t.Errorf("expected ShouldScaleUp=true when all saturated (urgently needs more capacity)")
+	}
+
+	// Scale-down should be unsafe
+	if analysis.ScaleDownSafe {
+		t.Errorf("expected ScaleDownSafe=false when all saturated")
+	}
+}
+
+func TestAnalyzeModelCapacity_TimestampSet(t *testing.T) {
+	analyzer := NewAnalyzer()
+	config := interfaces.DefaultCapacityScalingConfig()
+
+	before := time.Now()
+
+	replicaMetrics := []interfaces.ReplicaMetrics{
+		{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 2, Cost: 10},
+	}
+
+	analysis, err := analyzer.AnalyzeModelCapacity(
+		context.Background(),
+		"test-model",
+		"test-ns",
+		replicaMetrics,
+		config,
+	)
+
+	after := time.Now()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify timestamp is set and within reasonable range
+	if analysis.AnalyzedAt.IsZero() {
+		t.Errorf("expected AnalyzedAt to be set, but it's zero")
+	}
+
+	if analysis.AnalyzedAt.Before(before) || analysis.AnalyzedAt.After(after) {
+		t.Errorf("AnalyzedAt timestamp %v is outside expected range [%v, %v]",
+			analysis.AnalyzedAt, before, after)
+	}
+}
+
+// Tests for two-step decision logic (CalculateCapacityTargets + ArbitrateWithModelBased)
+
+func TestCalculateCapacityTargets_ScaleUpCheapest(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		ScaleUpReason: "KV spare capacity low",
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
+			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
+			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1-expensive", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v2-cheap", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
+	}
+
+	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+	// Should scale up cheapest variant (v2-cheap)
+	if targets["v2-cheap"] != 3 {
+		t.Errorf("expected v2-cheap target=3, got %d", targets["v2-cheap"])
+	}
+
+	// Others should remain at current
+	if targets["v1-expensive"] != 2 {
+		t.Errorf("expected v1-expensive target=2, got %d", targets["v1-expensive"])
+	}
+	if targets["v3-medium"] != 2 {
+		t.Errorf("expected v3-medium target=2, got %d", targets["v3-medium"])
+	}
+}
+
+func TestCalculateCapacityTargets_ScaleDownMostExpensive(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: false,
+		ScaleDownSafe: true,
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
+			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
+			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1-expensive", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v2-cheap", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
+	}
+
+	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+	// Should scale down most expensive variant (v1-expensive)
+	if targets["v1-expensive"] != 1 {
+		t.Errorf("expected v1-expensive target=1, got %d", targets["v1-expensive"])
+	}
+
+	// Others should remain at current
+	if targets["v2-cheap"] != 2 {
+		t.Errorf("expected v2-cheap target=2, got %d", targets["v2-cheap"])
+	}
+	if targets["v3-medium"] != 2 {
+		t.Errorf("expected v3-medium target=2, got %d", targets["v3-medium"])
+	}
+}
+
+func TestCalculateCapacityTargets_PreserveDesired(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		ScaleUpReason: "KV spare capacity low",
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
+			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
+		},
+	}
+
+	// v1 has desired > current (previous optimizer wanted to scale up)
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1-expensive", CurrentReplicas: 2, DesiredReplicas: 4},
+		{VariantName: "v2-cheap", CurrentReplicas: 2, DesiredReplicas: 0},
+	}
+
+	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+	// Should preserve v1's desired replicas
+	if targets["v1-expensive"] != 4 {
+		t.Errorf("expected v1-expensive target=4 (preserved desired), got %d", targets["v1-expensive"])
+	}
+
+	// v2 should be scaled up (cheapest non-preserved variant) since capacity still needs scale-up
+	if targets["v2-cheap"] != 3 {
+		t.Errorf("expected v2-cheap target=3 (cheapest for capacity scale-up), got %d", targets["v2-cheap"])
+	}
+}
+
+func TestArbitrateWithModelBased_CapacityVeto(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		ScaleDownSafe: false,
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	// Capacity wants scale-up (target=4), but model-based wants scale-down (target=2)
+	capacityTargets := map[string]int{"v1": 4}
+	modelBasedTargets := map[string]int{"v1": 2}
+
+	decisions := analyzer.ArbitrateWithModelBased(
+		capacityAnalysis,
+		capacityTargets,
+		modelBasedTargets,
+		variantStates,
+	)
+
+	if len(decisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(decisions))
+	}
+
+	decision := decisions[0]
+
+	// Should veto scale-down (no change)
+	if decision.Action != interfaces.ActionNoChange {
+		t.Errorf("expected no-change (veto), got %s", decision.Action)
+	}
+
+	if decision.TargetReplicas != 3 {
+		t.Errorf("expected target=3 (current), got %d", decision.TargetReplicas)
+	}
+
+	if !decision.SafetyOverride {
+		t.Errorf("expected SafetyOverride=true")
+	}
+}
+
+func TestArbitrateWithModelBased_SafetyBlock(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: false,
+		ScaleDownSafe: false, // Unsafe to scale down
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	// Both capacity and model-based want current (no change)
+	// But model-based wants scale-down
+	capacityTargets := map[string]int{"v1": 3}
+	modelBasedTargets := map[string]int{"v1": 2}
+
+	decisions := analyzer.ArbitrateWithModelBased(
+		capacityAnalysis,
+		capacityTargets,
+		modelBasedTargets,
+		variantStates,
+	)
+
+	decision := decisions[0]
+
+	// Should block scale-down (no change)
+	if decision.Action != interfaces.ActionNoChange {
+		t.Errorf("expected no-change (safety block), got %s", decision.Action)
+	}
+
+	if !decision.SafetyOverride {
+		t.Errorf("expected SafetyOverride=true")
+	}
+}
+
+func TestArbitrateWithModelBased_FollowModelBased(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: false,
+		ScaleDownSafe: true, // Safe to scale down
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	// Capacity says current is fine (target=3), model-based wants scale-up (target=5)
+	capacityTargets := map[string]int{"v1": 3}
+	modelBasedTargets := map[string]int{"v1": 5}
+
+	decisions := analyzer.ArbitrateWithModelBased(
+		capacityAnalysis,
+		capacityTargets,
+		modelBasedTargets,
+		variantStates,
+	)
+
+	decision := decisions[0]
+
+	// Should follow model-based recommendation
+	if decision.Action != interfaces.ActionScaleUp {
+		t.Errorf("expected scale-up, got %s", decision.Action)
+	}
+
+	if decision.TargetReplicas != 5 {
+		t.Errorf("expected target=5 (model-based), got %d", decision.TargetReplicas)
+	}
+
+	if !decision.ModelBasedDecision {
+		t.Errorf("expected ModelBasedDecision=true")
+	}
+
+	if decision.SafetyOverride {
+		t.Errorf("expected SafetyOverride=false (not a veto)")
+	}
+}
+
+func TestArbitrateWithModelBased_CapacityDriven(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		ScaleUpReason: "KV spare low",
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	// Capacity wants scale-up (target=4), model-based says no change (target=3)
+	capacityTargets := map[string]int{"v1": 4}
+	modelBasedTargets := map[string]int{"v1": 3}
+
+	decisions := analyzer.ArbitrateWithModelBased(
+		capacityAnalysis,
+		capacityTargets,
+		modelBasedTargets,
+		variantStates,
+	)
+
+	decision := decisions[0]
+
+	// Should scale up based on capacity
+	if decision.Action != interfaces.ActionScaleUp {
+		t.Errorf("expected scale-up (capacity-driven), got %s", decision.Action)
+	}
+
+	if decision.TargetReplicas != 4 {
+		t.Errorf("expected target=4 (capacity), got %d", decision.TargetReplicas)
+	}
+
+	if !decision.CapacityBased {
+		t.Errorf("expected CapacityBased=true")
+	}
+
+	if decision.ModelBasedDecision {
+		t.Errorf("expected ModelBasedDecision=false")
+	}
+}
+
+// Additional critical test cases for edge scenarios
+
+func TestCalculateCapacityTargets_AllVariantsPreserved(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true, // Capacity wants scale-up
+		ScaleUpReason: "KV spare capacity low",
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 5, ReplicaCount: 2},
+			{VariantName: "v2", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	// Both variants have desired ≠ current (all preserved)
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 2, DesiredReplicas: 4},
+		{VariantName: "v2", CurrentReplicas: 3, DesiredReplicas: 5},
+	}
+
+	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+	// Should preserve both desired replicas (no additional capacity action)
+	if targets["v1"] != 4 {
+		t.Errorf("expected v1 target=4 (preserved desired), got %d", targets["v1"])
+	}
+	if targets["v2"] != 5 {
+		t.Errorf("expected v2 target=5 (preserved desired), got %d", targets["v2"])
+	}
+}
+
+func TestCalculateCapacityTargets_EqualCosts(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v-zebra", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically last
+			{VariantName: "v-alpha", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically first
+			{VariantName: "v-middle", Cost: 10, ReplicaCount: 2}, // Same cost, middle
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v-zebra", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v-alpha", CurrentReplicas: 2, DesiredReplicas: 0},
+		{VariantName: "v-middle", CurrentReplicas: 2, DesiredReplicas: 0},
+	}
+
+	// Run multiple times to verify determinism
+	firstSelection := ""
+	for i := 0; i < 5; i++ {
+		targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+		scaledUpCount := 0
+		var scaledUpVariant string
+		for name, target := range targets {
+			if target > 2 {
+				scaledUpCount++
+				scaledUpVariant = name
+			}
+		}
+
+		if scaledUpCount != 1 {
+			t.Errorf("Expected exactly 1 variant to scale up, got %d", scaledUpCount)
+		}
+
+		// Should always select v-alpha (alphabetically first for tie-breaking)
+		if scaledUpVariant != "v-alpha" {
+			t.Errorf("Expected v-alpha to be selected (alphabetically first), got %s", scaledUpVariant)
+		}
+
+		if i == 0 {
+			firstSelection = scaledUpVariant
+		} else if scaledUpVariant != firstSelection {
+			t.Errorf("Non-deterministic selection: got %s, expected %s", scaledUpVariant, firstSelection)
+		}
+	}
+}
+
+func TestCalculateCapacityTargets_ScaleDownBelowMinimum(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ScaleDownSafe: true, // Capacity allows scale-down
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 20, ReplicaCount: 1}, // Only 1 replica
+			{VariantName: "v2", Cost: 10, ReplicaCount: 2},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 1, DesiredReplicas: 0},
+		{VariantName: "v2", CurrentReplicas: 2, DesiredReplicas: 0},
+	}
+
+	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+
+	// v1 has only 1 replica, should not be eligible for scale-down
+	// v2 should be scaled down instead (has 2 replicas, lower cost doesn't matter for scale-down)
+	if targets["v1"] != 1 {
+		t.Errorf("expected v1 target=1 (can't scale below minimum), got %d", targets["v1"])
+	}
+	if targets["v2"] != 1 {
+		t.Errorf("expected v2 target=1 (scaled down), got %d", targets["v2"])
+	}
+}
+
+func TestArbitrateWithModelBased_BothAgree(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+		ModelID:       "test-model",
+		Namespace:     "test-ns",
+		ShouldScaleUp: true,
+		ScaleDownSafe: false,
+		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
+		},
+	}
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	// Both capacity and model-based want to scale to 5
+	capacityTargets := map[string]int{"v1": 5}
+	modelBasedTargets := map[string]int{"v1": 5}
+
+	decisions := analyzer.ArbitrateWithModelBased(
+		capacityAnalysis, capacityTargets, modelBasedTargets, variantStates)
+
+	if len(decisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(decisions))
+	}
+
+	decision := decisions[0]
+
+	// Should scale to 5 (both agree)
+	if decision.TargetReplicas != 5 {
+		t.Errorf("expected target=5 (both agree), got %d", decision.TargetReplicas)
+	}
+
+	if decision.Action != interfaces.ActionScaleUp {
+		t.Errorf("expected ActionScaleUp, got %s", decision.Action)
+	}
+}
+
+func TestArbitrateWithModelBased_NilAnalysis(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	variantStates := []interfaces.VariantReplicaState{
+		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
+	}
+
+	capacityTargets := map[string]int{"v1": 3}
+	modelBasedTargets := map[string]int{"v1": 4}
+
+	// Should not panic with nil capacityAnalysis
+	decisions := analyzer.ArbitrateWithModelBased(
+		nil, capacityTargets, modelBasedTargets, variantStates)
+
+	if len(decisions) != 1 {
+		t.Errorf("expected 1 decision even with nil analysis, got %d", len(decisions))
+	}
+
+	// Should still make a decision (follow model-based in this case)
+	decision := decisions[0]
+	if decision.TargetReplicas != 4 {
+		t.Errorf("expected target=4 (model-based), got %d", decision.TargetReplicas)
+	}
+}

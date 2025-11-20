@@ -12,7 +12,7 @@ The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs i
 ## Key Features
 
 - **Intelligent Autoscaling**: Optimizes replica count and GPU allocation based on workload, performance models, and SLO requirements
-- **Cost Optimization**: Minimizes infrastructure costs while meeting SLO requirements  
+- **Cost Optimization**: Minimizes infrastructure costs while meeting SLO requirements
 - **Performance Modeling**: Uses queueing theory (M/M/1/k, M/G/1 models) for accurate latency and throughput prediction
 - **Multi-Model Support**: Manages multiple models with different service classes and priorities
 
@@ -51,7 +51,7 @@ make deploy-llm-d-wva-emulated-on-kind
 # - vLLM emulator for testing
 ```
 
-**Works on Mac (Apple Silicon/Intel) and Windows** - no physical GPUs needed!  
+**Works on Mac (Apple Silicon/Intel) and Windows** - no physical GPUs needed!
 Perfect for development and testing with GPU emulation.
 
 See the [Installation Guide](docs/user-guide/installation.md) for detailed instructions.
@@ -122,11 +122,7 @@ metadata:
   name: llama-8b-autoscaler
   namespace: llm-inference
 spec:
-  modelName: "meta/llama-3.1-8b"
-  serviceClass: "Premium"
-  acceleratorType: "A100"
-  minReplicas: 1
-  maxBatchSize: 256
+  modelId: "meta/llama-3.1-8b"
 ```
 
 More examples in [config/samples/](config/samples/).

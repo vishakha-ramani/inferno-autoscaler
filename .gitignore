@@ -26,3 +26,9 @@ gpu.cluster
 # Miscellaneous
 .DS_Store
 ~*
+
+# llm-d and llm-d-infra directories
+llm-d/
+llm-d-infra/
+llmd/
+llmd-infra/

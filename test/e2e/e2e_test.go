@@ -1039,15 +1039,26 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		Expect(err).NotTo(HaveOccurred(), "Prometheus port-forward should be ready within timeout")
 
 		By("starting load generation to create traffic for both deployments")
-		loadRate = 5 // increased requests per second
-		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, fmt.Sprintf("http://%s:%d", gatewayName, 80), firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		loadRate = 10 // significantly increased requests per second to trigger further scale-up from 2 to 3+ replicas
+		// Target services directly to ensure each deployment gets dedicated load
+		// Using service short DNS name: <service-name>.<namespace>
+		firstServiceURL := fmt.Sprintf("http://%s.%s:%d", firstServiceName, namespace, port)
+		loadGenJob1, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, firstServiceURL, firstModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", firstDeployName))
 		defer func() {
 			err = utils.StopJob(namespace, loadGenJob1, k8sClient, ctx)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", firstDeployName))
 		}()
 
-		By("waiting for job pod to be running")
+		secondServiceURL := fmt.Sprintf("http://%s.%s:%d", secondServiceName, namespace, port)
+		loadGenJob2, err := utils.CreateLoadGeneratorJob(GuidellmImage, namespace, secondServiceURL, secondModelName, loadRate, maxExecutionTimeSec, inputTokens, outputTokens, k8sClient, ctx)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to start load generator sending requests to: %s", secondDeployName))
+		defer func() {
+			err = utils.StopJob(namespace, loadGenJob2, k8sClient, ctx)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to stop load generator sending requests to: %s", secondDeployName))
+		}()
+
+		By("waiting for job pods to be running")
 		Eventually(func(g Gomega) {
 			podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("job-name=%s", loadGenJob1.Name),
@@ -1063,7 +1074,22 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 			), fmt.Sprintf("Job pod should be running or succeeded, but is in phase: %s", pod.Status.Phase))
 		}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation job is running\n")
+		Eventually(func(g Gomega) {
+			podList, err := k8sClient.CoreV1().Pods(llmDNamespace).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("job-name=%s", loadGenJob2.Name),
+			})
+			g.Expect(err).NotTo(HaveOccurred(), "Should be able to list job pods")
+			g.Expect(podList.Items).NotTo(BeEmpty(), "Job pod should exist")
+
+			pod := podList.Items[0]
+			// Check if pod is running or has completed initialization
+			g.Expect(pod.Status.Phase).To(Or(
+				Equal(corev1.PodRunning),
+				Equal(corev1.PodSucceeded),
+			), fmt.Sprintf("Job pod should be running or succeeded, but is in phase: %s", pod.Status.Phase))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "Load generation jobs are running\n")
 
 		By("waiting for load generation to ramp up again (30 seconds)")
 		time.Sleep(30 * time.Second)

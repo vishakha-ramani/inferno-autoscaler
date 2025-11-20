@@ -28,6 +28,9 @@ wva:
   experimental:
     enableModelTuner: false
     
+  experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
+  scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
+
 llmd:
   namespace: llm-d-inference-scheduler
   modelName: ms-inference-scheduling-llm-d-modelservice

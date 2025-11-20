@@ -10,13 +10,13 @@ type VariantAutoscalingSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Required
 	ModelID string `json:"modelID"`
-
+	//TODO: remove this
 	// SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration.
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	SLOClassRef ConfigMapKeyRef `json:"sloClassRef"`
 
 	// ModelProfile provides resource and performance characteristics for the model variant.
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	ModelProfile ModelProfile `json:"modelProfile"`
 
 	// ActivateModelTuner indicates whether to use the experimental model tuner.
@@ -65,7 +65,8 @@ type AcceleratorProfile struct {
 	AccCount int `json:"accCount"`
 
 	// PerParms specifies the prefill and decode parameters for ttft and itl models
-	PerfParms PerfParms `json:"perfParms"`
+	// +kubebuilder:validation:Optional
+	PerfParms PerfParms `json:"perfParms,omitempty"`
 
 	// MaxBatchSize is the maximum batch size supported by the accelerator.
 	// +kubebuilder:validation:Minimum=1
@@ -76,6 +77,7 @@ type AcceleratorProfile struct {
 // including the current allocation, desired optimized allocation, and actuation status.
 type VariantAutoscalingStatus struct {
 	// CurrentAlloc specifies the current resource allocation for the variant.
+	// +kubebuilder:validation:Optional
 	CurrentAlloc Allocation `json:"currentAlloc,omitempty"`
 
 	// DesiredOptimizedAlloc indicates the target optimized allocation based on autoscaling logic.
@@ -85,7 +87,7 @@ type VariantAutoscalingStatus struct {
 	Actuation ActuationStatus `json:"actuation,omitempty"`
 
 	// Conditions represent the latest available observations of the VariantAutoscaling's state
-	// +optional
+	// +kubebuilder:validation:Optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

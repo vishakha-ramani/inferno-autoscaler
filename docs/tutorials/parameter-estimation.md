@@ -108,7 +108,7 @@ See [vllm-samples.md](vllm-samples.md) for detailed manual deployment instructio
 - **Gamma (γ)**: Fixed overhead per prefill operation (ms)
 - **Delta (δ)**: Variable overhead per input token per batch member (ms per token per batch member)
 
-**What TTFT measures**: Time to first token, including prompt prkubectlessing and queue wait time.
+**What TTFT measures**: Time to first token, including prompt processing and queue wait time.
 
 ---
 

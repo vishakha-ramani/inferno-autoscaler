@@ -354,8 +354,11 @@ set_tls_verification() {
                 log_info "Kubernetes cluster - enabling TLS skip verification for self-signed certificates"
                 ;;
             "openshift")
+                # For OpenShift, we can use proper TLS verification since we have the Service CA
+                # However, defaulting to true for now to match current behavior
+                # TODO: Set to false once Service CA certificate extraction is fully validated
                 SKIP_TLS_VERIFY="true"
-                log_warning "OpenShift cluster - enabling strict TLS verification"
+                log_info "OpenShift cluster - TLS verification setting: $SKIP_TLS_VERIFY"
                 ;;
             *)
                 SKIP_TLS_VERIFY="true"
@@ -534,63 +537,44 @@ deploy_prometheus_adapter() {
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
     helm repo update
     
-    # Create prometheus-adapter values for Kubernetes
-    cat > /tmp/prometheus-adapter-values.yaml <<EOF
-prometheus:
-  url: $PROMETHEUS_BASE_URL
-  port: $PROMETHEUS_PORT
-
-rules:
-  external:
-  - seriesQuery: 'inferno_desired_replicas{variant_name!="",exported_namespace!=""}'
-    resources:
-      overrides:
-        exported_namespace: {resource: "namespace"}
-        variant_name: {resource: "deployment"}  
-    name:
-      matches: "^inferno_desired_replicas"
-      as: "inferno_desired_replicas"
-    metricsQuery: 'inferno_desired_replicas{<<.LabelMatchers>>}'
-
-replicas: 2
-logLevel: 4
-
-tls:
-  enable: false # Inbound TLS (Client → Adapter)
-
-extraVolumes:
-  - name: prometheus-ca
-    configMap:
-      name: prometheus-ca
-
-extraVolumeMounts:
-  - name: prometheus-ca
-    mountPath: /etc/prometheus-ca
-    readOnly: true
-
-extraArguments:
-  - --prometheus-ca-file=/etc/prometheus-ca/ca.crt
-  - --prometheus-token-file=/var/run/secrets/kubernetes.io/serviceaccount/token
-
-podSecurityContext:
-  fsGroup: null
-
-securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop: ["ALL"]
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: null
-  seccompProfile:
-    type: RuntimeDefault
-EOF
+    # Create prometheus-ca ConfigMap from the CA certificate
+    log_info "Creating prometheus-ca ConfigMap for Prometheus Adapter"
+    if [ ! -f "$PROM_CA_CERT_PATH" ] || [ ! -s "$PROM_CA_CERT_PATH" ]; then
+        log_error "CA certificate file not found or empty: $PROM_CA_CERT_PATH"
+        log_error "Please ensure deploy_wva_prerequisites() was called first"
+        exit 1
+    fi
     
-    # Deploy Prometheus Adapter
+    # Create or update the prometheus-ca ConfigMap
+    kubectl create configmap prometheus-ca \
+        --from-file=ca.crt=$PROM_CA_CERT_PATH \
+        -n $MONITORING_NAMESPACE \
+        --dry-run=client -o yaml | kubectl apply -f -
+    
+    log_success "prometheus-ca ConfigMap created/updated"
+    
+    # Use existing values files from config/samples
+    local values_file=""
+    if [ "$ENVIRONMENT" = "openshift" ]; then
+        values_file="${WVA_PROJECT}/config/samples/prometheus-adapter-values-ocp.yaml"
+        log_info "Using OpenShift-specific Prometheus Adapter configuration: $values_file"
+    else
+        values_file="${WVA_PROJECT}/config/samples/prometheus-adapter-values.yaml"
+        log_info "Using Kubernetes Prometheus Adapter configuration: $values_file"
+    fi
+    
+    if [ ! -f "$values_file" ]; then
+        log_error "Prometheus Adapter values file not found: $values_file"
+        exit 1
+    fi
+    
+    # Deploy Prometheus Adapter using existing values file and override URL/port
     log_info "Installing Prometheus Adapter via Helm"
     helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
         -n $MONITORING_NAMESPACE \
-        -f /tmp/prometheus-adapter-values.yaml \
+        -f "$values_file" \
+        --set prometheus.url="$PROMETHEUS_BASE_URL" \
+        --set prometheus.port="$PROMETHEUS_PORT" \
         --timeout=3m \
         --wait || {
             log_warning "Prometheus Adapter deployment timed out or failed, but continuing..."
@@ -764,7 +748,7 @@ undeploy_prometheus_adapter() {
         log_warning "Prometheus Adapter not found or already uninstalled"
     
     kubectl delete configmap prometheus-ca -n $MONITORING_NAMESPACE --ignore-not-found
-    rm -f /tmp/prometheus-adapter-values-k8s.yaml
+    # Cleanup is handled by the values files in config/samples
     
     log_success "Prometheus Adapter uninstalled"
 }

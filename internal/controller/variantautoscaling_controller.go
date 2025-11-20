@@ -130,7 +130,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	experimentalProactiveModel := os.Getenv("WVA_EXPERIMENTAL_PROACTIVE_MODEL")
 
 	if strings.EqualFold(experimentalProactiveModel, "true") {
-		logger.Log.Info("Scaling to zero is enabled!")
+		logger.Log.Info("experimental proactive model is enabled!")
 	}
 
 	// TODO: decide on whether to keep accelerator properties (device name, cost) in same configMap, provided by administrator
@@ -159,78 +159,98 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	if strings.EqualFold(experimentalProactiveModel, "true") {
-		// WVA operates in unlimited mode - no cluster inventory collection needed
-		systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
-
-		updateList, vaMap, allAnalyzerResponses, err := r.prepareVariantAutoscalings(ctx, activeVAs, acceleratorCm, serviceClassCm, systemData)
-		if err != nil {
-			logger.Log.Error(err, "failed to prepare variant autoscalings")
-			return ctrl.Result{}, err
+	switch {
+	case experimentalProactiveModel == "true":
+		logger.Log.Info("Experimental proactive model is enabled!")
+		if ctrlResult, err := r.runExperimentalProactiveModel(ctx, activeVAs, acceleratorCm, serviceClassCm, requeueDuration); err != nil {
+			logger.Log.Error(err, "Experimental optimization failed")
+			return ctrlResult, err
 		}
 
-		// analyze
-		system := inferno.NewSystem()
-		optimizerSpec := system.SetFromSpec(&systemData.Spec)
-		optimizer := infernoSolver.NewOptimizerFromSpec(optimizerSpec)
-		manager := infernoManager.NewManager(system, optimizer)
-
-		modelAnalyzer := analyzer.NewModelAnalyzer(system)
-		for _, s := range system.Servers() {
-			modelAnalyzeResponse := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
-			if len(modelAnalyzeResponse.Allocations) == 0 {
-				logger.Log.Info("No potential allocations found for server - ", "serverName: ", s.Name())
-				continue
-			}
-			allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
-		}
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Capacity))
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Accelerators))
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.ServiceClasses))
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Models))
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Optimizer))
-		logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Servers))
-
-		engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
-
-		optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
-		if err != nil {
-			logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
-
-			// Update OptimizationReady condition to False for all VAs in the update list
-			for i := range updateList.Items {
-				va := &updateList.Items[i]
-				llmdVariantAutoscalingV1alpha1.SetCondition(va,
-					llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
-					metav1.ConditionFalse,
-					llmdVariantAutoscalingV1alpha1.ReasonOptimizationFailed,
-					fmt.Sprintf("Optimization failed: %v", err))
-
-				if statusErr := r.Status().Update(ctx, va); statusErr != nil {
-					logger.Log.Error(statusErr, "failed to update status condition after optimization failure",
-						"variantAutoscaling", va.Name)
-				}
-			}
-
-			return ctrl.Result{RequeueAfter: requeueDuration}, nil
-		}
-
-		logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
-		logger.Log.Debug("Optimized allocation map - ", "numKeys: ", len(optimizedAllocation), ", updateList_count: ", len(updateList.Items))
-		for key, value := range optimizedAllocation {
-			logger.Log.Debug("Optimized allocation entry - ", "key: ", key, ", value: ", value)
-		}
-
-		if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
-			// If we fail to apply optimized allocations, we log the error
-			// In next reconcile, the controller will retry.
-			logger.Log.Error(err, "failed to apply optimized allocations")
-			return ctrl.Result{RequeueAfter: requeueDuration}, nil
-		}
-
+	default:
+		// Add saturation based reactive scaling
+		logger.Log.Debug("Running in saturation based scaling")
 	}
 
 	return ctrl.Result{RequeueAfter: requeueDuration}, nil
+}
+
+func (r *VariantAutoscalingReconciler) runExperimentalProactiveModel(
+	ctx context.Context,
+	activeVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
+	acceleratorCm map[string]map[string]string, serviceClassCm map[string]string,
+	requeueDuration time.Duration,
+) (ctrl.Result, error) {
+
+	// WVA operates in unlimited mode - no cluster inventory collection needed
+	systemData := utils.CreateSystemData(acceleratorCm, serviceClassCm)
+
+	updateList, vaMap, allAnalyzerResponses, err := r.prepareVariantAutoscalings(ctx, activeVAs, acceleratorCm, serviceClassCm, systemData)
+	if err != nil {
+		logger.Log.Error(err, "failed to prepare variant autoscalings")
+		return ctrl.Result{}, err
+	}
+
+	// analyze
+	system := inferno.NewSystem()
+	optimizerSpec := system.SetFromSpec(&systemData.Spec)
+	optimizer := infernoSolver.NewOptimizerFromSpec(optimizerSpec)
+	manager := infernoManager.NewManager(system, optimizer)
+
+	modelAnalyzer := analyzer.NewModelAnalyzer(system)
+	for _, s := range system.Servers() {
+		modelAnalyzeResponse := modelAnalyzer.AnalyzeModel(ctx, *vaMap[s.Name()])
+		if len(modelAnalyzeResponse.Allocations) == 0 {
+			logger.Log.Info("No potential allocations found for server - ", "serverName: ", s.Name())
+			continue
+		}
+		allAnalyzerResponses[s.Name()] = modelAnalyzeResponse
+	}
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Capacity))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Accelerators))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.ServiceClasses))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Models))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Optimizer))
+	logger.Log.Debug("System data prepared for optimization: - ", utils.MarshalStructToJsonString(systemData.Spec.Servers))
+
+	engine := variantAutoscalingOptimizer.NewVariantAutoscalingsEngine(manager, system)
+
+	optimizedAllocation, err := engine.Optimize(ctx, *updateList, allAnalyzerResponses)
+	if err != nil {
+		logger.Log.Error(err, "unable to perform model optimization, skipping this iteration")
+
+		// Update OptimizationReady condition to False for all VAs in the update list
+		for i := range updateList.Items {
+			va := &updateList.Items[i]
+			llmdVariantAutoscalingV1alpha1.SetCondition(va,
+				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
+				metav1.ConditionFalse,
+				llmdVariantAutoscalingV1alpha1.ReasonOptimizationFailed,
+				fmt.Sprintf("Optimization failed: %v", err))
+
+			if statusErr := r.Status().Update(ctx, va); statusErr != nil {
+				logger.Log.Error(statusErr, "failed to update status condition after optimization failure",
+					"variantAutoscaling", va.Name)
+			}
+		}
+
+		return ctrl.Result{RequeueAfter: requeueDuration}, nil
+	}
+
+	logger.Log.Debug("Optimization completed successfully, emitting optimization metrics")
+	logger.Log.Debug("Optimized allocation map - ", "numKeys: ", len(optimizedAllocation), ", updateList_count: ", len(updateList.Items))
+	for key, value := range optimizedAllocation {
+		logger.Log.Debug("Optimized allocation entry - ", "key: ", key, ", value: ", value)
+	}
+
+	if err := r.applyOptimizedAllocations(ctx, updateList, optimizedAllocation); err != nil {
+		// If we fail to apply optimized allocations, we log the error
+		// In next reconcile, the controller will retry.
+		logger.Log.Error(err, "failed to apply optimized allocations")
+		return ctrl.Result{RequeueAfter: requeueDuration}, nil
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // filterActiveVariantAutoscalings returns only those VAs not marked for deletion.

@@ -31,5 +31,5 @@ data:
 
   # Option to scale variants to zero replicas (default: true)
   WVA_SCALE_TO_ZERO: "false"
-
+  # Option to use experimental proactive scaling model (default: false)
   WVA_EXPERIMENTAL_PROACTIVE_MODEL: "true"

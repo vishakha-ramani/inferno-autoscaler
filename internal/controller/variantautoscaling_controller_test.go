@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
@@ -949,6 +950,120 @@ data:
 				By("Verifying no reconciliation is triggered")
 				Expect(result).To(BeEmpty())
 			})
+		})
+	})
+
+	Context("Capacity Config Cache", func() {
+		var (
+			ctx                  context.Context
+			controllerReconciler *VariantAutoscalingReconciler
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			controllerReconciler = &VariantAutoscalingReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: record.NewFakeRecorder(100),
+			}
+		})
+
+		It("should initialize cache with defaults when ConfigMap is missing", func() {
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+
+			By("Verifying cache initialization succeeded (uses defaults)")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(controllerReconciler.isCapacityConfigLoaded()).To(BeTrue())
+
+			By("Verifying default config is in cache")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			Expect(configs).To(HaveKey("default"))
+			Expect(configs["default"].KvCacheThreshold).To(Equal(0.80))
+			Expect(configs["default"].QueueLengthThreshold).To(Equal(5))
+		})
+
+		It("should load config from ConfigMap when it exists", func() {
+			configMap := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "capacity-scaling-config",
+					Namespace: configMapNamespace,
+				},
+				Data: map[string]string{
+					"default": `kvCacheThreshold: 0.75
+queueLengthThreshold: 10
+kvSpareTrigger: 0.15
+queueSpareTrigger: 5`,
+				},
+			}
+
+			By("Creating ConfigMap")
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying custom config is loaded")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			Expect(configs).To(HaveKey("default"))
+			Expect(configs["default"].KvCacheThreshold).To(Equal(0.75))
+			Expect(configs["default"].QueueLengthThreshold).To(Equal(10))
+
+			By("Cleaning up ConfigMap")
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
+		})
+
+		It("should return copy of cache to prevent external modification", func() {
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting cache copy")
+			configs1 := controllerReconciler.getCapacityConfigFromCache()
+			configs2 := controllerReconciler.getCapacityConfigFromCache()
+
+			By("Verifying copies are independent")
+			configs1["test"] = interfaces.CapacityScalingConfig{KvCacheThreshold: 0.99}
+			Expect(configs2).NotTo(HaveKey("test"))
+		})
+
+		It("should apply per-model overrides correctly", func() {
+			configMap := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "capacity-scaling-config",
+					Namespace: configMapNamespace,
+				},
+				Data: map[string]string{
+					"default": `kvCacheThreshold: 0.80
+queueLengthThreshold: 5
+kvSpareTrigger: 0.1
+queueSpareTrigger: 3`,
+					"custom": `model_id: test/model
+namespace: test-ns
+kvCacheThreshold: 0.90`,
+				},
+			}
+
+			By("Creating ConfigMap with override")
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting config for model with override")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			config := controllerReconciler.getCapacityScalingConfigForVariant(configs, "test/model", "test-ns")
+
+			By("Verifying override is applied")
+			Expect(config.KvCacheThreshold).To(Equal(0.90))
+			// Verify other fields inherit from default
+			Expect(config.QueueLengthThreshold).To(Equal(5))
+			Expect(config.QueueSpareTrigger).To(Equal(3))
+
+			By("Cleaning up ConfigMap")
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
 		})
 	})
 })

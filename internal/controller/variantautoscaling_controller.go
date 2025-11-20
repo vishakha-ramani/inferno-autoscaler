@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -71,6 +72,11 @@ type VariantAutoscalingReconciler struct {
 	Recorder record.EventRecorder
 
 	PromAPI promv1.API
+
+	// Capacity scaling config cache (thread-safe, updated on ConfigMap changes)
+	capacityConfigCache      map[string]interfaces.CapacityScalingConfig
+	capacityConfigCacheMutex sync.RWMutex
+	capacityConfigLoaded     bool // Track if initial load succeeded
 }
 
 // +kubebuilder:rbac:groups=llmd.ai,resources=variantautoscalings,verbs=get;list;watch;create;update;patch;delete
@@ -429,6 +435,49 @@ func (r *VariantAutoscalingReconciler) applyOptimizedAllocations(
 	return nil
 }
 
+// isCapacityScalingConfigMap checks if object is the capacity-scaling-config ConfigMap.
+func (r *VariantAutoscalingReconciler) isCapacityScalingConfigMap(obj client.Object) bool {
+	return obj.GetName() == "capacity-scaling-config" &&
+		obj.GetNamespace() == configMapNamespace
+}
+
+// handleCapacityConfigMapEvent handles capacity-scaling-config ConfigMap events.
+// Reloads cache and triggers reconciliation of all VariantAutoscaling resources.
+func (r *VariantAutoscalingReconciler) handleCapacityConfigMapEvent(ctx context.Context, obj client.Object) []reconcile.Request {
+	if !r.isCapacityScalingConfigMap(obj) {
+		return nil
+	}
+
+	// Reload cache when ConfigMap changes
+	logger.Log.Info("Capacity scaling ConfigMap changed, reloading cache")
+	if err := r.updateCapacityConfigCache(ctx); err != nil {
+		logger.Log.Error(err, "Failed to reload capacity scaling config cache")
+		// Continue to trigger reconciliation even if reload fails (will use existing cache or defaults)
+	}
+
+	// Trigger reconciliation for all VariantAutoscaling resources
+	vaList := &llmdVariantAutoscalingV1alpha1.VariantAutoscalingList{}
+	if err := r.List(ctx, vaList); err != nil {
+		logger.Log.Error(err, "Failed to list VariantAutoscaling resources")
+		return nil
+	}
+
+	requests := make([]reconcile.Request, len(vaList.Items))
+	for i, va := range vaList.Items {
+		requests[i] = reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      va.Name,
+				Namespace: va.Namespace,
+			},
+		}
+	}
+
+	logger.Log.Info("Triggering reconciliation for all VariantAutoscaling resources due to ConfigMap change",
+		"count", len(requests))
+
+	return requests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
@@ -507,6 +556,15 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				return obj.GetName() == serviceMonitorName && obj.GetNamespace() == configMapNamespace
 			})),
 		).
+		// Watch capacity-scaling-config ConfigMap to reload cache on changes
+		Watches(
+			&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.handleCapacityConfigMapEvent),
+			// Predicate to filter only the capacity-scaling-config ConfigMap
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return r.isCapacityScalingConfigMap(obj)
+			})),
+		).
 		Named("variantAutoscaling").
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {
@@ -580,12 +638,58 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 	return out, nil
 }
 
+// getCapacityConfigFromCache retrieves cached config (thread-safe read).
+// Returns a copy to prevent external modification.
+func (r *VariantAutoscalingReconciler) getCapacityConfigFromCache() map[string]interfaces.CapacityScalingConfig {
+	r.capacityConfigCacheMutex.RLock()
+	defer r.capacityConfigCacheMutex.RUnlock()
+
+	// Return copy to prevent external modification
+	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.capacityConfigCache))
+	for k, v := range r.capacityConfigCache {
+		configCopy[k] = v
+	}
+	return configCopy
+}
+
+// updateCapacityConfigCache updates the cache (thread-safe write).
+// Logs cache update and returns error if read fails.
+func (r *VariantAutoscalingReconciler) updateCapacityConfigCache(ctx context.Context) error {
+	configs, err := r.readCapacityScalingConfig(ctx, "capacity-scaling-config", configMapNamespace)
+	if err != nil {
+		return err
+	}
+
+	r.capacityConfigCacheMutex.Lock()
+	defer r.capacityConfigCacheMutex.Unlock()
+
+	r.capacityConfigCache = configs
+	r.capacityConfigLoaded = true
+
+	logger.Log.Info("Capacity scaling config cache updated",
+		"entries", len(configs),
+		"has_default", configs["default"] != (interfaces.CapacityScalingConfig{}))
+
+	return nil
+}
+
+// isCapacityConfigLoaded returns whether the initial config load succeeded (thread-safe).
+func (r *VariantAutoscalingReconciler) isCapacityConfigLoaded() bool {
+	r.capacityConfigCacheMutex.RLock()
+	defer r.capacityConfigCacheMutex.RUnlock()
+	return r.capacityConfigLoaded
+}
+
+// InitializeCapacityConfigCache performs initial load of capacity scaling config cache.
+// Called from main.go during controller startup. Non-fatal if load fails (uses defaults).
+func (r *VariantAutoscalingReconciler) InitializeCapacityConfigCache(ctx context.Context) error {
+	return r.updateCapacityConfigCache(ctx)
+}
+
 // readCapacityScalingConfig reads capacity scaling configuration from ConfigMap.
 // Returns default config with warning if ConfigMap is not found.
 // Returns a map with key "default" and optional per-model override entries.
-// TODO: Call this method when implementing capacity-based scaling logic
-//
-//nolint:unused // Reserved for capacity scaling implementation
+// This method is called by updateCapacityConfigCache and should not be called directly.
 func (r *VariantAutoscalingReconciler) readCapacityScalingConfig(ctx context.Context, cmName, cmNamespace string) (map[string]interfaces.CapacityScalingConfig, error) {
 	cm := corev1.ConfigMap{}
 	err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm)
@@ -637,9 +741,6 @@ func (r *VariantAutoscalingReconciler) readCapacityScalingConfig(ctx context.Con
 
 // getCapacityScalingConfigForVariant retrieves config for specific model/namespace with fallback to default.
 // It searches for an override entry matching both model_id and namespace fields.
-// TODO: Call this method when implementing capacity-based scaling logic
-//
-//nolint:unused // Reserved for capacity scaling implementation
 func (r *VariantAutoscalingReconciler) getCapacityScalingConfigForVariant(
 	configs map[string]interfaces.CapacityScalingConfig,
 	modelID, namespace string,

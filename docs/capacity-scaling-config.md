@@ -4,6 +4,13 @@
 
 The Workload Variant Autoscaler supports capacity-based scaling using KV cache utilization and queue length metrics. This feature is enabled by default and configured via a ConfigMap.
 
+**Key features:**
+- ✅ ConfigMap-based configuration with global defaults and per-model overrides
+- ✅ **Efficient caching** with single read on startup (zero API calls during reconciliation)
+- ✅ **Automatic reload** via ConfigMap watch (immediate response to changes)
+- ✅ **Thread-safe** concurrent access with RWMutex
+- ✅ Graceful degradation to defaults if ConfigMap missing
+
 ## Configuration
 
 ### ConfigMap Structure
@@ -68,6 +75,11 @@ Apply the ConfigMap:
 ```bash
 kubectl apply -f deploy/configmap-capacity-scaling.yaml
 ```
+
+**Note:** Changes take effect immediately! The controller watches the ConfigMap and automatically:
+1. Reloads the cache when changes are detected
+2. Triggers reconciliation of all VariantAutoscaling resources
+3. Applies the new configuration without requiring pod restart
 
 ### 3. Per-Model Overrides
 
@@ -148,14 +160,26 @@ WARN Invalid capacity scaling config entry, skipping key=invalid-config error=kv
 
 ## Integration with Controller
 
-The capacity scaling configuration is read during controller reconciliation:
+### Caching Architecture
 
+The controller uses an **efficient caching mechanism** with ConfigMap watch for optimal performance:
+
+**Initialization (on controller startup):**
 ```go
-// In Reconcile loop
-capacityConfigs, err := r.readCapacityScalingConfig(ctx, "capacity-scaling-config", configMapNamespace)
-if err != nil {
-    return ctrl.Result{}, err
+// cmd/main.go
+reconciler := &controller.VariantAutoscalingReconciler{...}
+reconciler.SetupWithManager(mgr)  // Sets up ConfigMap watch
+
+// Initialize cache on startup
+if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {
+    setupLog.Warn("Failed to load initial capacity scaling config, will use defaults")
 }
+```
+
+**Reconciliation (zero API calls):**
+```go
+// In Reconcile loop - uses cached config (fast, no API call)
+capacityConfigs := r.getCapacityConfigFromCache()
 
 // For a specific VariantAutoscaling resource
 capacityConfig := r.getCapacityScalingConfigForVariant(
@@ -165,10 +189,42 @@ capacityConfig := r.getCapacityScalingConfigForVariant(
 )
 
 // Use capacityConfig for capacity-based scaling decisions
-if capacityConfig.KvCacheThreshold > 0 {
+if currentKvUtil >= capacityConfig.KvCacheThreshold {
     // Apply capacity scaling logic
 }
 ```
+
+### Automatic Cache Updates
+
+The controller watches the `capacity-scaling-config` ConfigMap for changes:
+
+1. **ConfigMap change detected** → Watch event triggered
+2. **Cache automatically reloaded** → New configuration loaded
+3. **All VariantAutoscaling resources reconciled** → New config applied immediately
+
+**Log output on ConfigMap change:**
+```
+INFO  Capacity scaling ConfigMap changed, reloading cache
+INFO  Capacity scaling config cache updated entries=3 has_default=true
+INFO  Triggering reconciliation for all VariantAutoscaling resources due to ConfigMap change count=5
+```
+
+### Performance Characteristics
+
+| Operation | Before (Without Cache) | After (With Cache) |
+|-----------|------------------------|-------------------|
+| Startup | N/A | Single ConfigMap read |
+| Per Reconciliation | ConfigMap API call | Memory read only |
+| Config Change | Manual pod restart needed | Automatic reload + reconcile |
+| Latency Impact | Network round-trip per reconcile | Zero (memory access) |
+| Concurrency | Serial API calls | Thread-safe concurrent reads |
+
+**Cache benefits:**
+- ✅ **Single read on startup** instead of per-reconciliation
+- ✅ **Zero API calls during reconciliation** (cached access)
+- ✅ **Event-driven updates** (immediate response to changes)
+- ✅ **Thread-safe concurrent access** (RWMutex)
+- ✅ **Defensive copying** prevents external modification
 
 ## Troubleshooting
 
@@ -224,6 +280,59 @@ data:
 ```
 DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b namespace=production config={...}
 ```
+
+### Config Changes Not Taking Effect
+
+**Symptom:** Updated ConfigMap but controller still uses old values
+
+**Solution:** The controller watches for ConfigMap changes and automatically reloads. Check:
+
+1. **Verify ConfigMap was updated:**
+   ```bash
+   kubectl get cm capacity-scaling-config -n workload-variant-autoscaler-system -o yaml
+   ```
+
+2. **Check controller logs for reload confirmation:**
+   ```bash
+   kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller | grep "Capacity scaling"
+   ```
+
+   Expected logs:
+   ```
+   INFO  Capacity scaling ConfigMap changed, reloading cache
+   INFO  Capacity scaling config cache updated entries=2 has_default=true
+   INFO  Triggering reconciliation for all VariantAutoscaling resources
+   ```
+
+3. **If no logs appear, verify watch is working:**
+   - Check controller pod is running: `kubectl get pods -n workload-variant-autoscaler-system`
+   - Check for errors: `kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller --tail=100`
+
+4. **Manual restart (last resort):**
+   ```bash
+   kubectl rollout restart deployment/wva-controller -n workload-variant-autoscaler-system
+   ```
+
+### Cache Initialization Failed
+
+**Symptom:** Warning on controller startup
+```
+WARN Failed to load initial capacity scaling config, will use defaults
+```
+
+**Solution:** This is non-fatal. The controller continues with hardcoded defaults. To fix:
+
+1. Deploy the ConfigMap:
+   ```bash
+   kubectl apply -f deploy/configmap-capacity-scaling.yaml
+   ```
+
+2. The watch mechanism will automatically reload the cache once ConfigMap is available
+
+3. Verify cache loaded:
+   ```bash
+   kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller | grep "Capacity scaling configuration loaded"
+   ```
 
 ## Example: Production Setup
 
@@ -293,10 +402,36 @@ type CapacityScalingConfig struct {
 - `Validate() error` - Validates configuration values
 - `Merge(override CapacityScalingConfig)` - Applies partial override
 
+## Architecture Notes
+
+### Caching Implementation Details
+
+The caching mechanism uses the following components:
+
+**Thread Safety:**
+- Uses `sync.RWMutex` for concurrent access control
+- Multiple reconciliation loops can read cache simultaneously
+- Write operations (cache reload) are exclusive
+
+**Defensive Copy:**
+- `getCapacityConfigFromCache()` returns a deep copy
+- Prevents external code from modifying cached configuration
+- Each caller gets an independent copy
+
+**Watch Mechanism:**
+- Kubernetes watch on `capacity-scaling-config` ConfigMap
+- Predicate filters to only relevant ConfigMap events
+- Event handler reloads cache and triggers reconciliation
+
+**Graceful Degradation:**
+- Controller starts successfully even if ConfigMap missing
+- Uses hardcoded defaults as fallback
+- Automatically loads config once ConfigMap becomes available
+
 ## Future Enhancements
 
 Potential future features:
-- Per-accelerator type overrides
+- Integration of threshold values with Inference Scheduler
 - Time-based configuration (e.g., aggressive scaling during peak hours)
 - Dynamic threshold adjustment based on historical metrics
-- Global enable/disable flag via environment variable
+- Metric-based cache invalidation (detect stale configs)

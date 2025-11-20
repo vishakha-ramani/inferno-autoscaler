@@ -35,20 +35,20 @@ func NewCapacityMetricsCollector(promAPI promv1.API) *CapacityMetricsCollector {
 // validatePrometheusLabel validates that a label value is safe for use in Prometheus queries.
 // This prevents query injection attacks by ensuring the value matches Kubernetes label patterns.
 // Returns error if validation fails.
-func validatePrometheusLabel(value, name string) error {
-	if value == "" {
-		return fmt.Errorf("%s cannot be empty", name)
-	}
-	// Kubernetes label validation (RFC 1123 subdomain)
-	// Must be 63 characters or less and match the pattern
-	if len(value) > 63 {
-		return fmt.Errorf("%s too long (max 63 characters): %s", name, value)
-	}
-	if !kubernetesLabelPattern.MatchString(value) {
-		return fmt.Errorf("invalid %s: must match Kubernetes label pattern (alphanumeric, '-', '_', '.' allowed, must start and end with alphanumeric): %s", name, value)
-	}
-	return nil
-}
+// func validatePrometheusLabel(value, name string) error {
+// 	if value == "" {
+// 		return fmt.Errorf("%s cannot be empty", name)
+// 	}
+// 	// Kubernetes label validation (RFC 1123 subdomain)
+// 	// Must be 63 characters or less and match the pattern
+// 	if len(value) > 63 {
+// 		return fmt.Errorf("%s too long (max 63 characters): %s", name, value)
+// 	}
+// 	if !kubernetesLabelPattern.MatchString(value) {
+// 		return fmt.Errorf("invalid %s: must match Kubernetes label pattern (alphanumeric, '-', '_', '.' allowed, must start and end with alphanumeric): %s", name, value)
+// 	}
+// 	return nil
+// }
 
 // contextWithRespectedDeadline creates a timeout context that respects the parent context deadline.
 // If the parent has a deadline shorter than the desired timeout, uses the parent's remaining time minus a buffer.
@@ -99,12 +99,12 @@ func (cmc *CapacityMetricsCollector) CollectReplicaMetrics(
 ) ([]interfaces.ReplicaMetrics, error) {
 
 	// Validate input to prevent injection and ensure valid queries
-	if err := validatePrometheusLabel(namespace, "namespace"); err != nil {
-		return nil, err
-	}
-	if err := validatePrometheusLabel(modelID, "modelID"); err != nil {
-		return nil, err
-	}
+	// if err := validatePrometheusLabel(namespace, "namespace"); err != nil {
+	// 	return nil, err
+	// }
+	// if err := validatePrometheusLabel(modelID, "modelID"); err != nil {
+	// 	return nil, err
+	// }
 
 	// Query KV cache and queue metrics in parallel for better performance
 	// Use result struct to avoid race conditions on error variables
@@ -175,8 +175,8 @@ func (cmc *CapacityMetricsCollector) queryKvCacheMetrics(
 
 	// Query for peak KV cache usage over last minute across all pods of this model (all variants)
 	// Using max_over_time ensures we don't miss saturation events between queries
-	// TODO: Verify vLLM metrics include model_id label, adjust filter if needed
-	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_id="%s"}[1m])`,
+	// TODO: Verify vLLM metrics include model_name label, adjust filter if needed
+	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_name="%s"}[1m])`,
 		constants.VLLMKvCacheUsagePerc, namespace, modelID)
 
 	// Add timeout to prevent hanging on Prometheus issues (respects parent deadline)
@@ -229,8 +229,8 @@ func (cmc *CapacityMetricsCollector) queryQueueMetrics(
 
 	// Query for peak queue length over last minute
 	// Using max_over_time ensures we catch burst traffic that could saturate the system
-	// TODO: Verify vLLM metrics include model_id label, adjust filter if needed
-	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_id="%s"}[1m])`,
+	// TODO: Verify vLLM metrics include model_name label, adjust filter if needed
+	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_name="%s"}[1m])`,
 		constants.VLLMNumRequestsWaiting, namespace, modelID)
 
 	// Add timeout to prevent hanging on Prometheus issues (respects parent deadline)

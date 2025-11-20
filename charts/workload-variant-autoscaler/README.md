@@ -52,13 +52,8 @@ helm ls -A
 ```
 export OWNER="llm-d-incubation"
 export WVA_PROJECT="workload-variant-autoscaler"
-export WVA_RELEASE="v0.0.1"
-export LLMD_PROJECT="llm-d-infra"
-export LLMD_RELEASE="v1.3.1"
-export HF_TOKEN="<your_token_here>"
+export WVA_RELEASE="v0.0.4"
 export WVA_NS="workload-variant-autoscaler-system"
-export BASE_NAME="inference-scheduling"
-export LLMD_NS="llm-d-$BASE_NAME"
 export MON_NS="openshift-user-workload-monitoring"
 
 kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
@@ -82,11 +77,6 @@ metadata:
     app.kubernetes.io/name: workload-variant-autoscaler
     control-plane: controller-manager
     openshift.io/user-monitoring: "true"
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: $LLMD_NS
 EOF
 
 cd $WVA_PROJECT/charts
@@ -147,11 +137,10 @@ helm install workload-variant-autoscaler ./workload-variant-autoscaler \
 ```
 export MON_NS="openshift-user-workload-monitoring"
 export WVA_NS="workload-variant-autoscaler-system"
-export LLMD_NS="llm-d-$BASE_NAME"
 
 helm delete prometheus-adapter -n $MON_NS
 helm delete workload-variant-autoscaler -n $WVA_NS
-kubectl delete ns $WVA_NS $LLMD_NS
+kubectl delete ns $WVA_NS
 ```
 
 ### VALIDATION / TROUBLESHOOTING

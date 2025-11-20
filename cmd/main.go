@@ -236,6 +236,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup webhooks
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		setupLog.Info("Setting up validation webhook for VariantAutoscaling")
+		if err = (&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error("unable to create webhook", zap.String("webhook", "VariantAutoscaling"), zap.Error(err))
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("Webhooks disabled via ENABLE_WEBHOOKS=false")
+	}
+
 	// Initialize capacity scaling config cache
 	setupLog.Info("Loading initial capacity scaling configuration")
 	if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {

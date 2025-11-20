@@ -51,7 +51,19 @@ func (a *Analyzer) AnalyzeModelCapacity(
 	}
 
 	// Step 1: Group metrics by variant and calculate per-variant analysis
-	variantMap := make(map[string][]interfaces.ReplicaMetrics)
+	// Pre-count variants to pre-allocate slices (avoids repeated slice reallocation)
+	variantCounts := make(map[string]int)
+	for _, metric := range replicaMetrics {
+		variantCounts[metric.VariantName]++
+	}
+
+	// Pre-allocate slices with exact capacity
+	variantMap := make(map[string][]interfaces.ReplicaMetrics, len(variantCounts))
+	for variant, count := range variantCounts {
+		variantMap[variant] = make([]interfaces.ReplicaMetrics, 0, count)
+	}
+
+	// Populate with metrics (no reallocation needed)
 	for _, metric := range replicaMetrics {
 		variantMap[metric.VariantName] = append(variantMap[metric.VariantName], metric)
 	}

@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
+	"regexp"
 	"sync"
 	"time"
 
@@ -14,10 +14,10 @@ import (
 	"github.com/prometheus/common/model"
 )
 
-const (
-	// DefaultReplicaCost is the default cost per replica when not specified in CRD.
-	// TODO: Extract cost from CRD spec.cost field in future implementation
-	DefaultReplicaCost = 10.0
+var (
+	// kubernetesLabelPattern validates Kubernetes label values (RFC 1123 subdomain)
+	// Matches alphanumeric, hyphens, dots, underscores (must start/end with alphanumeric)
+	kubernetesLabelPattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-_.]*[a-zA-Z0-9])?$`)
 )
 
 // CapacityMetricsCollector collects vLLM capacity metrics from Prometheus
@@ -30,6 +30,55 @@ func NewCapacityMetricsCollector(promAPI promv1.API) *CapacityMetricsCollector {
 	return &CapacityMetricsCollector{
 		promAPI: promAPI,
 	}
+}
+
+// validatePrometheusLabel validates that a label value is safe for use in Prometheus queries.
+// This prevents query injection attacks by ensuring the value matches Kubernetes label patterns.
+// Returns error if validation fails.
+func validatePrometheusLabel(value, name string) error {
+	if value == "" {
+		return fmt.Errorf("%s cannot be empty", name)
+	}
+	// Kubernetes label validation (RFC 1123 subdomain)
+	// Must be 63 characters or less and match the pattern
+	if len(value) > 63 {
+		return fmt.Errorf("%s too long (max 63 characters): %s", name, value)
+	}
+	if !kubernetesLabelPattern.MatchString(value) {
+		return fmt.Errorf("invalid %s: must match Kubernetes label pattern (alphanumeric, '-', '_', '.' allowed, must start and end with alphanumeric): %s", name, value)
+	}
+	return nil
+}
+
+// contextWithRespectedDeadline creates a timeout context that respects the parent context deadline.
+// If the parent has a deadline shorter than the desired timeout, uses the parent's remaining time minus a buffer.
+// Returns the context and cancel function.
+func contextWithRespectedDeadline(parent context.Context, desiredTimeout time.Duration) (context.Context, context.CancelFunc) {
+	deadline, hasDeadline := parent.Deadline()
+	if !hasDeadline {
+		// No parent deadline, use desired timeout
+		return context.WithTimeout(parent, desiredTimeout)
+	}
+
+	// Calculate remaining time from parent deadline
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		// Parent already expired, use minimal timeout
+		return context.WithTimeout(parent, time.Millisecond)
+	}
+
+	// If remaining time is less than desired, use remaining minus buffer
+	const deadlineBuffer = 100 * time.Millisecond
+	if remaining < desiredTimeout {
+		timeout := remaining - deadlineBuffer
+		if timeout < time.Millisecond {
+			timeout = time.Millisecond
+		}
+		return context.WithTimeout(parent, timeout)
+	}
+
+	// Parent deadline is generous, use desired timeout
+	return context.WithTimeout(parent, desiredTimeout)
 }
 
 // CollectReplicaMetrics collects KV cache and queue metrics for all replicas of a model.
@@ -46,48 +95,67 @@ func (cmc *CapacityMetricsCollector) CollectReplicaMetrics(
 	ctx context.Context,
 	modelID string,
 	namespace string,
+	variantCosts map[string]float64,
 ) ([]interfaces.ReplicaMetrics, error) {
 
 	// Validate input to prevent injection and ensure valid queries
-	if namespace == "" {
-		return nil, fmt.Errorf("namespace cannot be empty")
+	if err := validatePrometheusLabel(namespace, "namespace"); err != nil {
+		return nil, err
 	}
-	if strings.ContainsAny(namespace, `"'\`) {
-		return nil, fmt.Errorf("invalid namespace: contains special characters")
+	if err := validatePrometheusLabel(modelID, "modelID"); err != nil {
+		return nil, err
 	}
 
 	// Query KV cache and queue metrics in parallel for better performance
+	// Use result struct to avoid race conditions on error variables
+	type queryResult struct {
+		kvMetrics    map[string]float64
+		queueMetrics map[string]int
+		kvErr        error
+		queueErr     error
+	}
+	result := &queryResult{}
+	var resultMutex sync.Mutex
 	var wg sync.WaitGroup
-	var kvMetricsMap map[string]float64
-	var queueMetricsMap map[string]int
-	var kvErr, queueErr error
 
 	wg.Add(2)
 
 	// Query KV cache metrics in parallel
 	go func() {
 		defer wg.Done()
-		kvMetricsMap, kvErr = cmc.queryKvCacheMetrics(ctx, modelID, namespace)
+		kv, err := cmc.queryKvCacheMetrics(ctx, modelID, namespace)
+		resultMutex.Lock()
+		result.kvMetrics = kv
+		result.kvErr = err
+		resultMutex.Unlock()
 	}()
 
 	// Query queue metrics in parallel
 	go func() {
 		defer wg.Done()
-		queueMetricsMap, queueErr = cmc.queryQueueMetrics(ctx, modelID, namespace)
+		queue, err := cmc.queryQueueMetrics(ctx, modelID, namespace)
+		resultMutex.Lock()
+		result.queueMetrics = queue
+		result.queueErr = err
+		resultMutex.Unlock()
 	}()
 
 	wg.Wait()
 
 	// Check for errors after both queries complete
-	if kvErr != nil {
-		return nil, fmt.Errorf("failed to query KV cache metrics: %w", kvErr)
+	if result.kvErr != nil {
+		return nil, fmt.Errorf("failed to query KV cache metrics: %w", result.kvErr)
 	}
-	if queueErr != nil {
-		return nil, fmt.Errorf("failed to query queue metrics: %w", queueErr)
+	if result.queueErr != nil {
+		return nil, fmt.Errorf("failed to query queue metrics: %w", result.queueErr)
 	}
 
+	// Use results from struct
+	kvMetricsMap := result.kvMetrics
+	queueMetricsMap := result.queueMetrics
+
 	// Merge metrics by pod
-	replicaMetrics := cmc.mergeMetrics(kvMetricsMap, queueMetricsMap, modelID, namespace)
+	replicaMetrics := cmc.mergeMetrics(kvMetricsMap, queueMetricsMap, modelID, namespace, variantCosts)
 
 	logger.Log.Debug("Collected replica metrics",
 		"modelID", modelID,
@@ -111,8 +179,8 @@ func (cmc *CapacityMetricsCollector) queryKvCacheMetrics(
 	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_id="%s"}[1m])`,
 		constants.VLLMKvCacheUsagePerc, namespace, modelID)
 
-	// Add timeout to prevent hanging on Prometheus issues
-	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Add timeout to prevent hanging on Prometheus issues (respects parent deadline)
+	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
 	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
@@ -165,8 +233,8 @@ func (cmc *CapacityMetricsCollector) queryQueueMetrics(
 	query := fmt.Sprintf(`max_over_time(%s{namespace="%s",model_id="%s"}[1m])`,
 		constants.VLLMNumRequestsWaiting, namespace, modelID)
 
-	// Add timeout to prevent hanging on Prometheus issues
-	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Add timeout to prevent hanging on Prometheus issues (respects parent deadline)
+	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
 	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
@@ -210,6 +278,7 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 	queueMetrics map[string]int,
 	modelID string,
 	namespace string,
+	variantCosts map[string]float64,
 ) []interfaces.ReplicaMetrics {
 
 	// Use union of pod names from both metric sets
@@ -224,19 +293,48 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 	replicaMetrics := make([]interfaces.ReplicaMetrics, 0, len(podSet))
 
 	for podName := range podSet {
-		metric := interfaces.ReplicaMetrics{
-			PodName:      podName,
-			ModelID:      modelID,
-			Namespace:    namespace,
-			KvCacheUsage: kvMetrics[podName],    // 0 if not found
-			QueueLength:  queueMetrics[podName], // 0 if not found
-			Cost:         DefaultReplicaCost,    // TODO: Extract from CRD spec.cost
+		// Check for missing metrics and warn (prevents silent data loss)
+		kvUsage, hasKv := kvMetrics[podName]
+		queueLen, hasQueue := queueMetrics[podName]
+
+		if !hasKv {
+			logger.Log.Warn("Pod missing KV cache metrics, using 0 (may cause incorrect capacity analysis)",
+				"pod", podName,
+				"model", modelID,
+				"namespace", namespace)
+			kvUsage = 0
+		}
+		if !hasQueue {
+			logger.Log.Warn("Pod missing queue metrics, using 0 (may cause incorrect capacity analysis)",
+				"pod", podName,
+				"model", modelID,
+				"namespace", namespace)
+			queueLen = 0
 		}
 
 		// TODO: Extract variant name and accelerator from pod labels
 		// For now, use placeholder - will be enhanced in controller integration
-		metric.VariantName = "unknown"
-		metric.AcceleratorName = "unknown"
+		variantName := "unknown"
+		acceleratorName := "unknown"
+
+		// Look up cost by variant name, default to 10.0 if not found
+		cost := 10.0
+		if variantCosts != nil {
+			if c, ok := variantCosts[variantName]; ok {
+				cost = c
+			}
+		}
+
+		metric := interfaces.ReplicaMetrics{
+			PodName:         podName,
+			ModelID:         modelID,
+			Namespace:       namespace,
+			VariantName:     variantName,
+			AcceleratorName: acceleratorName,
+			KvCacheUsage:    kvUsage,
+			QueueLength:     queueLen,
+			Cost:            cost,
+		}
 
 		replicaMetrics = append(replicaMetrics, metric)
 	}
@@ -249,6 +347,7 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 func (cmc *CapacityMetricsCollector) CollectReplicaMetricsFromPods(
 	ctx context.Context,
 	pods []PodInfo,
+	variantCosts map[string]float64,
 ) ([]interfaces.ReplicaMetrics, error) {
 
 	if len(pods) == 0 {
@@ -260,36 +359,62 @@ func (cmc *CapacityMetricsCollector) CollectReplicaMetricsFromPods(
 	modelID := pods[0].ModelID
 
 	// Query metrics in parallel for better performance
+	// Use result struct to avoid race conditions on error variables
+	type queryResult struct {
+		kvMetrics    map[string]float64
+		queueMetrics map[string]int
+		kvErr        error
+		queueErr     error
+	}
+	result := &queryResult{}
+	var resultMutex sync.Mutex
 	var wg sync.WaitGroup
-	var kvMetricsMap map[string]float64
-	var queueMetricsMap map[string]int
-	var kvErr, queueErr error
 
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		kvMetricsMap, kvErr = cmc.queryKvCacheMetrics(ctx, modelID, namespace)
+		kv, err := cmc.queryKvCacheMetrics(ctx, modelID, namespace)
+		resultMutex.Lock()
+		result.kvMetrics = kv
+		result.kvErr = err
+		resultMutex.Unlock()
 	}()
 
 	go func() {
 		defer wg.Done()
-		queueMetricsMap, queueErr = cmc.queryQueueMetrics(ctx, modelID, namespace)
+		queue, err := cmc.queryQueueMetrics(ctx, modelID, namespace)
+		resultMutex.Lock()
+		result.queueMetrics = queue
+		result.queueErr = err
+		resultMutex.Unlock()
 	}()
 
 	wg.Wait()
 
-	if kvErr != nil {
-		return nil, fmt.Errorf("failed to query KV cache metrics: %w", kvErr)
+	if result.kvErr != nil {
+		return nil, fmt.Errorf("failed to query KV cache metrics: %w", result.kvErr)
 	}
-	if queueErr != nil {
-		return nil, fmt.Errorf("failed to query queue metrics: %w", queueErr)
+	if result.queueErr != nil {
+		return nil, fmt.Errorf("failed to query queue metrics: %w", result.queueErr)
 	}
+
+	// Use results from struct
+	kvMetricsMap := result.kvMetrics
+	queueMetricsMap := result.queueMetrics
 
 	// Merge with pod metadata
 	replicaMetrics := make([]interfaces.ReplicaMetrics, 0, len(pods))
 
 	for _, pod := range pods {
+		// Look up cost by variant name, default to 10.0 if not found
+		cost := 10.0
+		if variantCosts != nil {
+			if c, ok := variantCosts[pod.VariantName]; ok {
+				cost = c
+			}
+		}
+
 		metric := interfaces.ReplicaMetrics{
 			PodName:         pod.Name,
 			ModelID:         pod.ModelID,
@@ -298,7 +423,7 @@ func (cmc *CapacityMetricsCollector) CollectReplicaMetricsFromPods(
 			AcceleratorName: pod.AcceleratorName,
 			KvCacheUsage:    kvMetricsMap[pod.Name],    // 0 if not found
 			QueueLength:     queueMetricsMap[pod.Name], // 0 if not found
-			Cost:            DefaultReplicaCost,        // TODO: Extract from CRD spec.cost
+			Cost:            cost,
 		}
 
 		replicaMetrics = append(replicaMetrics, metric)

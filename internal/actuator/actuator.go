@@ -25,8 +25,8 @@ func NewActuator(k8sClient client.Client) *Actuator {
 	}
 }
 
-// getCurrentDeploymentReplicas gets the real current replica count from the actual Deployment
-func (a *Actuator) getCurrentDeploymentReplicas(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling) (int32, error) {
+// GetCurrentDeploymentReplicas gets the real current replica count from the actual Deployment
+func (a *Actuator) GetCurrentDeploymentReplicas(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling) (int32, error) {
 	var deploy appsv1.Deployment
 	err := utils.GetDeploymentWithBackoff(ctx, a.Client, va.Name, va.Namespace, &deploy)
 	if err != nil {
@@ -52,7 +52,7 @@ func (a *Actuator) EmitMetrics(ctx context.Context, VariantAutoscaling *llmdOptv
 	if VariantAutoscaling.Status.DesiredOptimizedAlloc.NumReplicas >= 0 {
 
 		// Get real current replicas from Deployment (not stale VariantAutoscaling status)
-		currentReplicas, err := a.getCurrentDeploymentReplicas(ctx, VariantAutoscaling)
+		currentReplicas, err := a.GetCurrentDeploymentReplicas(ctx, VariantAutoscaling)
 		if err != nil {
 			logger.Log.Warn("Could not get current deployment replicas, using VariantAutoscaling status",
 				"error", err, "variant", VariantAutoscaling.Name)

@@ -95,7 +95,7 @@ func CreateServiceClassConfigMap(controllerNamespace string) *corev1.ConfigMap {
 			"premium.yaml": `name: Premium
 priority: 1
 data:
-  - model: default/default
+  - model: default-default
     slo-tpot: 24
     slo-ttft: 500
   - model: meta/llama0-70b

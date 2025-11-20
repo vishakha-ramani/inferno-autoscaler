@@ -26,6 +26,52 @@ spec:
 
 For complete field documentation, see the [CRD Reference](crd-reference.md).
 
+## Operating Modes
+
+WVA supports two operating modes controlled by the `EXPERIMENTAL_PROACTIVE_MODEL` environment variable.
+
+### CAPACITY-ONLY Mode (Default)
+
+**Recommended for production.**
+
+- **Behavior**: Reactive scaling based on saturation detection
+- **How It Works**: Monitors KV cache usage and queue lengths, scales when thresholds exceeded
+- **Configuration**: Uses `capacity-scaling-config` ConfigMap
+- **Pros**: Fast response (<30s), predictable, no model training needed
+- **Cons**: Reactive (scales after saturation detected)
+
+**Enable:**
+```yaml
+# Already enabled by default, no configuration needed
+# Or explicitly set:
+env:
+  - name: EXPERIMENTAL_PROACTIVE_MODEL
+    value: "false"
+```
+
+### HYBRID Mode (Experimental)
+
+**Not recommended for production.**
+
+- **Behavior**: Combines capacity analyzer with model-based optimizer
+- **How It Works**:
+  1. Runs capacity analyzer for saturation detection
+  2. Runs model-based optimizer for proactive scaling
+  3. Arbitrates between the two (capacity safety overrides)
+- **Pros**: Proactive scaling (can scale before saturation)
+- **Cons**: Slower (~60s), requires model training, experimental
+
+**Enable:**
+```yaml
+env:
+  - name: EXPERIMENTAL_PROACTIVE_MODEL
+    value: "true"
+```
+
+**Recommendation:** Stick with CAPACITY-ONLY mode unless you have specific proactive scaling requirements.
+
+See [Capacity Analyzer Documentation](../../docs/capacity-analyzer.md) for configuration details.
+
 ## ConfigMaps
 
 WVA uses two ConfigMaps for cluster-wide configuration.
@@ -101,6 +147,54 @@ data:
 - **maxBatchSize**: Maximum batch size for inference
 - **keepAccelerator**: Pin to specific accelerator type (true/false)
 
+### Cost Configuration
+
+#### variantCost (Optional)
+
+Specifies the cost per replica for this variant, used in capacity-based cost optimization.
+
+```yaml
+spec:
+  modelID: "meta/llama-3.1-8b"
+  variantCost: 15.5  # Cost per replica (default: 10.0)
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+        accCount: 1
+```
+
+**Default:** 10.0
+**Validation:** Must be >= 0
+
+**Use Cases:**
+- **Differentiated Pricing**: Higher cost for premium accelerators (H100) vs. standard (A100)
+- **Multi-Tenant Cost Tracking**: Assign different costs per customer/tenant
+- **Cost-Based Optimization**: Capacity analyzer prefers lower-cost variants when multiple variants can handle load
+
+**Example:**
+```yaml
+# Premium variant (H100, higher cost)
+spec:
+  modelID: "meta/llama-3.1-70b"
+  variantCost: 80.0
+  modelProfile:
+    accelerators:
+      - acc: "H100"
+
+# Standard variant (A100, lower cost)
+spec:
+  modelID: "meta/llama-3.1-70b"
+  variantCost: 40.0
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+```
+
+**Behavior:**
+- Capacity analyzer uses `variantCost` when deciding which variant to scale
+- If costs are equal, chooses variant with most available capacity
+- Does not affect model-based optimization (uses accelerator unit costs)
+
 ### Advanced Options
 
 See [CRD Reference](crd-reference.md) for advanced configuration options.
@@ -123,7 +217,39 @@ Batch size affects throughput and latency performance:
 
 ## Monitoring Configuration
 
-WVA exposes metrics for monitoring. See:
+WVA exposes metrics for monitoring and integrates with HPA for automatic scaling.
+
+### Safety Net Behavior
+
+WVA includes a **safety net** that prevents HPA from using stale metrics during failures:
+
+1. **Normal Operation**: Emits `inferno_desired_replicas` with optimized targets
+2. **Capacity Analysis Fails**:
+   - Uses previous desired replicas (from last successful run)
+   - If unavailable, uses current replicas (safe no-op)
+3. **Log Messages**: Watch for `"Safety net activated"` in controller logs
+
+**Check Safety Net Activation:**
+```bash
+# Controller logs
+kubectl logs -n llm-d-scheduler deployment/wva-controller | grep "Safety net activated"
+
+# Should see:
+# "Safety net activated: emitted fallback metrics"
+#   variant=my-va
+#   currentReplicas=2
+#   desiredReplicas=2
+#   fallbackSource=current-replicas
+```
+
+**Why This Matters:**
+- Prevents HPA from scaling based on stale metrics
+- Provides graceful degradation during Prometheus outages
+- Emits safe no-op signals (current=desired) when no history available
+
+### Prometheus Metrics
+
+See:
 - [Prometheus Integration](../integrations/prometheus.md)
 - [Custom Metrics](../integrations/prometheus.md#custom-metrics)
 

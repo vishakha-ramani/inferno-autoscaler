@@ -220,6 +220,7 @@ _Appears in:_
 | `modelID` _string_ | ModelID specifies the unique identifier of the model to be autoscaled. |  | MinLength: 1 <br />Required: \{\} <br /> |
 | `sloClassRef` _[ConfigMapKeyRef](#configmapkeyref)_ | SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration. |  | Optional: \{\} <br /> |
 | `modelProfile` _[ModelProfile](#modelprofile)_ | ModelProfile provides resource and performance characteristics for the model variant. |  | Optional: \{\} <br /> |
+| `variantCost` _string_ | VariantCost specifies the cost per replica for this variant (used in capacity analysis). | 10.0 | Optional: \{\} <br />Pattern: `^\d+(\.\d+)?$` <br /> |
 
 
 #### VariantAutoscalingStatus
@@ -240,5 +241,91 @@ _Appears in:_
 | `desiredOptimizedAlloc` _[OptimizedAlloc](#optimizedalloc)_ | DesiredOptimizedAlloc indicates the target optimized allocation based on autoscaling logic. |  |  |
 | `actuation` _[ActuationStatus](#actuationstatus)_ | Actuation provides details about the actuation process and its current status. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions represent the latest available observations of the VariantAutoscaling's state |  | Optional: \{\} <br /> |
+
+
+## Status Conditions
+
+VariantAutoscaling uses Kubernetes-standard conditions to report its state. Conditions appear in the `status.conditions` array.
+
+### Condition Types
+
+| Type | Description |
+| --- | --- |
+| `MetricsAvailable` | Indicates whether vLLM metrics are available from Prometheus |
+| `OptimizationReady` | Indicates whether the optimization engine can run successfully |
+
+### MetricsAvailable Reasons
+
+| Reason | Status | Description |
+| --- | --- | --- |
+| `MetricsFound` | True | vLLM metrics were successfully retrieved |
+| `MetricsMissing` | False | vLLM metrics are not available (likely ServiceMonitor issue) |
+| `MetricsStale` | False | Metrics exist but are outdated |
+| `PrometheusError` | False | Error querying Prometheus |
+
+### OptimizationReady Reasons
+
+| Reason | Status | Description |
+| --- | --- | --- |
+| `OptimizationSucceeded` | True | Optimization completed successfully |
+| `OptimizationFailed` | False | Optimization failed |
+| `MetricsUnavailable` | False | Optimization cannot run due to missing metrics |
+| `InvalidConfiguration` | False | VA has invalid configuration (e.g., missing ModelID) |
+| `SkippedProcessing` | False | VA was skipped during processing |
+
+### Checking Conditions
+
+```bash
+# View all conditions for a VA
+kubectl get va my-va -o jsonpath='{.status.conditions}' | jq
+
+# Check if metrics are available
+kubectl get va my-va -o jsonpath='{.status.conditions[?(@.type=="MetricsAvailable")].status}'
+
+# View specific condition details
+kubectl get va my-va -o yaml | yq '.status.conditions[] | select(.type == "OptimizationReady")'
+
+# View in kubectl get output (MetricsReady column)
+kubectl get va
+# NAME    MODEL          ACCELERATOR  CURRENTREPLICAS  OPTIMIZED  METRICSREADY  AGE
+# my-va   llama-8b       A100         2                3          True          5m
+```
+
+### Common Condition Patterns
+
+**Healthy VA:**
+```yaml
+conditions:
+  - type: MetricsAvailable
+    status: "True"
+    reason: MetricsFound
+    message: "vLLM metrics successfully retrieved"
+  - type: OptimizationReady
+    status: "True"
+    reason: OptimizationSucceeded
+    message: "Capacity analysis completed successfully"
+```
+
+**Missing Metrics:**
+```yaml
+conditions:
+  - type: MetricsAvailable
+    status: "False"
+    reason: MetricsMissing
+    message: "No metrics found for model llama-8b (check ServiceMonitor)"
+  - type: OptimizationReady
+    status: "False"
+    reason: MetricsUnavailable
+    message: "Cannot run optimization without metrics"
+```
+
+**Invalid Configuration:**
+```yaml
+conditions:
+  - type: OptimizationReady
+    status: "False"
+    reason: InvalidConfiguration
+    message: "ModelID is required but not specified in spec"
+```
 
 

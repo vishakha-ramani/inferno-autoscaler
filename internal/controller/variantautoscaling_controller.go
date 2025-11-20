@@ -575,8 +575,10 @@ func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
 	variantCosts := make(map[string]float64)
 	for _, va := range modelVAs {
 		cost := 10.0 // default
-		if va.Spec.VariantCost != nil {
-			cost = *va.Spec.VariantCost
+		if va.Spec.VariantCost != "" {
+			if parsedCost, err := strconv.ParseFloat(va.Spec.VariantCost, 64); err == nil {
+				cost = parsedCost
+			}
 		}
 		variantCosts[va.Name] = cost
 	}

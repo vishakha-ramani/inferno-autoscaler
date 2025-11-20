@@ -21,9 +21,9 @@ type VariantAutoscalingSpec struct {
 
 	// VariantCost specifies the cost per replica for this variant (used in capacity analysis).
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:default=10.0
-	VariantCost *float64 `json:"variantCost,omitempty"`
+	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
+	// +kubebuilder:default="10.0"
+	VariantCost string `json:"variantCost,omitempty"`
 }
 
 // ConfigMapKeyRef references a specific key within a ConfigMap.

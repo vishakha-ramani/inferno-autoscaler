@@ -144,7 +144,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Check experimental hybrid optimization flag
 	optimizationMode := os.Getenv(EnvExperimentalHybridOptimization)
 	enableModelOptimizer := optimizationMode == "on" || optimizationMode == "model-only"
-	enableCapacityAnalyzer := optimizationMode == "" || optimizationMode == "on"
+	enableCapacityAnalyzer := optimizationMode == "" || optimizationMode == "off"
 
 	if enableModelOptimizer && enableCapacityAnalyzer {
 		logger.Log.Info("Operating in HYBRID mode: capacity analyzer + model-based optimizer with arbitration")

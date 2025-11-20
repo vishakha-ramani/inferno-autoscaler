@@ -84,6 +84,11 @@ spec:
               configMapKeyRef:
                 name: workload-variant-autoscaler-variantautoscaling-config
                 key: WVA_SCALE_TO_ZERO
+          - name:  WVA_EXPERIMENTAL_PROACTIVE_MODEL
+            valueFrom:
+              configMapKeyRef:
+                name: workload-variant-autoscaler-variantautoscaling-config
+                key:  WVA_EXPERIMENTAL_PROACTIVE_MODEL
         name: manager
         ports:
           - name: healthz

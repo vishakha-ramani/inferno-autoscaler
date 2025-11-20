@@ -119,6 +119,8 @@ func initMetricsEmitter() {
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	//TODO: move interval to manager.yaml
+
 	interval, err := r.readOptimizationConfig(ctx)
 	if err != nil {
 		logger.Log.Error(err, "Unable to read optimization config")

@@ -85,11 +85,11 @@ spec:
               configMapKeyRef:
                 name: variantautoscaling-config
                 key: WVA_SCALE_TO_ZERO
-          - name: WVA_EXPERIMENTAL_PROACTIVE_MODEL
+          - name: EXPERIMENTAL_HYBRID_OPTIMIZATION
             valueFrom:
               configMapKeyRef:
                 name: variantautoscaling-config
-                key: WVA_EXPERIMENTAL_PROACTIVE_MODEL
+                key: EXPERIMENTAL_HYBRID_OPTIMIZATION
         name: manager
         ports: []
         securityContext:

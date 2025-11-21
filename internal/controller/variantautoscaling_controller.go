@@ -364,8 +364,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				logger.Log.Infof("Arbitration completed for model: %s - decision count: %d",
 					modelID,
 					len(finalDecisions))
-			} else {
-
 			}
 		} else if enableModelOptimizer {
 			// MODEL-ONLY MODE: Capacity-based failed but model-based succeeded, or capacity analysis unavailable - use model-based only

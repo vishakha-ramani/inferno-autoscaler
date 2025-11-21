@@ -38,7 +38,7 @@ wva:
 	## When "on", runs both capacity analyzer and model-based optimizer with arbitration
 	## When "model-only" runs model-based optimizer only
 	## When "off" or unset, runs capacity analyzer only (default, reactive mode)
-  experimentalHybridOptimization: false  # Enable experimental proactive scaling model (default: false)
+  experimentalHybridOptimization: off  # Enable experimental proactive scaling model (default: off)
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
 llmd:

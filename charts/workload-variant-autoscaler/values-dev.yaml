@@ -3,7 +3,6 @@
 
 wva:
   enabled: true
-  baseName: inference-scheduler
   replicaCount: 1
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler

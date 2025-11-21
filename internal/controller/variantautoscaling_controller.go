@@ -543,6 +543,7 @@ func convertCapacityTargetsToDecisions(
 			action = interfaces.ActionScaleDown
 		} else {
 			action = interfaces.ActionNoChange
+			continue
 		}
 
 		decision := interfaces.VariantDecision{

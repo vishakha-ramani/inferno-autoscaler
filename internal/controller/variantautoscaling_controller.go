@@ -372,13 +372,15 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			logger.Log.Warnf("Capacity analysis unavailable, using model-based targets only: modelID=%s", modelID)
 			for _, va := range modelVAs {
 				if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
-					state := interfaces.VariantReplicaState{VariantName: va.Name, CurrentReplicas: va.Status.CurrentAlloc.NumReplicas}
+					currentReplicas := va.Status.CurrentAlloc.NumReplicas
+
 					var action interfaces.CapacityAction
-					if targetReplicas > state.CurrentReplicas {
+					switch {
+					case targetReplicas > currentReplicas:
 						action = interfaces.ActionScaleUp
-					} else if targetReplicas < state.CurrentReplicas {
+					case targetReplicas < currentReplicas:
 						action = interfaces.ActionScaleDown
-					} else {
+					default:
 						action = interfaces.ActionNoChange
 					}
 
@@ -386,7 +388,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 						VariantName:        va.Name,
 						Namespace:          va.Namespace,
 						ModelID:            modelID,
-						CurrentReplicas:    state.CurrentReplicas,
+						CurrentReplicas:    currentReplicas,
 						TargetReplicas:     targetReplicas,
 						Action:             action,
 						ModelBasedDecision: true,

@@ -20,10 +20,30 @@ metadata:
 data:
   # Global defaults applied to all variants unless overridden
   default: |
-    kvCacheThreshold: 0.80
-    queueLengthThreshold: 5
-    kvSpareTrigger: 0.1
-    queueSpareTrigger: 3
+    kvCacheThreshold: {{ .Values.wva.capacityScaling.default.kvCacheThreshold }}
+    queueLengthThreshold: {{ .Values.wva.capacityScaling.default.queueLengthThreshold }}
+    kvSpareTrigger: {{ .Values.wva.capacityScaling.default.kvSpareTrigger }}
+    queueSpareTrigger: {{ .Values.wva.capacityScaling.default.queueSpareTrigger }}
+{{- if .Values.wva.capacityScaling.overrides }}
+{{- range $name, $override := .Values.wva.capacityScaling.overrides }}
+  {{ $name }}: |
+    model_id: {{ $override.modelID | quote }}
+    namespace: {{ $override.namespace | quote }}
+{{- if $override.kvCacheThreshold }}
+    kvCacheThreshold: {{ $override.kvCacheThreshold }}
+{{- end }}
+{{- if $override.queueLengthThreshold }}
+    queueLengthThreshold: {{ $override.queueLengthThreshold }}
+{{- end }}
+{{- if $override.kvSpareTrigger }}
+    kvSpareTrigger: {{ $override.kvSpareTrigger }}
+{{- end }}
+{{- if $override.queueSpareTrigger }}
+    queueSpareTrigger: {{ $override.queueSpareTrigger }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 
   # Example per-model override for granite model in lab namespace
   # Uncomment and customize as needed

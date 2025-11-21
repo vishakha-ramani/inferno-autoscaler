@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+# This ConfigMap defines capacity-based scaling thresholds for model variants.
+# Capacity scaling is enabled by default and uses KV cache utilization and queue length
+# metrics to determine when replicas are saturated and when to scale up.
+#
+# Configuration structure:
+# - 'default' entry: Global default thresholds applied to all variants
+# - Override entries: Per-model/namespace custom thresholds (must include model_id and namespace)
+#
+# Threshold definitions:
+# - kvCacheThreshold: Replica saturated if KV cache utilization >= threshold (0.0-1.0)
+# - queueLengthThreshold: Replica saturated if queue length >= threshold (integer)
+# - kvSpareTrigger: Scale-up signal if avg spare KV capacity < trigger (0.0-1.0)
+# - queueSpareTrigger: Scale-up signal if avg spare queue capacity < trigger (integer)
+#
+metadata:
+  name: capacity-scaling-config
+  namespace: {{ .Release.Namespace }}
+data:
+  # Global defaults applied to all variants unless overridden
+  default: |
+    kvCacheThreshold: 0.80
+    queueLengthThreshold: 5
+    kvSpareTrigger: 0.1
+    queueSpareTrigger: 3
+
+  # Example per-model override for granite model in lab namespace
+  # Uncomment and customize as needed
+  # granite-override: |
+  #   model_id: ibm/granite-13b
+  #   namespace: lab-namespace
+  #   kvCacheThreshold: 0.75
+  #   queueLengthThreshold: 10
+  #   kvSpareTrigger: 0.15
+  #   queueSpareTrigger: 5
+
+  # Example per-model override for llama model in production namespace
+  # Shows partial override (only some fields specified, rest inherit from default)
+  # llama-production: |
+  #   model_id: meta/llama-70b
+  #   namespace: production
+  #   kvCacheThreshold: 0.85
+  #   kvSpareTrigger: 0.15

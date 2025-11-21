@@ -22,7 +22,7 @@ WVA is currently designed and optimized for **dense transformer architectures** 
 
 **Benefits:**
 - Doesn't require performance parameters (α, β, γ, δ)
-- Scales reactively based on observed metrics (resource utilization and queue length vs. capacity)
+- Scales reactively based on observed metrics (resource utilization and queue length against threshold values)
 - Less sensitive to architecture-specific behavior differences
 
 **Limitations:**

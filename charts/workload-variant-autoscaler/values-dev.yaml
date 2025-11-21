@@ -3,7 +3,6 @@
 
 wva:
   enabled: true
-  baseName: inference-scheduling
   replicaCount: 1
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
@@ -12,7 +11,7 @@ wva:
 
   reconcileInterval: 30s
 
-  modelName: ms-inference-scheduling-llm-d-modelservice
+  modelName: ms-workload-autoscaler-llm-d-modelservice
 
   metrics:
     enabled: true
@@ -35,9 +34,9 @@ wva:
     #   -----END CERTIFICATE-----
 
   # Environment variable to enable experimental hybrid-based optimization
-	## When "on", runs both capacity analyzer and model-based optimizer with arbitration
-	## When "model-only" runs model-based optimizer only
-	## When "off" or unset, runs capacity analyzer only (default, reactive mode)
+  #  When "on", runs both capacity analyzer and model-based optimizer with arbitration
+  #  When "model-only" runs model-based optimizer only
+  #  When "off" or unset, runs capacity analyzer only (default, reactive mode)
   experimentalHybridOptimization: off  # Enable experimental proactive scaling model (default: off)
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
@@ -56,14 +55,14 @@ wva:
     # overrides:
     #   llm-d:
     #     modelID: "Qwen/Qwen3-0.6B"
-    #     namespace: "llm-d-inference-scheduler"
+    #     namespace: "llm-d-autoscaler"
     #     kvCacheThreshold: 0.70
     #     kvSpareTrigger: 0.35
     overrides: {}
 
 llmd:
-  namespace: llm-d-inference-scheduler
-  modelName: ms-inference-scheduling-llm-d-modelservice
+  namespace: llm-d-autoscaler
+  modelName: ms-workload-autoscaler-llm-d-modelservice
   modelID: "Qwen/Qwen3-0.6B"
 va:
   enabled: true

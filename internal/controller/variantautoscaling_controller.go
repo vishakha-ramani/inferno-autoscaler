@@ -96,10 +96,11 @@ const (
 	configMapNamespace = "workload-variant-autoscaler-system"
 	// ServiceMonitor constants for watching controller's own metrics ServiceMonitor
 	serviceMonitorName = "workload-variant-autoscaler-controller-manager-metrics-monitor"
-	// Environment variable to enable experimental proactive model-based optimization
-	// When "true", runs both capacity analyzer and model-based optimizer with arbitration
-	// When "false" or unset, runs capacity analyzer only (default, reactive mode)
-	EnvExperimentalProactiveModel = "EXPERIMENTAL_PROACTIVE_MODEL"
+	// Environment variable to enable experimental hybrid-based optimization
+	// When "on", runs both capacity analyzer and model-based optimizer with arbitration
+	// When "model-only" runs model-based optimizer only
+	// When "off" or unset, runs capacity analyzer only (default, reactive mode)
+	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
 )
 
 var (
@@ -138,15 +139,24 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	if strings.EqualFold(os.Getenv("WVA_SCALE_TO_ZERO"), "true") {
-		logger.Log.Infof("Scaling to zero is enabled!")
+		logger.Log.Info("Scaling to zero is enabled!")
 	}
 
-	// Check experimental proactive model flag
-	enableModelBased := strings.EqualFold(os.Getenv(EnvExperimentalProactiveModel), "true")
-	if enableModelBased {
-		logger.Log.Infof("Operating in HYBRID mode: capacity analyzer + model-based optimizer with arbitration")
+	// Check experimental hybrid optimization flag
+	optimizationMode := os.Getenv(EnvExperimentalHybridOptimization)
+	enableModelOptimizer := optimizationMode == "on" || optimizationMode == "model-only"
+	enableCapacityAnalyzer := optimizationMode == "" || optimizationMode == "off"
+
+	if enableModelOptimizer && enableCapacityAnalyzer {
+		logger.Log.Info("Operating in HYBRID mode: capacity analyzer + model-based optimizer with arbitration")
+	} else if enableModelOptimizer && !enableCapacityAnalyzer {
+		logger.Log.Info("Operating in MODEL-ONLY mode: model-based optimization only")
+	} else if !enableModelOptimizer && enableCapacityAnalyzer {
+		logger.Log.Info("Operating in CAPACITY-ONLY mode: reactive capacity-based scaling only")
 	} else {
-		logger.Log.Infof("Operating in CAPACITY-ONLY mode: reactive capacity-based scaling only")
+		// Invalid environment variable, default to capacity-only
+		logger.Log.Info("No optimization mode enabled, defaulting to CAPACITY-ONLY mode")
+		enableCapacityAnalyzer = true
 	}
 
 	// Get list of all VAs
@@ -189,52 +199,57 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	for modelID, modelVAs := range modelGroups {
 		logger.Log.Infof("Processing model: modelID=%s, variantCount=%d", modelID, len(modelVAs))
 
-		// Get capacity config for this model (with fallback to default)
-		capacityConfig := interfaces.DefaultCapacityScalingConfig()
-		if len(modelVAs) > 0 {
-			modelConfig := r.getCapacityScalingConfigForVariant(capacityConfigMap, modelID, modelVAs[0].Namespace)
-			capacityConfig.Merge(modelConfig)
-		}
+		// PHASE 1: compute capacity analysis and/or model-based optimization
 
-		// STEP 1: Run capacity analysis (always, regardless of mode)
-		capacityTargets, capacityAnalysis, variantStates, err := r.runCapacityAnalysis(ctx, modelID, modelVAs, capacityConfig)
+		// STEP 1: Run capacity analysis (if enabled)
+		var capacityTargets map[string]int
+		var capacityAnalysis *interfaces.ModelCapacityAnalysis
+		var variantStates []interfaces.VariantReplicaState
 
-		// Distinguish between errors and missing metrics:
-		// - err != nil: analysis failed (Prometheus error, internal error, etc.)
-		// - err == nil && capacityTargets == nil: metrics unavailable (no pods/metrics to analyze)
-		// - err == nil && capacityTargets != nil: analysis succeeded
-		metricsAvailable := err == nil && capacityTargets != nil
-
-		if err != nil {
-			logger.Log.Error(err, "Capacity analysis failed for model, continuing with model-based if enabled", "modelID", modelID)
-			errorCount++
-			// Continue with model-based approach if enabled, as per requirement #1
-			if !enableModelBased {
-				// In capacity-only mode, if capacity fails, skip this model
-				continue
+		if enableCapacityAnalyzer {
+			// Collect metrics and populate CurrentAlloc for capacity-only mode
+			// This validates metrics availability and populates the VariantAutoscalings with CurrentAlloc
+			if err := r.collectMetricsForCapacityMode(ctx, modelVAs, vaMap); err != nil {
+				logger.Log.Error(err, "Failed to collect metrics for capacity mode", "modelID", modelID)
+				// Metrics collection error - individual VAs are skipped
 			}
-			// In hybrid mode, continue to run model-based (capacity failed but we can still run optimizer)
-		} else if !metricsAvailable {
-			// Metrics unavailable (no error, but no data either)
-			logger.Log.Infof("Capacity metrics unavailable for model (pods may not be ready): modelID=%s", modelID)
+
+			// Get capacity config for this model (with fallback to default)
+			capacityConfig := interfaces.DefaultCapacityScalingConfig()
+			if len(modelVAs) > 0 {
+				modelConfig := r.getCapacityScalingConfigForVariant(capacityConfigMap, modelID, modelVAs[0].Namespace)
+				capacityConfig.Merge(modelConfig)
+			}
+
+			capacityTargets, capacityAnalysis, variantStates, err = r.runCapacityAnalysis(ctx, modelID, modelVAs, capacityConfig)
+			if err != nil {
+				logger.Log.Error(err, "Capacity analysis failed for model, continuing with model-based if enabled", "modelID", modelID)
+				// Continue with model-based approach if enabled, as per requirement #1
+				if !enableModelOptimizer {
+					// In capacity-only mode, if capacity fails, skip this model
+					errorCount++
+					continue
+				}
+				// In hybrid mode, continue to run model-based (capacity failed but we can still run optimizer)
+				errorCount++
+			}
 		}
 
 		var finalDecisions []interfaces.VariantDecision
 
-		if enableModelBased {
-			// HYBRID MODE: Run model-based optimizer and arbitrate
-
+		modelBasedTargets := make(map[string]int)
+		if enableModelOptimizer {
 			// Read configs needed for model-based optimizer
 			acceleratorCm, err := r.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
 			if err != nil {
-				logger.Log.Errorf("unable to read accelerator configMap, skipping model-based optimization for this model: modelID=%s, error=%v", modelID, err)
+				logger.Log.Error(err, "unable to read accelerator configMap, skipping model-based optimization for this model")
 				errorCount++
 				// Fall back to capacity-only for this model
-				if metricsAvailable {
+				if capacityAnalysis != nil {
 					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
 				} else {
-					// Capacity metrics unavailable - activate safety net
-					logger.Log.Infof("Metrics unavailable and config read failed, activating safety net: modelID=%s", modelID)
+					// Capacity also failed - activate safety net
+					logger.Log.Warn("Config read failed and capacity unavailable, activating safety net", "modelID", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -246,11 +261,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				logger.Log.Error(err, "unable to read serviceclass configMap, skipping model-based optimization for this model")
 				errorCount++
 				// Fall back to capacity-only for this model
-				if metricsAvailable {
+				if capacityAnalysis != nil {
 					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
 				} else {
-					// Metrics unavailable - activate safety net
-					logger.Log.Infof("Metrics unavailable and config read failed, activating safety net: modelID=%s", modelID)
+					// Capacity also failed - activate safety net
+					logger.Log.Warn("Config read failed and capacity unavailable, activating safety net", "modelID", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -263,11 +278,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Error(err, "failed to prepare variant autoscalings, falling back to capacity-only")
 				errorCount++
-				if metricsAvailable {
+				if capacityAnalysis != nil {
 					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
 				} else {
-					// Metrics unavailable - activate safety net
-					logger.Log.Infof("Metrics unavailable and variant preparation failed, activating safety net: modelID=%s", modelID)
+					// Capacity also failed - activate safety net
+					logger.Log.Warn("Variant preparation failed and capacity unavailable, activating safety net", "modelID", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -296,11 +311,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Error(err, "Model-based optimization failed, falling back to capacity-only")
 				errorCount++
-				if metricsAvailable {
+				if capacityAnalysis != nil {
 					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
 				} else {
-					// Metrics unavailable - activate safety net
-					logger.Log.Infof("Metrics unavailable and model-based optimization failed, activating safety net: modelID=%s", modelID)
+					// Both capacity and model-based failed - activate safety net
+					logger.Log.Warn("Both capacity and model-based failed, activating safety net", "modelID", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -308,7 +323,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 
 			// Extract model-based targets for this model's variants
-			modelBasedTargets := make(map[string]int)
+
 			for _, va := range modelVAs {
 				if alloc, ok := optimizedAllocation[va.Name]; ok {
 					modelBasedTargets[va.Name] = alloc.NumReplicas
@@ -319,8 +334,27 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				"modelID", modelID,
 				"modelBasedTargets", modelBasedTargets)
 
-			// STEP 2: Arbitrate between capacity and model-based targets
-			if metricsAvailable && len(capacityTargets) > 0 {
+		}
+
+		// PHASE 2: Accumulate final decisions
+
+		if enableCapacityAnalyzer && !enableModelOptimizer {
+			// CAPACITY-ONLY MODE
+			if capacityAnalysis != nil {
+				finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+				logger.Log.Info("Capacity-only decisions made",
+					"modelID", modelID,
+					"decisionCount", len(finalDecisions))
+			} else {
+				logger.Log.Error(nil, "Capacity analysis failed and model-based disabled, activating safety net", "modelID", modelID)
+				errorCount++
+				// SAFETY NET: Emit fallback metrics to prevent HPA from using stale data
+				r.emitSafetyNetMetrics(ctx, modelVAs)
+				continue
+			}
+		} else if enableCapacityAnalyzer && enableModelOptimizer {
+			// HYBRID MODE: Arbitrate between capacity and model-based targets - only if capacity analysis succeeded
+			if capacityAnalysis != nil && len(capacityTargets) > 0 {
 				capacityAnalyzer := capacity.NewAnalyzer()
 				finalDecisions = capacityAnalyzer.ArbitrateWithModelBased(
 					capacityAnalysis,
@@ -328,57 +362,39 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 					modelBasedTargets,
 					variantStates,
 				)
-				logger.Log.Infof("Arbitration completed: modelID=%s, decisionCount=%d",
-					modelID, len(finalDecisions))
+				logger.Log.Info("Arbitration completed",
+					"modelID", modelID,
+					"decisionCount", len(finalDecisions))
 			} else {
-				// Capacity metrics unavailable - use model-based only
-				logger.Log.Infof("Capacity metrics unavailable, using model-based targets only: modelID=%s", modelID)
-				for _, va := range modelVAs {
-					if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
-						currentReplicas := va.Status.CurrentAlloc.NumReplicas
 
-						var action interfaces.CapacityAction
-						switch {
-						case targetReplicas > currentReplicas:
-							action = interfaces.ActionScaleUp
-						case targetReplicas < currentReplicas:
-							action = interfaces.ActionScaleDown
-						default:
-							action = interfaces.ActionNoChange
-						}
-
-						finalDecisions = append(finalDecisions, interfaces.VariantDecision{
-							VariantName:        va.Name,
-							Namespace:          va.Namespace,
-							ModelID:            modelID,
-							CurrentReplicas:    currentReplicas,
-							TargetReplicas:     targetReplicas,
-							Action:             action,
-							ModelBasedDecision: true,
-							CapacityBased:      false,
-							Reason:             "model-based only (capacity unavailable)",
-						})
+			}
+		} else if enableModelOptimizer {
+			// MODEL-ONLY MODE: Capacity-based failed but model-based succeeded, or capacity analysis unavailable - use model-based only
+			logger.Log.Warn("Capacity analysis unavailable, using model-based targets only", "modelID", modelID)
+			for _, va := range modelVAs {
+				if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
+					state := interfaces.VariantReplicaState{VariantName: va.Name, CurrentReplicas: va.Status.CurrentAlloc.NumReplicas}
+					var action interfaces.CapacityAction
+					if targetReplicas > state.CurrentReplicas {
+						action = interfaces.ActionScaleUp
+					} else if targetReplicas < state.CurrentReplicas {
+						action = interfaces.ActionScaleDown
+					} else {
+						action = interfaces.ActionNoChange
 					}
-				}
-			}
-		} else {
-			// CAPACITY-ONLY MODE
-			// Collect metrics and populate CurrentAlloc for each VA
-			// Use lightweight metrics collection (no optimizer system data needed)
-			if err := r.collectMetricsForCapacityMode(ctx, modelVAs, vaMap); err != nil {
-				logger.Log.Errorf("failed to collect metrics in capacity-only mode: %v", err)
-				errorCount++
-			}
 
-			if metricsAvailable {
-				finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
-				logger.Log.Infof("Capacity-only decisions made: modelID=%s, decisionCount=%d",
-					modelID, len(finalDecisions))
-			} else {
-				logger.Log.Infof("Capacity metrics unavailable in capacity-only mode, activating safety net: modelID=%s", modelID)
-				// SAFETY NET: Emit fallback metrics to prevent HPA from using stale data
-				r.emitSafetyNetMetrics(ctx, modelVAs)
-				continue
+					finalDecisions = append(finalDecisions, interfaces.VariantDecision{
+						VariantName:        va.Name,
+						Namespace:          va.Namespace,
+						ModelID:            modelID,
+						CurrentReplicas:    state.CurrentReplicas,
+						TargetReplicas:     targetReplicas,
+						Action:             action,
+						ModelBasedDecision: true,
+						CapacityBased:      false,
+						Reason:             "model-based only (capacity unavailable)",
+					})
+				}
 			}
 		}
 
@@ -396,21 +412,33 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Info("No scaling decisions to apply")
 	}
 
-	// Log final reconciliation summary
-	mode := "capacity-only"
-	if enableModelBased {
-		mode = "hybrid"
-	}
-
 	if errorCount > 0 {
-		logger.Log.Warnf("Reconciliation completed with errors: mode=%s, modelsProcessed=%d, modelsFailed=%d, decisionsApplied=%d",
-			mode, len(modelGroups), errorCount, len(allDecisions))
-		// Return error to trigger requeue (errors already logged individually)
-		return ctrl.Result{RequeueAfter: requeueDuration}, fmt.Errorf("%d model(s) failed processing", errorCount)
-	}
+		logger.Log.Warn("Reconciliation completed with errors",
+			"mode", func() string {
 
-	logger.Log.Infof("Reconciliation completed successfully: mode=%s, modelsProcessed=%d, decisionsApplied=%d",
-		mode, len(modelGroups), len(allDecisions))
+				if enableModelOptimizer && enableCapacityAnalyzer {
+					return "hybrid"
+				} else if enableModelOptimizer {
+					return "model-only"
+				}
+				return "capacity-only"
+			}(),
+			"modelsProcessed", len(modelGroups),
+			"modelsFailed", errorCount,
+			"decisionsApplied", len(allDecisions))
+	} else {
+		logger.Log.Info("Reconciliation completed successfully",
+			"mode", func() string {
+				if enableModelOptimizer && enableCapacityAnalyzer {
+					return "hybrid"
+				} else if enableModelOptimizer {
+					return "model-only"
+				}
+				return "capacity-only"
+			}(),
+			"modelsProcessed", len(modelGroups),
+			"decisionsApplied", len(allDecisions))
+	}
 
 	return ctrl.Result{RequeueAfter: requeueDuration}, nil
 }
@@ -661,20 +689,34 @@ func (r *VariantAutoscalingReconciler) collectMetricsForCapacityMode(
 			continue // Skip VAs without deployments
 		}
 
-		// Validate metrics availability before collecting
-		metricsValidation := collector.ValidateMetricsAvailability(ctx, r.PromAPI, modelName, deploy.Namespace)
-		if !metricsValidation.Available {
-			// Metrics unavailable - skip this VA (don't update status to avoid CRD validation errors)
-			logger.Log.Debugf("Metrics unavailable for VA, skipping: variant=%s, reason=%s",
-				va.Name, metricsValidation.Reason)
-			continue
-		}
-
 		// Fetch latest VA from API server
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, deploy.Name, deploy.Namespace, &updateVA)
 		if err != nil {
 			logger.Log.Debugf("Unable to get VA for deployment: deployment=%s, error=%v", deploy.Name, err)
+			continue
+		}
+
+		// Validate metrics availability before collecting
+		metricsValidation := collector.ValidateMetricsAvailability(ctx, r.PromAPI, modelName, deploy.Namespace)
+
+		// Update MetricsAvailable condition based on validation result
+		if metricsValidation.Available {
+			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVA,
+				llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable,
+				metav1.ConditionTrue,
+				metricsValidation.Reason,
+				metricsValidation.Message)
+		} else {
+			// Metrics unavailable - set condition and skip
+			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVA,
+				llmdVariantAutoscalingV1alpha1.TypeMetricsAvailable,
+				metav1.ConditionFalse,
+				metricsValidation.Reason,
+				metricsValidation.Message)
+
+			logger.Log.Warnf("Metrics unavailable for VA, skipping: variant=%s, reason=%s, troubleshooting=%s",
+				updateVA.Name, metricsValidation.Reason, metricsValidation.Message)
 			continue
 		}
 

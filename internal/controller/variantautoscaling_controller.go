@@ -102,6 +102,13 @@ const (
 	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
 )
 
+func getNamespace() string {
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns
+	}
+	return "workload-variant-autoscaler-system"
+}
+
 var (
 	// ServiceMonitor GVK for watching controller's own metrics ServiceMonitor
 	serviceMonitorGVK = schema.GroupVersionKind{
@@ -109,7 +116,7 @@ var (
 		Version: "v1",
 		Kind:    "ServiceMonitor",
 	}
-	configMapNamespace = os.Getenv("POD_NAMESPACE")
+	configMapNamespace = getNamespace()
 )
 
 func initMetricsEmitter() {

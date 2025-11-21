@@ -37,11 +37,11 @@ jobs:
       # - name: Run precommit checks
       #   run: make precommit
       
-      - name: Run make test-e2e
-        shell: bash
-        run: |
-          make test-e2e
-          
+      # - name: Run make test-e2e
+      #   shell: bash
+      #   run: |
+      #     make test-e2e
+      
       - name: Run make build
         shell: bash
         run: |

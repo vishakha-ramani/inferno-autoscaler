@@ -13,7 +13,7 @@ metadata:
 spec:
   # OpenAI API compatible name of the model
   modelID: {{ .Values.llmd.modelID | quote }}
-  {{- if .Values.experimentalProactiveModel }}
+  {{- if .Values.experimentalHybridOptimization }}
   # Add SLOs in configmap, add reference to this per model data
   # to avoid duplication and Move to ISOs when available
   sloClassRef:

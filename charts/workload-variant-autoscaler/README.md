@@ -23,7 +23,7 @@ Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM 
 | vllmService.nodePort | int | `30000` |  |
 | vllmService.scheme | string | `"http"` |  |
 | wva.enabled | bool | `true` |  |
-| wva.experimentalProactiveModel | bool | `false` |  |
+| wva.experimentalHybridOptimization | bool | `false` |  |
 | wva.image.repository | string | `"ghcr.io/llm-d/workload-variant-autoscaler"` |  |
 | wva.image.tag | string | `"latest"` |  |
 | wva.imagePullPolicy | string | `"Always"` |  |

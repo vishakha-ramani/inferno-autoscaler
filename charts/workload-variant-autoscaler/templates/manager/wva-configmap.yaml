@@ -33,4 +33,4 @@ data:
   WVA_SCALE_TO_ZERO: {{ .Values.wva.scaleToZero | default "false" | quote }}
 
   # Option to use experimental proactive scaling model (default: false)
-  WVA_EXPERIMENTAL_PROACTIVE_MODEL: {{ .Values.wva.experimentalProactiveModel | default "false" | quote }}
+  WVA_EXPERIMENTAL_PROACTIVE_MODEL: {{ .Values.wva.experimentalHybridOptimization | default "false" | quote }}

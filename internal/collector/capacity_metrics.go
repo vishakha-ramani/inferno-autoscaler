@@ -51,15 +51,6 @@ func escapePrometheusLabelValue(value string) string {
 	return value
 }
 
-// validatePrometheusLabel validates that a label value is not empty.
-// Returns error if validation fails.
-func validatePrometheusLabel(value, name string) error {
-	if value == "" {
-		return fmt.Errorf("%s cannot be empty", name)
-	}
-	return nil
-}
-
 // contextWithRespectedDeadline creates a timeout context that respects the parent context deadline.
 // If the parent has a deadline shorter than the desired timeout, uses the parent's remaining time minus a buffer.
 // Returns the context and cancel function.

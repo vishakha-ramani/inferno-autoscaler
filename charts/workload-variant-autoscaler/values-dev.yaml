@@ -34,7 +34,7 @@ wva:
     #   YOUR_CA_CERTIFICATE_HERE
     #   -----END CERTIFICATE-----
 
-  experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
+  experimentalHybridOptimization: "off"  # Enable experimental hybrid optimization (default: "off")
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
   # Capacity-based scaling configuration

@@ -32,5 +32,5 @@ data:
   # Option to scale variants to zero replicas (default: false)
   WVA_SCALE_TO_ZERO: {{ .Values.wva.scaleToZero | default "false" | quote }}
 
-  # Option to use experimental proactive scaling model (default: false)
-  EXPERIMENTAL_HYBRID_OPTIMIZATION: {{ .Values.wva.experimentalHybridOptimization | default "false" | quote }}
+  # Option to use experimental hybrid optimization (default: false)
+  EXPERIMENTAL_HYBRID_OPTIMIZATION: {{ .Values.wva.experimentalHybridOptimization | default "off" | quote }}

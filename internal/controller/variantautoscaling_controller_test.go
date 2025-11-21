@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
+	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	logger "github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	utils "github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	testutils "github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
@@ -85,7 +86,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					// TODO(user): Specify other spec details if needed.
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
 						// Example spec fields, adjust as necessary
-						ModelID: "default/default",
+						ModelID: "default-default",
 						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 							Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 								{
@@ -101,7 +102,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 						},
 						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
 							Name: "premium",
-							Key:  "default/default",
+							Key:  "default-default",
 						},
 					},
 				}
@@ -149,9 +150,14 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
+			mockPromAPI := &testutils.MockPromAPI{
+				QueryResults: map[string]model.Value{},
+				QueryErrors:  map[string]error{},
+			}
 			controllerReconciler := &VariantAutoscalingReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:  k8sClient,
+				Scheme:  k8sClient.Scheme(),
+				PromAPI: mockPromAPI,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -419,7 +425,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ModelID: "default/default",
+					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{
@@ -435,7 +441,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					},
 					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
 						Name: "premium",
-						Key:  "default/default",
+						Key:  "default-default",
 					},
 				},
 			}
@@ -468,7 +474,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					},
 					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
 						Name: "premium",
-						Key:  "default/default",
+						Key:  "default-default",
 					},
 				},
 			}
@@ -485,7 +491,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ModelID: "default/default",
+					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							// no configuration for accelerators
@@ -493,7 +499,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					},
 					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
 						Name: "premium",
-						Key:  "default/default",
+						Key:  "default-default",
 					},
 				},
 			}
@@ -510,7 +516,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ModelID: "default/default",
+					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{
@@ -582,7 +588,7 @@ data:
 			// Use custom configmap creation function
 			var modelNames []string
 			for i := range totalVAs {
-				modelNames = append(modelNames, fmt.Sprintf("model-%d/model-%d", i, i))
+				modelNames = append(modelNames, fmt.Sprintf("model-%d-model-%d", i, i))
 			}
 			configMap := CreateServiceClassConfigMap(ns.Name, modelNames...)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
@@ -595,7 +601,7 @@ data:
 
 			By("Creating VariantAutoscaling resources and Deployments")
 			for i := range totalVAs {
-				modelID := fmt.Sprintf("model-%d/model-%d", i, i)
+				modelID := fmt.Sprintf("model-%d-model-%d", i, i)
 				name := fmt.Sprintf("multi-test-resource-%d", i)
 
 				d := &appsv1.Deployment{
@@ -949,6 +955,120 @@ data:
 				By("Verifying no reconciliation is triggered")
 				Expect(result).To(BeEmpty())
 			})
+		})
+	})
+
+	Context("Capacity Config Cache", func() {
+		var (
+			ctx                  context.Context
+			controllerReconciler *VariantAutoscalingReconciler
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			controllerReconciler = &VariantAutoscalingReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: record.NewFakeRecorder(100),
+			}
+		})
+
+		It("should initialize cache with defaults when ConfigMap is missing", func() {
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+
+			By("Verifying cache initialization succeeded (uses defaults)")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(controllerReconciler.isCapacityConfigLoaded()).To(BeTrue())
+
+			By("Verifying default config is in cache")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			Expect(configs).To(HaveKey("default"))
+			Expect(configs["default"].KvCacheThreshold).To(Equal(0.80))
+			Expect(configs["default"].QueueLengthThreshold).To(Equal(5.0))
+		})
+
+		It("should load config from ConfigMap when it exists", func() {
+			configMap := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "capacity-scaling-config",
+					Namespace: configMapNamespace,
+				},
+				Data: map[string]string{
+					"default": `kvCacheThreshold: 0.75
+queueLengthThreshold: 10
+kvSpareTrigger: 0.15
+queueSpareTrigger: 5`,
+				},
+			}
+
+			By("Creating ConfigMap")
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying custom config is loaded")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			Expect(configs).To(HaveKey("default"))
+			Expect(configs["default"].KvCacheThreshold).To(Equal(0.75))
+			Expect(configs["default"].QueueLengthThreshold).To(Equal(10.0))
+
+			By("Cleaning up ConfigMap")
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
+		})
+
+		It("should return copy of cache to prevent external modification", func() {
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting cache copy")
+			configs1 := controllerReconciler.getCapacityConfigFromCache()
+			configs2 := controllerReconciler.getCapacityConfigFromCache()
+
+			By("Verifying copies are independent")
+			configs1["test"] = interfaces.CapacityScalingConfig{KvCacheThreshold: 0.99}
+			Expect(configs2).NotTo(HaveKey("test"))
+		})
+
+		It("should apply per-model overrides correctly", func() {
+			configMap := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "capacity-scaling-config",
+					Namespace: configMapNamespace,
+				},
+				Data: map[string]string{
+					"default": `kvCacheThreshold: 0.80
+queueLengthThreshold: 5
+kvSpareTrigger: 0.1
+queueSpareTrigger: 3`,
+					"custom": `model_id: test/model
+namespace: test-ns
+kvCacheThreshold: 0.90`,
+				},
+			}
+
+			By("Creating ConfigMap with override")
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, configMap))).To(Succeed())
+
+			By("Initializing cache")
+			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting config for model with override")
+			configs := controllerReconciler.getCapacityConfigFromCache()
+			config := controllerReconciler.getCapacityScalingConfigForVariant(configs, "test/model", "test-ns")
+
+			By("Verifying override is applied")
+			Expect(config.KvCacheThreshold).To(Equal(0.90))
+			// Verify other fields inherit from default
+			Expect(config.QueueLengthThreshold).To(Equal(5.0))
+			Expect(config.QueueSpareTrigger).To(Equal(3.0))
+
+			By("Cleaning up ConfigMap")
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
 		})
 	})
 })

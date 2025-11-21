@@ -1,0 +1,227 @@
+# Example: VariantAutoscaling with variantCost configuration
+# This demonstrates how to configure different costs for variants to enable
+# cost-based optimization in the capacity analyzer.
+#
+# Scenario: Two variants of the same model on different accelerators
+# - Premium variant on H100 (higher cost, faster performance)
+# - Standard variant on A100 (lower cost, standard performance)
+#
+# The capacity analyzer will prefer scaling the lower-cost variant when both
+# can handle the load, enabling cost optimization.
+
+---
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-70b-premium-h100
+  namespace: llm-inference
+  labels:
+    app: llm-inference
+    model: llama-70b
+    variant: premium
+    accelerator: h100
+spec:
+  # Model identifier (OpenAI API compatible)
+  modelID: "meta/llama-3.1-70b"
+
+  # Premium tier: H100 accelerator with higher cost
+  variantCost: 80.0  # Cost per replica (reflects H100 premium pricing)
+
+  # SLO configuration reference
+  sloClassRef:
+    name: premium
+    key: llama-70b
+
+  # Model profile for H100 accelerator
+  modelProfile:
+    accelerators:
+      - acc: "H100"
+        accCount: 1
+
+        # Performance parameters for H100 (faster than A100)
+        perfParms:
+          decodeParms:
+            # ITL equation: itl = alpha + beta * maxBatchSize
+            alpha: "15.2"   # Lower base latency (H100 is faster)
+            beta: "0.28"    # Lower per-batch overhead
+
+          prefillParms:
+            # TTFT equation: ttft = gamma + delta * tokens * maxBatchSize
+            gamma: "3.8"    # Lower base prefill time
+            delta: "0.07"   # Lower per-token cost
+
+        maxBatchSize: 256
+
+---
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-70b-standard-a100
+  namespace: llm-inference
+  labels:
+    app: llm-inference
+    model: llama-70b
+    variant: standard
+    accelerator: a100
+spec:
+  # Model identifier (same model as premium variant)
+  modelID: "meta/llama-3.1-70b"
+
+  # Standard tier: A100 accelerator with standard cost
+  variantCost: 40.0  # Cost per replica (standard A100 pricing)
+
+  # SLO configuration reference (same SLOs as premium)
+  sloClassRef:
+    name: premium
+    key: llama-70b
+
+  # Model profile for A100 accelerator
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+        accCount: 1
+
+        # Performance parameters for A100 (standard performance)
+        perfParms:
+          decodeParms:
+            # ITL equation: itl = alpha + beta * maxBatchSize
+            alpha: "20.5"   # Higher base latency than H100
+            beta: "0.41"    # Higher per-batch overhead
+
+          prefillParms:
+            # TTFT equation: ttft = gamma + delta * tokens * maxBatchSize
+            gamma: "5.2"    # Higher base prefill time
+            delta: "0.1"    # Higher per-token cost
+
+        maxBatchSize: 256
+
+---
+# Example: Budget variant with lower cost for best-effort workloads
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b-budget-t4
+  namespace: llm-inference
+  labels:
+    app: llm-inference
+    model: llama-8b
+    variant: budget
+    accelerator: t4
+spec:
+  modelID: "meta/llama-3.1-8b"
+
+  # Budget tier: Very low cost for cost-sensitive workloads
+  variantCost: 5.0  # Minimal cost for T4 GPUs
+
+  sloClassRef:
+    name: freemium
+    key: llama-8b
+
+  modelProfile:
+    accelerators:
+      - acc: "T4"
+        accCount: 1
+        perfParms:
+          decodeParms:
+            alpha: "35.0"   # Slower performance
+            beta: "0.75"
+          prefillParms:
+            gamma: "12.0"
+            delta: "0.25"
+        maxBatchSize: 64  # Smaller batch size for T4
+
+---
+# Example: Multi-tenant cost tracking
+# Assign different costs to the same accelerator for different tenants
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b-tenant-gold
+  namespace: tenant-gold
+  labels:
+    tenant: gold
+    model: llama-8b
+spec:
+  modelID: "meta/llama-3.1-8b"
+
+  # Gold tenant: Premium pricing for priority service
+  variantCost: 25.0  # Higher cost reflects priority/SLA
+
+  sloClassRef:
+    name: premium
+    key: llama-8b
+
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+        accCount: 1
+        perfParms:
+          decodeParms:
+            alpha: "20.5"
+            beta: "0.41"
+          prefillParms:
+            gamma: "5.2"
+            delta: "0.1"
+        maxBatchSize: 256
+
+---
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b-tenant-silver
+  namespace: tenant-silver
+  labels:
+    tenant: silver
+    model: llama-8b
+spec:
+  modelID: "meta/llama-3.1-8b"
+
+  # Silver tenant: Standard pricing
+  variantCost: 15.0  # Standard cost
+
+  sloClassRef:
+    name: standard
+    key: llama-8b
+
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+        accCount: 1
+        perfParms:
+          decodeParms:
+            alpha: "20.5"
+            beta: "0.41"
+          prefillParms:
+            gamma: "5.2"
+            delta: "0.1"
+        maxBatchSize: 256
+
+---
+# Note: If variantCost is not specified, it defaults to 10.0
+# Example of default behavior:
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b-default-cost
+  namespace: llm-inference
+spec:
+  modelID: "meta/llama-3.1-8b"
+
+  # variantCost omitted - will default to 10.0
+
+  sloClassRef:
+    name: standard
+    key: llama-8b
+
+  modelProfile:
+    accelerators:
+      - acc: "A100"
+        accCount: 1
+        perfParms:
+          decodeParms:
+            alpha: "20.5"
+            beta: "0.41"
+          prefillParms:
+            gamma: "5.2"
+            delta: "0.1"
+        maxBatchSize: 256

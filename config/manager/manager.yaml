@@ -90,6 +90,10 @@ spec:
               configMapKeyRef:
                 name: variantautoscaling-config
                 key: EXPERIMENTAL_HYBRID_OPTIMIZATION
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         name: manager
         ports: []
         securityContext:

@@ -123,7 +123,6 @@ spec:
                       - acc
                       - accCount
                       - maxBatchSize
-                      - perfParms
                       type: object
                     minItems: 1
                     type: array
@@ -146,10 +145,14 @@ spec:
                 - key
                 - name
                 type: object
+              variantCost:
+                default: "10.0"
+                description: VariantCost specifies the cost per replica for this variant
+                  (used in capacity analysis).
+                pattern: ^\d+(\.\d+)?$
+                type: string
             required:
             - modelID
-            - modelProfile
-            - sloClassRef
             type: object
           status:
             description: Status represents the current status of autoscaling for the

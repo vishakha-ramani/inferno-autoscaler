@@ -3,7 +3,7 @@
 
 wva:
   enabled: true
-  baseName: inference-scheduling
+  baseName: inference-scheduler
   replicaCount: 1
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
@@ -12,7 +12,7 @@ wva:
 
   reconcileInterval: 30s
 
-  modelName: ms-inference-scheduling-llm-d-modelservice
+  modelName: ms-workload-autoscaler-llm-d-modelservice
 
   metrics:
     enabled: true

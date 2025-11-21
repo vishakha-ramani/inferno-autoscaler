@@ -92,8 +92,7 @@ type VariantAutoscalingReconciler struct {
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 const (
-	configMapName      = "workload-variant-autoscaler-variantautoscaling-config"
-	configMapNamespace = "workload-variant-autoscaler-system"
+	configMapName = "workload-variant-autoscaler-variantautoscaling-config"
 	// ServiceMonitor constants for watching controller's own metrics ServiceMonitor
 	serviceMonitorName = "workload-variant-autoscaler-controller-manager-metrics-monitor"
 	// Environment variable to enable experimental hybrid-based optimization
@@ -110,6 +109,7 @@ var (
 		Version: "v1",
 		Kind:    "ServiceMonitor",
 	}
+	configMapNamespace = os.Getenv("POD_NAMESPACE")
 )
 
 func initMetricsEmitter() {

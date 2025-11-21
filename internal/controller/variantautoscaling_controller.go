@@ -604,6 +604,10 @@ func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
 		return nil, nil, nil, fmt.Errorf("failed to collect capacity metrics for model %s: %w", modelID, err)
 	}
 
+	for i := range replicaMetrics {
+		replicaMetrics[i].VariantName = modelVAs[0].Name
+	}
+
 	logger.Log.Debug("Collected capacity metrics",
 		"modelID", modelID,
 		"namespace", namespace,

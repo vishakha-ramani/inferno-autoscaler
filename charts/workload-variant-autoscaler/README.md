@@ -13,7 +13,7 @@ Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM 
 | hpa.targetAverageValue | string | `"1"` |  |
 | llmd.modelID | string | `"unsloth/Meta-Llama-3.1-8B"` |  |
 | llmd.modelName | string | `"ms-inference-scheduling-llm-d-modelservice"` |  |
-| llmd.namespace | string | `"llm-d-inference-scheduler"` |  |
+| llmd.namespace | string | `"llm-d-autoscaler"` |  |
 | va.accelerator | string | `"H100"` |  |
 | va.enabled | bool | `true` |  |
 | va.sloTpot | int | `10` |  |
@@ -129,7 +129,7 @@ wva:
     overrides:
       llm-d:
         modelID: "Qwen/Qwen3-0.6B"
-        namespace: "llm-d-inference-scheduler"
+        namespace: "llm-d-autoscaler"
         kvCacheThreshold: 0.70      # Lower threshold for production
         kvSpareTrigger: 0.35        # Avg spare KV <10% → scale-up
 ```

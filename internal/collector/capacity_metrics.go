@@ -1,4 +1,4 @@
-package collector
+package controller
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
-	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/capacity"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
@@ -367,7 +366,7 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 		}
 
 		// Look up cost by variant name, default to DefaultVariantCost if not found
-		cost := capacity.DefaultVariantCost
+		cost := 10.0
 		if variantCosts != nil {
 			if c, ok := variantCosts[variantName]; ok {
 				cost = c

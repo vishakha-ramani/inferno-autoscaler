@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 
-The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers based on [saturation](https://docs.google.com/document/d/1iGHqdxRUDpiKwtJFr5tMCKM7RF6fbTfZBL7BTn6UkwA/edit?tab=t.0#heading=h.mdte0lq44ul4). High-level details of the [algorthim](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues/269) where we explore only capacity. It determines optimal replica counts for given request traffic loads for inference servers.
+The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers based on saturation. The high-level details of the algorithm where we explore only capacity are [here](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues/269). It determines optimal replica counts for given request traffic loads for inference servers.
 <!--
 <![Architecture](docs/design/diagrams/inferno-WVA-design.png)>
 -->
@@ -105,8 +105,9 @@ WVA consists of several key components:
 - **Optimizer**: Capacity model provides saturation based scaling based on threshold
 - **Actuator**: Emits metrics to Prometheus and updates deployment replicas
 
+<!-- 
 For detailed architecture information, see the [design documentation](docs/design/modeling-optimization.md).
-
+-->
 ## How It Works
 
 1. Platform admin deploys llm-d infrastructure (including model servers) and waits for servers to warm up and start serving requests
@@ -155,6 +156,10 @@ Apache 2.0 - see [LICENSE](LICENSE) for details.
 
 - [llm-d infrastructure](https://github.com/llm-d-incubation/llm-d-infra)
 - [llm-d main repository](https://github.com/llm-d-incubation/llm-d)
+
+## References
+
+- [Saturation based design discussion](https://docs.google.com/document/d/1iGHqdxRUDpiKwtJFr5tMCKM7RF6fbTfZBL7BTn6UkwA/edit?tab=t.0#heading=h.mdte0lq44ul4)
 
 ---
 

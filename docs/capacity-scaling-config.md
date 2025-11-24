@@ -15,7 +15,7 @@ The Workload Variant Autoscaler supports capacity-based scaling using KV cache u
 
 ### ConfigMap Structure
 
-The capacity scaling configuration is stored in a ConfigMap named `capacity-scaling-config` in the `workload-variant-autoscaler-system` namespace.
+The capacity scaling configuration is stored in a ConfigMap named `capacity-scaling-config` in the Workload Variant Autoscaler controller's namespace.
 
 **Location:** `deploy/configmap-capacity-scaling.yaml`
 
@@ -76,11 +76,11 @@ This proactive approach ensures adequate headroom and prevents request drops by 
 
 ### What is End Point Picker (EPP)?
 
-The **End Point Picker (EPP)** is an intelligent request routing component in the InferenceScheduler that selects the optimal inference server replica to handle each incoming request. EPP monitors replica capacity metrics (KV cache utilization, queue depth) and uses scoring algorithms to route requests to the least-loaded replicas, preventing overload and ensuring efficient resource utilization.
+The **End Point Picker (EPP)** is an intelligent request routing component in the InferenceScheduler that selects the optimal inference server replica to handle each incoming request. EPP monitors replica capacity metrics (KV cache utilization, queue depth), as well as other replica metrics and uses scoring algorithms to route requests to replicas.
 
 ### Deployment Architecture
 
-**EPP Deployment Model**: Each model deployment has a **1-to-1 relationship** with its EPP instance. Every model served by the inference infrastructure has a dedicated EPP component that routes requests specifically to that model's replicas.
+**EPP Deployment Model**: Each model has a **1-to-1 relationship** with its EPP instance. Every model served by the inference infrastructure has a dedicated EPP component that routes requests specifically to that model's replicas.
 
 **Example deployment pattern:**
 - Model: `Qwen/Qwen3-0.6B` in namespace `llm-d-autoscaler` → Dedicated EPP instance `gaie-workload-autoscaler-epp`
@@ -111,12 +111,11 @@ Using aligned thresholds ensures consistent capacity management across the clust
 
 ```yaml
 # WVA Configuration (capacity-scaling-config ConfigMap)
-# namespace: workload-variant-autoscaler-system
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: capacity-scaling-config
-  namespace: workload-variant-autoscaler-system
+  namespace: <workload-variant-autoscaler-namespace>
 data:
   default: |
     kvCacheThreshold: 0.80        # Should match EPP kvCacheUtilThreshold
@@ -176,7 +175,7 @@ Choose thresholds based on your workload characteristics and SLO requirements:
 Update `capacity-scaling-config` ConfigMap:
 
 ```bash
-kubectl edit cm capacity-scaling-config -n workload-variant-autoscaler-system
+kubectl edit cm capacity-scaling-config -n <workload-variant-autoscaler-namespace>
 ```
 
 Changes take effect **immediately** (WVA watches ConfigMap and auto-reloads).
@@ -214,7 +213,7 @@ kubectl rollout restart deployment/gaie-llama-70b-epp -n lab
 
 **WVA verification:**
 ```bash
-kubectl get cm capacity-scaling-config -n workload-variant-autoscaler-system -o yaml
+kubectl get cm capacity-scaling-config -n <workload-variant-autoscaler-namespace> -o yaml
 ```
 
 **EPP verification (per-model instance):**
@@ -270,7 +269,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: capacity-scaling-config
-  namespace: workload-variant-autoscaler-system
+  namespace: <workload-variant-autoscaler-namespace>
 data:
   default: |
     kvCacheThreshold: 0.75
@@ -298,7 +297,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: capacity-scaling-config
-  namespace: workload-variant-autoscaler-system
+  namespace: <workload-variant-autoscaler-namespace>
 data:
   default: |
     kvCacheThreshold: 0.80
@@ -440,7 +439,7 @@ INFO  Triggering reconciliation for all VariantAutoscaling resources due to Conf
 
 **Symptom:** Warning log message
 ```
-WARN Capacity scaling ConfigMap not found, using hardcoded defaults configmap=capacity-scaling-config namespace=workload-variant-autoscaler-system
+WARN Capacity scaling ConfigMap not found, using hardcoded defaults configmap=capacity-scaling-config namespace=<workload-variant-autoscaler-namespace>
 ```
 
 **Solution:** Deploy the ConfigMap:
@@ -497,12 +496,12 @@ DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b 
 
 1. **Verify ConfigMap was updated:**
    ```bash
-   kubectl get cm capacity-scaling-config -n workload-variant-autoscaler-system -o yaml
+   kubectl get cm capacity-scaling-config -n <workload-variant-autoscaler-namespace> -o yaml
    ```
 
 2. **Check controller logs for reload confirmation:**
    ```bash
-   kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller | grep "Capacity scaling"
+   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Capacity scaling"
    ```
 
    Expected logs:
@@ -513,12 +512,12 @@ DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b 
    ```
 
 3. **If no logs appear, verify watch is working:**
-   - Check controller pod is running: `kubectl get pods -n workload-variant-autoscaler-system`
-   - Check for errors: `kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller --tail=100`
+   - Check controller pod is running: `kubectl get pods -n <workload-variant-autoscaler-namespace>`
+   - Check for errors: `kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller --tail=100`
 
 4. **Manual restart (last resort):**
    ```bash
-   kubectl rollout restart deployment/wva-controller -n workload-variant-autoscaler-system
+   kubectl rollout restart deployment/wva-controller -n <workload-variant-autoscaler-namespace>
    ```
 
 ### Cache Initialization Failed
@@ -539,7 +538,7 @@ WARN Failed to load initial capacity scaling config, will use defaults
 
 3. Verify cache loaded:
    ```bash
-   kubectl logs -n workload-variant-autoscaler-system deployment/wva-controller | grep "Capacity scaling configuration loaded"
+   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Capacity scaling configuration loaded"
    ```
 
 ## Example: Production Setup
@@ -550,7 +549,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: capacity-scaling-config
-  namespace: workload-variant-autoscaler-system
+  namespace: <workload-variant-autoscaler-namespace>
 data:
   # Conservative defaults for most workloads
   default: |
@@ -585,8 +584,8 @@ kubectl apply -f deploy/configmap-capacity-scaling.yaml
 
 Verify deployment:
 ```bash
-kubectl get cm capacity-scaling-config -n workload-variant-autoscaler-system
-kubectl describe cm capacity-scaling-config -n workload-variant-autoscaler-system
+kubectl get cm capacity-scaling-config -n <workload-variant-autoscaler-namespace>
+kubectl describe cm capacity-scaling-config -n <workload-variant-autoscaler-namespace>
 ```
 
 ## API Reference

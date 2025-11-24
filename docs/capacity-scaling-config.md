@@ -43,23 +43,57 @@ kvSpareTrigger: 0.1
 queueSpareTrigger: 3
 ```
 
-## Best Practices: Coordinating with InferenceScheduler (EPP)
+### How Scale-Up Triggers Work
+
+The capacity analyzer uses a **spare capacity model** to determine when to scale up. Instead of waiting for replicas to become fully saturated, WVA proactively scales when the average spare capacity across non-saturated replicas falls below configured thresholds.
+
+**Scale-up logic:**
+
+1. **Calculate spare capacity** for each non-saturated replica:
+   - Spare KV capacity = `kvCacheThreshold - current_kv_usage`
+   - Spare queue capacity = `queueLengthThreshold - current_queue_length`
+
+2. **Average across non-saturated replicas**:
+   - WVA computes the average spare capacity across all healthy (non-saturated) replicas
+
+3. **Trigger scale-up when spare capacity is low**:
+   - If `avg_spare_kv < kvSpareTrigger` **OR** `avg_spare_queue < queueSpareTrigger`
+   - Scale-up is triggered to add capacity before existing replicas saturate
+
+**Example scenario:**
+- `kvCacheThreshold = 0.80`, `kvSpareTrigger = 0.10`
+- Replica A: 65% KV cache usage → Spare capacity: 0.15
+- Replica B: 72% KV cache usage → Spare capacity: 0.08
+- Average spare KV: (0.15 + 0.08) / 2 = **0.115**
+- Since 0.115 > 0.10, no scale-up yet
+- If Replica B increases to 75%: Average spare = 0.10 → **Scale-up triggered**
+
+This proactive approach ensures adequate headroom and prevents request drops by scaling before saturation occurs.
+
+**For detailed implementation, see:** [Capacity Analyzer Documentation](capacity-analyzer.md)
+
+## Best Practices: Coordinating with InferenceScheduler (End Point Picker)
+
+### What is End Point Picker (EPP)?
+
+The **End Point Picker (EPP)** is an intelligent request routing component in the InferenceScheduler that selects the optimal inference server replica to handle each incoming request. EPP monitors replica capacity metrics (KV cache utilization, queue depth) and uses scoring algorithms to route requests to the least-loaded replicas, preventing overload and ensuring efficient resource utilization.
 
 ### Deployment Architecture
 
-**EPP Deployment Model**: Each model deployment has a **1-on-1 relationship** with its EPP instance. Every model served by the inference infrastructure has a dedicated EPP component that routes requests specifically to that model's replicas.
+**EPP Deployment Model**: Each model deployment has a **1-to-1 relationship** with its EPP instance. Every model served by the inference infrastructure has a dedicated EPP component that routes requests specifically to that model's replicas.
 
 **Example deployment pattern:**
-- Model: `ibm/granite-13b` in namespace `production` → Dedicated EPP instance
-- Model: `meta/llama-70b` in namespace `lab` → Separate dedicated EPP instance
+- Model: `Qwen/Qwen3-0.6B` in namespace `llm-d-autoscaler` → Dedicated EPP instance `gaie-workload-autoscaler-epp`
+- Model: `ibm/granite-13b` in namespace `production` → Dedicated EPP instance `gaie-production-epp`
+- Each model deployment has its own EPP instance (naming follows namespace/workload convention)
 
-This 1-on-1 architecture means that saturation detection and request routing decisions are **model-specific**, with each EPP instance monitoring only its associated model's replicas.
+This 1-to-1 architecture means that saturation detection and request routing decisions are **model-specific**, with each EPP instance monitoring only its associated model's replicas.
 
 ### Threshold Alignment Recommendation
 
-**For optimal cluster performance, we strongly recommend using the same threshold values for both WVA (Workload Variant Autoscaler) and InferenceScheduler (EPP - Envoy Proxy Provider) for each model deployment.**
+**For optimal cluster performance, we strongly recommend using the same threshold values for both WVA (Workload Variant Autoscaler) and InferenceScheduler (End Point Picker) for each model deployment.**
 
-Using aligned thresholds ensures consistent capacity management across the cluster and prevents request drop situations:
+Using aligned thresholds ensures consistent capacity management across the cluster and prevents request drop situations.
 
 **Why threshold alignment matters:**
 
@@ -100,9 +134,11 @@ The InferenceScheduler EPP component uses the [gateway-api-inference-extension](
 ```yaml
 # EPP Saturation Detector Configuration (per-model EPP instance)
 saturationDetector:
+  ...
   queueDepthThreshold: 5          # Default: 5 - Backend waiting queue size threshold
   kvCacheUtilThreshold: 0.8       # Default: 0.8 - KV cache utilization threshold (0.0-1.0)
   metricsStalenessThreshold: 200ms # Default: 200ms - Maximum age for pod metrics
+  ...
 ```
 
 **Purpose**: Monitors three metrics from inference servers (backend queue size, KV cache utilization, metrics staleness) to determine saturation status. When saturation is detected, sheddable requests are dropped.
@@ -132,24 +168,6 @@ EPP uses YAML-based configuration with three main sections:
 3. **Scheduling Profiles** - Weighted combinations of scoring plugins
 
 For complete EPP configuration details, see [gateway-api-inference-extension/guides/epp-configuration](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/site-src/guides/epp-configuration/config-text.md)
-
-### Current Deployment Status
-
-**WVA (Workload Variant Autoscaler):**
-- ✅ ConfigMap-based configuration with live updates
-- ✅ Per-model overrides supported
-- ✅ Automatic cache reload on ConfigMap changes
-- ✅ Namespace: `workload-variant-autoscaler-system`
-- ✅ ConfigMap: `capacity-scaling-config`
-- ✅ Single controller instance manages all models cluster-wide
-
-**EPP (InferenceScheduler):**
-- ⚠️  **Hardcoded defaults** in deployment
-- ⚠️  Configuration changes require pod restart
-- ⚠️  Namespace: Varies by deployment (e.g., `llm-d-inference-scheduler`, `llm-d-autoscaler`)
-- ℹ️  ConfigMap `gaie-inference-scheduling-epp` contains **only** plugin configuration, **not** saturation thresholds
-- ℹ️  **1-on-1 deployment model**: Each model has its own dedicated EPP instance
-- ℹ️  Each EPP instance routes requests exclusively to its associated model's replicas
 
 ### Configuration Workflow
 
@@ -190,21 +208,17 @@ Changes take effect **immediately** (WVA watches ConfigMap and auto-reloads).
 3. Restart the EPP pod for that model:
    ```bash
    # Restart the specific model's EPP instance
-   kubectl rollout restart deployment/epp-<model-name>-controller -n <namespace>
+   kubectl rollout restart deployment/gaie-<model-name>-epp -n <namespace>
    ```
 
 **Example for multiple models:**
 ```bash
 # Model 1: granite-13b in production
-kubectl rollout restart deployment/epp-granite-controller -n production
+kubectl rollout restart deployment/gaie-granite-13b-epp -n production
 
 # Model 2: llama-70b in lab
-kubectl rollout restart deployment/epp-llama-controller -n lab
+kubectl rollout restart deployment/gaie-llama-70b-epp -n lab
 ```
-
-**Future approach** (when EPP adds ConfigMap support):
-
-EPP configuration will be managed via ConfigMap with `--config-text` or `--config-file` flags, still on a per-model basis.
 
 #### Step 4: Verify Configuration
 
@@ -216,10 +230,10 @@ kubectl get cm capacity-scaling-config -n workload-variant-autoscaler-system -o 
 **EPP verification (per-model instance):**
 ```bash
 # Check specific model's EPP pod logs for loaded configuration
-kubectl logs -n <namespace> deployment/epp-<model-name>-controller | grep -i "saturation\|threshold"
+kubectl logs -n <namespace> deployment/gaie-<model-name>-epp | grep -i "saturation\|threshold"
 
-# Example: Verify EPP configuration for granite model in production
-kubectl logs -n production deployment/epp-granite-controller | grep -i "saturation\|threshold"
+# Example: Verify EPP configuration for granite-13b model in production
+kubectl logs -n production deployment/gaie-granite-13b-epp | grep -i "saturation\|threshold"
 ```
 
 ### Alignment Best Practices
@@ -246,21 +260,6 @@ kubectl logs -n production deployment/epp-granite-controller | grep -i "saturati
    - Monitor impact on request drop rate and latency for the specific model
    - Adjust based on observed behavior
    - Remember to update both WVA and the model's EPP instance
-
-5. **Documentation**:
-   - Document your chosen thresholds and rationale per model
-   - Maintain a mapping table: Model → WVA Config → EPP Instance → Thresholds
-   - Include in runbooks for operational teams
-
-### Future Enhancements
-
-Potential improvements for better WVA-EPP alignment:
-
-- **EPP ConfigMap Support**: Enable runtime threshold updates for EPP (matching WVA's live reload)
-- **Unified Configuration**: Single ConfigMap for both WVA and EPP saturation thresholds
-- **Per-Model Thresholds in EPP**: Support model-specific overrides (matching WVA capability)
-- **Configuration Validation**: Cross-component validation to detect misalignment
-- **Monitoring Dashboard**: Grafana dashboard showing aligned/misaligned thresholds across components
 
 ## Usage
 
@@ -318,14 +317,14 @@ data:
     queueSpareTrigger: 3
 
   # Override for granite model in production namespace
-  granite-production: |
+  granite-13b-production: |
     model_id: ibm/granite-13b
     namespace: production
     kvCacheThreshold: 0.85
     kvSpareTrigger: 0.15
 
   # Override for llama model in lab namespace
-  llama-lab: |
+  llama-70b-lab: |
     model_id: meta/llama-70b
     namespace: lab
     queueLengthThreshold: 20
@@ -333,7 +332,7 @@ data:
 ```
 
 **Key points:**
-- Entry keys (e.g., `granite-production`) can be any descriptive name
+- Entry keys (e.g., `granite-13b-production`) can be any descriptive name
 - Each override must include `model_id` and `namespace` fields
 - Only specified fields are overridden; others inherit from `default`
 - Multiple overrides can exist for different model/namespace combinations
@@ -646,11 +645,3 @@ The caching mechanism uses the following components:
 - Controller starts successfully even if ConfigMap missing
 - Uses hardcoded defaults as fallback
 - Automatically loads config once ConfigMap becomes available
-
-## Future Enhancements
-
-Potential future features:
-- Integration of threshold values with Inference Scheduler
-- Time-based configuration (e.g., aggressive scaling during peak hours)
-- Dynamic threshold adjustment based on historical metrics
-- Metric-based cache invalidation (detect stale configs)

@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 
-The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers based on saturation. The high-level details of the algorithm where we explore only capacity are [here](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues/269). It determines optimal replica counts for given request traffic loads for inference servers.
+The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers based on saturation. The high-level details of the algorithm where we explore only capacity are [here](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/main/docs/capacity-scaling-config.md ). It determines optimal replica counts for given request traffic loads for inference servers.
 <!--
 <![Architecture](docs/design/diagrams/inferno-WVA-design.png)>
 -->

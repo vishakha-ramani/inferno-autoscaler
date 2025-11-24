@@ -1,3 +1,4 @@
+# NOTE: this doc is experimental and may not apply to release v0.0.5 release of WVA
 # Capacity Analyzer
 
 ## Overview

@@ -136,11 +136,8 @@ saturationDetector:
   ...
   queueDepthThreshold: 5          # Default: 5 - Backend waiting queue size threshold
   kvCacheUtilThreshold: 0.8       # Default: 0.8 - KV cache utilization threshold (0.0-1.0)
-  metricsStalenessThreshold: 200ms # Default: 200ms - Maximum age for pod metrics
   ...
 ```
-
-**Purpose**: Monitors three metrics from inference servers (backend queue size, KV cache utilization, metrics staleness) to determine saturation status. When saturation is detected, sheddable requests are dropped.
 
 **Configuration Notes**:
 - All parameters are optional; omitting them applies the documented defaults
@@ -154,7 +151,6 @@ saturationDetector:
 |---------|-----------|-----------|-----------------|-------------|
 | **KV Cache Saturation** | `kvCacheThreshold` | `kvCacheUtilThreshold` | **0.80** (80%) | Replica is saturated when KV cache ≥ threshold |
 | **Queue Saturation** | `queueLengthThreshold` | `queueDepthThreshold` | **5** | Replica is saturated when queue length ≥ threshold |
-| **Metrics Freshness** | *(not configurable)* | `metricsStalenessThreshold` | **200ms** | EPP-only: Maximum metric age before considering stale |
 | **Scale-Up Trigger (KV)** | `kvSpareTrigger` | *(not applicable)* | **0.10** (10%) | WVA-only: Trigger scale-up when spare KV < threshold |
 | **Scale-Up Trigger (Queue)** | `queueSpareTrigger` | *(not applicable)* | **3** | WVA-only: Trigger scale-up when spare queue < threshold |
 

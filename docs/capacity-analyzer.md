@@ -1,3 +1,4 @@
+# NOTE: we are currently updating the documentation to be aligned with the 0.4.0 release
 # Capacity Analyzer
 
 ## Overview

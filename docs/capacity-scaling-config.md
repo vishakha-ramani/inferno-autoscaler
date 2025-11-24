@@ -159,16 +159,6 @@ saturationDetector:
 | **Scale-Up Trigger (KV)** | `kvSpareTrigger` | *(not applicable)* | **0.10** (10%) | WVA-only: Trigger scale-up when spare KV < threshold |
 | **Scale-Up Trigger (Queue)** | `queueSpareTrigger` | *(not applicable)* | **3** | WVA-only: Trigger scale-up when spare queue < threshold |
 
-### EPP Configuration Overview
-
-EPP uses YAML-based configuration with three main sections:
-
-1. **Saturation Detector** - Monitors cluster overload (relevant for WVA alignment)
-2. **Scheduling Plugins** - Request routing logic (kv-cache-scorer, queue-scorer, prefix-cache-scorer)
-3. **Scheduling Profiles** - Weighted combinations of scoring plugins
-
-For complete EPP configuration details, see [gateway-api-inference-extension/guides/epp-configuration](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/site-src/guides/epp-configuration/config-text.md)
-
 ### Configuration Workflow
 
 #### Step 1: Define Thresholds
@@ -193,9 +183,9 @@ Changes take effect **immediately** (WVA watches ConfigMap and auto-reloads).
 
 #### Step 3: Apply to EPP
 
-**Important**: Since each model has its own dedicated EPP instance (1-on-1 relationship), you must configure the EPP instance for **each specific model deployment** separately.
+**Important**: Since each model has its own dedicated EPP instance (1-to-1 relationship), you must configure the EPP instance for **each specific model deployment** separately.
 
-**Current approach** (until EPP supports ConfigMap configuration):
+**Current approach:**
 
 1. Identify the EPP instance for your target model:
    ```bash

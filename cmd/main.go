@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -236,14 +237,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize capacity scaling config cache
-	setupLog.Info("Loading initial capacity scaling configuration")
-	if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {
-		setupLog.Warn("Failed to load initial capacity scaling config, will use defaults", zap.Error(err))
-	} else {
-		setupLog.Info("Capacity scaling configuration loaded successfully")
-	}
 	// +kubebuilder:scaffold:builder
+
+	// Add runnable to initialize capacity scaling config cache after cache has started
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		setupLog.Info("Loading initial capacity scaling configuration (after cache start)")
+		if err := reconciler.InitializeCapacityConfigCache(ctx); err != nil {
+			setupLog.Warn("Failed to load initial capacity scaling config, will use defaults", zap.Error(err))
+		} else {
+			setupLog.Info("Capacity scaling configuration loaded successfully")
+		}
+		return nil
+	})); err != nil {
+		setupLog.Error("unable to add capacity config cache initializer", zap.Error(err))
+		os.Exit(1)
+	}
 
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")

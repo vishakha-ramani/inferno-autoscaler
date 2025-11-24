@@ -3,18 +3,18 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/llm-d-incubation/workload-variant-autoscaler)](https://goreportcard.com/report/github.com/llm-d-incubation/workload-variant-autoscaler)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**GPU-aware autoscaler for LLM inference workloads with optimal resource allocation**
 
-The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers. It assigns GPU types to models, determines optimal replica counts for given request traffic loads and service classes, and configures batch sizes—all while optimizing for cost and performance.
-
-![Architecture](docs/design/diagrams/inferno-WVA-design.png)
-
+The Workload-Variant-Autoscaler (WVA) is a Kubernetes controller that performs intelligent autoscaling for inference model servers based on saturation. The high-level details of the algorithm where we explore only capacity are [here](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/main/docs/capacity-scaling-config.md ). It determines optimal replica counts for given request traffic loads for inference servers.
+<!--
+<![Architecture](docs/design/diagrams/inferno-WVA-design.png)>
+-->
 ## Key Features
 
-- **Intelligent Autoscaling**: Optimizes replica count and GPU allocation based on workload, performance models, and SLO requirements
+- **Intelligent Autoscaling**: Optimizes replica count and GPU allocation based on inference server saturation
 - **Cost Optimization**: Minimizes infrastructure costs while meeting SLO requirements
+<!-- 
 - **Performance Modeling**: Uses queueing theory (M/M/1/k, M/G/1 models) for accurate latency and throughput prediction
-- **Multi-Model Support**: Manages multiple models with different service classes and priorities
+- **Multi-Model Support**: Manages multiple models with different service classes and priorities -->
 
 ## Quick Start
 
@@ -63,24 +63,30 @@ See the [Installation Guide](docs/user-guide/installation.md) for detailed instr
 - [Configuration](docs/user-guide/configuration.md)
 - [CRD Reference](docs/user-guide/crd-reference.md)
 
+<!-- 
+
 ### Tutorials
 - [Quick Start Demo](docs/tutorials/demo.md)
 - [Parameter Estimation](docs/tutorials/parameter-estimation.md)
 - [vLLM Server Setup](docs/tutorials/vllm-samples.md)
-
+-->
 ### Integrations
 - [HPA Integration](docs/integrations/hpa-integration.md)
 - [KEDA Integration](docs/integrations/keda-integration.md)
 - [Prometheus Metrics](docs/integrations/prometheus.md)
 
+<!-- 
+
 ### Design & Architecture
 - [Architecture Overview](docs/design/modeling-optimization.md)
+- [**Architecture Limitations**](docs/design/architecture-limitations.md) - **Important:** Read this if using HSSM, MoE, or non-standard architectures
 - [Architecture Diagrams](docs/design/diagrams/) - Visual architecture and workflow diagrams
-
+-->
+<!-- 
 ### Developer Guide
 - [Development Setup](docs/developer-guide/development.md)
 - [Contributing](CONTRIBUTING.md)
-
+-->
 ### Deployment Options
 - [Kubernetes Deployment](deploy/kubernetes/README.md)
 - [OpenShift Deployment](deploy/openshift/README.md)
@@ -92,24 +98,33 @@ WVA consists of several key components:
 
 - **Reconciler**: Kubernetes controller that manages VariantAutoscaling resources
 - **Collector**: Gathers cluster state and vLLM server metrics
+<!-- 
 - **Model Analyzer**: Performs per-model analysis using queueing theory
 - **Optimizer**: Makes global scaling decisions across models
+-->
+- **Optimizer**: Capacity model provides saturation based scaling based on threshold
 - **Actuator**: Emits metrics to Prometheus and updates deployment replicas
 
+<!-- 
 For detailed architecture information, see the [design documentation](docs/design/modeling-optimization.md).
-
+-->
 ## How It Works
 
 1. Platform admin deploys llm-d infrastructure (including model servers) and waits for servers to warm up and start serving requests
 2. Platform admin creates a `VariantAutoscaling` CR for the running deployment
 3. WVA continuously monitors request rates and server performance via Prometheus metrics
+<!-- 
 4. Model Analyzer estimates latency and throughput using queueing models
 5. Optimizer solves for minimal cost allocation meeting all SLOs
-6. Actuator emits optimization metrics to Prometheus and updates VariantAutoscaling status
-7. External autoscaler (HPA/KEDA) reads the metrics and scales the deployment accordingly
+-->
+4. Capacity model obtains KV cache utilization and queue depth of inference servers with slack capacity to determine replicas
+5. Actuator emits optimization metrics to Prometheus and updates VariantAutoscaling status
+6. External autoscaler (HPA/KEDA) reads the metrics and scales the deployment accordingly
 
 **Important Notes**:
+<!-- 
 - Create the VariantAutoscaling CR **only after** your deployment is warmed up to avoid immediate scale-down
+-->
 - Configure HPA stabilization window (recommend 120s+) for gradual scaling behavior
 - WVA updates the VA status with current and desired allocations every reconciliation cycle
 
@@ -141,6 +156,10 @@ Apache 2.0 - see [LICENSE](LICENSE) for details.
 
 - [llm-d infrastructure](https://github.com/llm-d-incubation/llm-d-infra)
 - [llm-d main repository](https://github.com/llm-d-incubation/llm-d)
+
+## References
+
+- [Saturation based design discussion](https://docs.google.com/document/d/1iGHqdxRUDpiKwtJFr5tMCKM7RF6fbTfZBL7BTn6UkwA/edit?tab=t.0#heading=h.mdte0lq44ul4)
 
 ---
 

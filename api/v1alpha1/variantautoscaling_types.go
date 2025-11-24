@@ -22,6 +22,11 @@ type VariantAutoscalingSpec struct {
 	// ActivateModelTuner indicates whether to use the experimental model tuner.
 	// +optional
 	ActivateModelTuner bool `json:"activateModelTuner,omitempty"`
+	// VariantCost specifies the cost per replica for this variant (used in capacity analysis).
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
+	// +kubebuilder:default="10.0"
+	VariantCost string `json:"variantCost,omitempty"`
 }
 
 // ConfigMapKeyRef references a specific key within a ConfigMap.
@@ -258,4 +263,8 @@ const (
 	ReasonOptimizationFailed = "OptimizationFailed"
 	// ReasonMetricsUnavailable indicates optimization cannot run due to missing metrics
 	ReasonMetricsUnavailable = "MetricsUnavailable"
+	// ReasonInvalidConfiguration indicates VA has invalid configuration (e.g., missing ModelID)
+	ReasonInvalidConfiguration = "InvalidConfiguration"
+	// ReasonSkippedProcessing indicates VA was skipped during processing
+	ReasonSkippedProcessing = "SkippedProcessing"
 )

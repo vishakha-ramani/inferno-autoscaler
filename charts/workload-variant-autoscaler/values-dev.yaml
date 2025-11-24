@@ -3,7 +3,6 @@
 
 wva:
   enabled: true
-  baseName: inference-scheduling
   replicaCount: 1
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
@@ -12,7 +11,7 @@ wva:
 
   reconcileInterval: 30s
 
-  modelName: ms-inference-scheduling-llm-d-modelservice
+  modelName: ms-workload-autoscaler-llm-d-modelservice
 
   metrics:
     enabled: true
@@ -38,13 +37,37 @@ wva:
     enableModelTuner: false  # Enable experimental model tuner feature
     autoGuessInitialState: false  # When true: prefer metrics-based guessing over spec parameters
     
-  experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
+  # Environment variable to enable experimental hybrid-based optimization
+  #  When "on", runs both capacity analyzer and model-based optimizer with arbitration
+  #  When "model-only" runs model-based optimizer only
+  #  When "off" or unset, runs capacity analyzer only (default, reactive mode)
+  experimentalHybridOptimization: off  # Enable experimental proactive scaling model (default: off)
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
+  # Capacity-based scaling configuration
+  # These thresholds determine when replicas are saturated and when to scale up
+  capacityScaling:
+    # Global defaults applied to all variants unless overridden
+    default:
+      kvCacheThreshold: 0.80      # Replica saturated if KV cache utilization >= threshold (0.0-1.0)
+      queueLengthThreshold: 5     # Replica saturated if queue length >= threshold
+      kvSpareTrigger: 0.1         # Scale-up if avg spare KV capacity < trigger (0.0-1.0)
+      queueSpareTrigger: 3        # Scale-up if avg spare queue capacity < trigger
+    
+    # Per-model/namespace overrides (optional)
+    # Example:
+    # overrides:
+    #   llm-d:
+    #     modelID: "Qwen/Qwen3-0.6B"
+    #     namespace: "llm-d-autoscaler"
+    #     kvCacheThreshold: 0.70
+    #     kvSpareTrigger: 0.35
+    overrides: {}
+
 llmd:
-  namespace: llm-d-inference-scheduling
-  modelName: ms-inference-scheduling-llm-d-modelservice
-  modelID: "unsloth/Meta-Llama-3.1-8B"
+  namespace: llm-d-autoscaler
+  modelName: ms-workload-autoscaler-llm-d-modelservice
+  modelID: "Qwen/Qwen3-0.6B"
 va:
   enabled: true
   tuned: true

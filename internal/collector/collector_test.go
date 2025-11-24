@@ -1,4 +1,4 @@
-package controller
+package collector
 
 import (
 	"context"
@@ -317,7 +317,7 @@ var _ = Describe("Collector", func() {
 			Expect(allocation.Load.AvgOutputTokens).To(Equal("150.00")) // output tokens per req
 		})
 
-		It("should handle missing accelerator label", func() {
+		It("should check missing accelerator label", func() {
 			// Remove accelerator label
 			delete(va.Labels, "inference.optimization/acceleratorName")
 
@@ -334,8 +334,10 @@ var _ = Describe("Collector", func() {
 
 			allocation, err := AddMetricsToOptStatus(ctx, &va, deployment, accCost, mockProm)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(allocation.Accelerator).To(Equal("")) // Empty due to deleted accName label
+			// Should fail with error due to missing accelerator label (required by CRD validation)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing or empty acceleratorName label"))
+			Expect(allocation).To(Equal(llmdVariantAutoscalingV1alpha1.Allocation{})) // Empty allocation on error
 		})
 
 		It("should handle Prometheus Query errors", func() {

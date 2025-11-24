@@ -44,6 +44,14 @@ const (
 	// VLLMTimePerOutputTokenSecondsCount tracks the count of requests for time per output token.
 	// Used with VLLMTimePerOutputTokenSecondsSum to calculate ITL (Inter-Token Latency).
 	VLLMTimePerOutputTokenSecondsCount = "vllm:time_per_output_token_seconds_count"
+
+	// VLLMKvCacheUsagePerc tracks the KV cache utilization as a percentage (0.0-1.0).
+	// Used by capacity analyzer to detect KV cache saturation and prevent OOM errors.
+	VLLMKvCacheUsagePerc = "vllm:kv_cache_usage_perc"
+
+	// VLLMNumRequestsWaiting tracks the number of requests waiting in the queue.
+	// Used by capacity analyzer to detect request queue saturation.
+	VLLMNumRequestsWaiting = "vllm:num_requests_waiting"
 )
 
 // Inferno Output Metrics

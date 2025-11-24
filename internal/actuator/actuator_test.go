@@ -76,7 +76,7 @@ var _ = Describe("Actuator", func() {
 		})
 	})
 
-	Context("Testing getCurrentDeploymentReplicas", func() {
+	Context("Testing GetCurrentDeploymentReplicas", func() {
 		var deployment *appsv1.Deployment
 		var va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling
 
@@ -130,7 +130,7 @@ var _ = Describe("Actuator", func() {
 			deployment.Status.Replicas = 3
 			Expect(k8sClient.Status().Update(ctx, deployment)).To(Succeed())
 
-			replicas, err := actuator.getCurrentDeploymentReplicas(ctx, va)
+			replicas, err := actuator.GetCurrentDeploymentReplicas(ctx, va)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(replicas).To(Equal(deployment.Status.Replicas), fmt.Sprintf("Should return status replicas - actual: %d", replicas))
 		})
@@ -143,7 +143,7 @@ var _ = Describe("Actuator", func() {
 				},
 			}
 
-			_, err := actuator.getCurrentDeploymentReplicas(ctx, nonExistentVA)
+			_, err := actuator.GetCurrentDeploymentReplicas(ctx, nonExistentVA)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get Deployment"))
 		})

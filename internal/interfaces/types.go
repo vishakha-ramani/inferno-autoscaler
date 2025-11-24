@@ -1,4 +1,4 @@
-package controller
+package interfaces
 
 import inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
 

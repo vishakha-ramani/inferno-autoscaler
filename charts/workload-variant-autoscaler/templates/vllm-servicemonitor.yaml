@@ -3,7 +3,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: vllm-servicemonitor
-  namespace: {{ .Values.wva.prometheus.monitoringNamespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     llm-d.ai/model: {{ .Values.llmd.modelName }}
     openshift.io/user-monitoring: "true"

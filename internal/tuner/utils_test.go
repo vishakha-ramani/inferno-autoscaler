@@ -64,7 +64,7 @@ func TestGetStateAndCovariance(t *testing.T) {
 			name: "with tuned results in status",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
 							DecodeParms: map[string]string{
 								"alpha": "6.0",
@@ -130,7 +130,7 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
 							{"0.1", "0.01", "0", "0"},
 							{"0.01", "0.1", "0", "0"},
@@ -147,7 +147,7 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
 							{"0.1", "0.02", "0", "0"}, // Note: 0.02 here
 							{"0.01", "0.1", "0", "0"}, // but 0.01 here - asymmetric!
@@ -164,7 +164,7 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
 							{"0.1", "0", "0"},
 							{"0", "0.1", "0"},
@@ -179,7 +179,7 @@ func TestExtractCovarianceFromVAStatus(t *testing.T) {
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-va", Namespace: "default"},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						CovarianceMatrix: [][]string{
 							{"0.1", "0", "0", "0"},
 							{"0", "invalid", "0", "0"},
@@ -219,7 +219,7 @@ func TestExtractStateFromVAStatus(t *testing.T) {
 			name: "valid state parameters",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
 							DecodeParms: map[string]string{
 								"alpha": "5.5",
@@ -240,7 +240,7 @@ func TestExtractStateFromVAStatus(t *testing.T) {
 			name: "invalid decode params count",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
 							DecodeParms: map[string]string{
 								"alpha": "5.5",
@@ -259,7 +259,7 @@ func TestExtractStateFromVAStatus(t *testing.T) {
 			name: "invalid number format",
 			va: &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
 							DecodeParms: map[string]string{
 								"alpha": "not_a_number",
@@ -1058,7 +1058,7 @@ func TestUpdateVAStatusWithTunedParams(t *testing.T) {
 					ModelID: "llama-3-8b",
 				},
 				Status: llmdVariantAutoscalingV1alpha1.VariantAutoscalingStatus{
-					TunerPerfData: llmdVariantAutoscalingV1alpha1.TunerPerfData{
+					TunerPerfData: &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 						Model:       "llama-3-8b",
 						Accelerator: "A100",
 						PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{

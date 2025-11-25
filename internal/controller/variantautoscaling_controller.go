@@ -835,15 +835,10 @@ func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
 		}
 		updateVa.Status.Actuation.Applied = false
 
-		// Copy TunerPerfData from updateList (which was updated by tuner)
-		// The tuner handles setting initial params when ActivateModelTuner is false or tuned params when ActivateModelTuner is true
-		updateVa.Status.TunerPerfData = va.Status.TunerPerfData
-
-		// Set fallback tuner parameters
-		if decision.CapacityOnly {
-			if err := tuner.SetFallbackTunedParamsInVAStatus(&updateVa); err != nil {
-				logger.Log.Warnf("Failed to set fallback tuned parameters for variant %s: %v", updateVa.Name, err)
-			}
+		// Handle TunerPerfData based on mode
+		if !decision.CapacityOnly {
+			// Model-based optimization: update TunerPerfData
+			updateVa.Status.TunerPerfData = va.Status.TunerPerfData
 		}
 
 		// Set condition based on decision characteristics

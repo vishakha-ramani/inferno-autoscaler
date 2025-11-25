@@ -181,6 +181,10 @@ func getStateAndCovariance(
 // HasFullTunedResults checks if VA status contains both valid tuned parameters and the covariance matrix.
 // Used when we need to continue tuning with the full state (including covariance).
 func HasFullTunedResults(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) bool {
+	if va.Status.TunerPerfData == nil {
+		return false
+	}
+
 	perfParms := va.Status.TunerPerfData.PerfParms
 
 	// Check if all 4 parameters are valid
@@ -265,6 +269,10 @@ func extractStateAndCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.Va
 }
 
 func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
+	if va.Status.TunerPerfData == nil {
+		return nil, fmt.Errorf("TunerPerfData is nil")
+	}
+
 	matStatus := va.Status.TunerPerfData.CovarianceMatrix
 	numRows := len(matStatus)
 	if numRows == 0 {
@@ -304,6 +312,10 @@ func extractCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAut
 }
 
 func extractStateFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) ([]float64, error) {
+	if va.Status.TunerPerfData == nil {
+		return nil, fmt.Errorf("TunerPerfData is nil")
+	}
+
 	// extract decode model (itl) parameters
 	decodeParms := va.Status.TunerPerfData.PerfParms.DecodeParms
 	if len(decodeParms) != 2 {
@@ -465,7 +477,8 @@ func updateVAStatusWithTunedParams(
 	tunedResults *tune.TunedResults,
 ) error {
 	// Check if we already have tuned data and if it matches the new values
-	if hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
+	if va.Status.TunerPerfData != nil &&
+		hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
 		if tunedParamsMatch(va, model, accelerator, tunedResults) {
 			logger.Log.Debugf("Tuned parameters unchanged for variant %s, skipping status update", va.Name)
 			return nil
@@ -475,7 +488,7 @@ func updateVAStatusWithTunedParams(
 	// convert *mat.Dense to slice of string slices to store covariance matrix in VA status
 	covMatrixStatus := denseMatrixToSliceOfStrings(tunedResults.Covariance)
 
-	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       model,
 		Accelerator: accelerator,
 		UpdatedAt:   metav1.NewTime(time.Now()),
@@ -510,7 +523,8 @@ func updateVAStatusWithTunedParams(
 // 3. Set zero parameters as fallback
 func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
 	// Priority 1: If VA status already has valid params, keep them
-	if hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
+	if va.Status.TunerPerfData != nil &&
+		hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
 		logger.Log.Infof("Keeping existing parameters in status for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
 			va.Name,
 			va.Namespace,
@@ -531,6 +545,11 @@ func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.Variant
 // setParamsFromSpec sets parameters from the VA spec's ModelProfile
 // Falls back to zero parameters if spec is invalid or incomplete
 func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
+	// Initialize TunerPerfData if nil
+	if va.Status.TunerPerfData == nil {
+		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
+	}
+
 	// Initialize maps if nil
 	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
 		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
@@ -604,6 +623,11 @@ func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) er
 
 // setZeroParams sets all tuned performance parameters to "0" when params from spec cannot be retrieved
 func setZeroParams(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
+	// Initialize TunerPerfData if nil
+	if va.Status.TunerPerfData == nil {
+		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
+	}
+
 	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
 		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
 	}
@@ -628,6 +652,10 @@ func tunedParamsMatch(
 	accelerator string,
 	tunedResults *tune.TunedResults,
 ) bool {
+	if va.Status.TunerPerfData == nil {
+		return false
+	}
+
 	existing := va.Status.TunerPerfData
 
 	// Check model and accelerator
@@ -757,6 +785,11 @@ func updateVAStatusWithState(
 ) error {
 	if len(state) != 4 {
 		return fmt.Errorf("invalid state length: expected 4, got %d", len(state))
+	}
+
+	// Initialize TunerPerfData if nil
+	if va.Status.TunerPerfData == nil {
+		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
 	}
 
 	// Initialize maps if nil

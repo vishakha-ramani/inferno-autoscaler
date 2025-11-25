@@ -968,9 +968,11 @@ data:
 			updatedVA := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedVA)
 			Expect(err).NotTo(HaveOccurred())
-			// When tuner is disabled, TunerPerfData should be empty (zero value)
-			Expect(updatedVA.Status.TunerPerfData.Model).To(BeEmpty(), "TunerPerfData.Model should be empty when tuner is disabled")
-			Expect(updatedVA.Status.TunerPerfData.Accelerator).To(BeEmpty(), "TunerPerfData.Accelerator should be empty when tuner is disabled")
+			// When tuner is disabled, TunerPerfData should be nil or empty
+			if updatedVA.Status.TunerPerfData != nil {
+				Expect(updatedVA.Status.TunerPerfData.Model).To(BeEmpty(), "TunerPerfData.Model should be empty when tuner is disabled")
+				Expect(updatedVA.Status.TunerPerfData.Accelerator).To(BeEmpty(), "TunerPerfData.Accelerator should be empty when tuner is disabled")
+			}
 		})
 
 		It("should tune parameters when ActivateModelTuner is true", func() {

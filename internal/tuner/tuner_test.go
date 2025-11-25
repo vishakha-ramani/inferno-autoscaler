@@ -217,7 +217,7 @@ func TestTuneModelPerfParams_SuccessfulTuningPath(t *testing.T) {
 	// Add existing tuned state to VA - using actual predictions from queue analyzer
 	// With params [5.0, 2.5, 10.0, 0.15], lambda=1 req/sec, batch=8, the analyzer predicts:
 	// TTFT=186.7ms, ITL=14.9ms
-	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       TestModelName,
 		Accelerator: TestAcceleratorType,
 		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
@@ -255,7 +255,7 @@ func TestTuneModelPerfParams_SuccessfulTuningPath(t *testing.T) {
 		perfData.PrefillParms.Delta)
 
 	// Verify VA status was potentially updated
-	if va.Status.TunerPerfData.Model != "" {
+	if va.Status.TunerPerfData != nil && va.Status.TunerPerfData.Model != "" {
 		t.Logf("VA status updated with model: %s, accelerator: %s",
 			va.Status.TunerPerfData.Model,
 			va.Status.TunerPerfData.Accelerator)
@@ -350,7 +350,7 @@ func TestTuneServer_WithExistingTunedResults(t *testing.T) {
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 
 	// Add existing tuned results to VA status
-	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       TestModelName,
 		Accelerator: TestAcceleratorType,
 		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
@@ -432,7 +432,7 @@ func TestCreateTuner_WithExistingState(t *testing.T) {
 	va := createTunerTestVA(TestVAName, TestVANamespace, true)
 
 	// Add existing tuned state
-	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       TestModelName,
 		Accelerator: TestAcceleratorType,
 		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
@@ -494,7 +494,7 @@ func TestTuneModelPerfParams_NISValidationFailure(t *testing.T) {
 
 	// Add existing tuned state with tight covariance
 	// This makes the filter very sensitive to deviations
-	va.Status.TunerPerfData = llmdVariantAutoscalingV1alpha1.TunerPerfData{
+	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       TestModelName,
 		Accelerator: TestAcceleratorType,
 		PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
@@ -549,7 +549,7 @@ func TestTuneModelPerfParams_NISValidationFailure(t *testing.T) {
 	}
 
 	// Verify VA status still has the previous NIS value
-	if va.Status.TunerPerfData.NIS != fmt.Sprintf("%.1f", TestNIS) {
+	if va.Status.TunerPerfData != nil && va.Status.TunerPerfData.NIS != fmt.Sprintf("%.1f", TestNIS) {
 		t.Errorf("NIS should remain at previous value after validation failure: got %s, want %.1f",
 			va.Status.TunerPerfData.NIS, TestNIS)
 	}

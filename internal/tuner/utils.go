@@ -136,7 +136,7 @@ func getStateAndCovariance(
 				state[constants.StateIndexDelta])
 			return state, nil, nil
 		}
-		logger.Log.Infof("Failed to guess initial state for variant %s: %v. Trying spec.", va.Name, err)
+		logger.Log.Debugf("Failed to guess initial state for variant %s: %v. Trying spec.", va.Name, err)
 
 		state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
 		if err != nil {
@@ -162,7 +162,7 @@ func getStateAndCovariance(
 			state[constants.StateIndexDelta])
 		return state, nil, nil
 	}
-	logger.Log.Infof("Failed to find perf data in SystemData for variant %s: %v. Trying new initial parameters.", va.Name, err)
+	logger.Log.Debugf("Failed to find perf data in SystemData for variant %s: %v. Trying new initial parameters.", va.Name, err)
 
 	state, err = guessInitState(server)
 	if err != nil {
@@ -525,7 +525,7 @@ func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.Variant
 	// Priority 1: If VA status already has valid params, keep them
 	if va.Status.TunerPerfData != nil &&
 		hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
-		logger.Log.Infof("Keeping existing parameters in status for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
+		logger.Log.Debugf("Keeping existing parameters in status for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
 			va.Name,
 			va.Namespace,
 			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
@@ -613,7 +613,7 @@ func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) er
 	va.Status.TunerPerfData.PerfParms.DecodeParms = specDecodeParms
 	va.Status.TunerPerfData.PerfParms.PrefillParms = specPrefillParms
 
-	logger.Log.Infof("Set initial parameters for variant %s/%s from spec: alpha=%s, beta=%s, gamma=%s, delta=%s",
+	logger.Log.Debugf("Set initial parameters for variant %s/%s from spec: alpha=%s, beta=%s, gamma=%s, delta=%s",
 		va.Name,
 		va.Namespace,
 		alpha, beta, gamma, delta)

@@ -15,6 +15,7 @@ wva:
     
   prometheus:
     monitoringNamespace: openshift-user-workload-monitoring
+    serviceAccountName: "kube-prometheus-stack-prometheus"
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     # Development security configuration (relaxed for easier development)
     tls:

@@ -11,5 +11,5 @@ roleRef:
   name: cluster-monitoring-view
 subjects:
   - kind: ServiceAccount
-    name: prometheus-adapter
+    name: {{ .Values.wva.prometheus.serviceAccountName }}
     namespace: {{ .Values.wva.prometheus.monitoringNamespace }}

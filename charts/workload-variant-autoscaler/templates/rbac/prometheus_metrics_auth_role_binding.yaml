@@ -12,5 +12,5 @@ subjects:
 # Bind the Prometheus service account to the metrics auth role
 # This allows Prometheus to access WVA's secure HTTPS metrics endpoint
 - kind: ServiceAccount
-  name: kube-prometheus-stack-prometheus
+  name: {{ .Values.wva.prometheus.serviceAccountName }}
   namespace: {{ .Values.wva.prometheus.monitoringNamespace }}

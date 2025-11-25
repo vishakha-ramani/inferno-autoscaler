@@ -24,6 +24,11 @@ data:
     "device": "NVIDIA-H100-80GB-HBM3",
     "cost": "100.0"
     }
+  H200: |
+    {
+    "device": "NVIDIA-H200-141GB",
+    "cost": "110.0"
+    }
   L40S: |
     {
     "device": "NVIDIA-L40S",

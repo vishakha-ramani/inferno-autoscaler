@@ -65,7 +65,7 @@ spec:
             properties:
               activateModelTuner:
                 description: ActivateModelTuner indicates whether to use the experimental
-                  model tuner
+                  model tuner.
                 type: boolean
               modelID:
                 description: ModelID specifies the unique identifier of the model
@@ -321,33 +321,38 @@ spec:
                 type: object
               tunerPerfData:
                 description: TunerPerfData specifies the tuned prefill and decode
-                  parameters for ttft and itl models
+                  parameters of the model used by the queue analyzer in model-based
+                  autoscaling.
                 properties:
                   accelerator:
-                    description: Accelerator is the type of accelerator currently
-                      allocated.
+                    description: Accelerator is the type of accelerator used in tuning.
+                    minLength: 1
                     type: string
                   covarianceMatrix:
                     description: |-
                       CovarianceMatrix contains the current covariance matrix of the tuned state.
-                      It Represents the uncertainty in the estimate.
+                      It represents the uncertainty in the estimate.
                     items:
                       items:
                         type: string
                       type: array
+                    maxItems: 4
+                    minItems: 4
                     type: array
                   model:
                     description: Model specifies the unique identifier of the model
-                      to be tuned.
+                      used in tuning.
+                    minLength: 1
                     type: string
                   nis:
                     description: |-
-                      Normalized Innovaion Square value of the tuner update.
+                      Normalized Innovation Squared value of the tuner update.
                       NIS determines how accurately Kalman filter is able to predict the measurement.
+                    pattern: ^\d+(\.\d+)?$
                     type: string
                   perfParms:
-                    description: PerParms specifies the TUNED prefill and decode parameters
-                      for ttft and itl models
+                    description: PerfParms specifies the TUNED prefill and decode
+                      parameters of the queueing model.
                     properties:
                       decodeParms:
                         additionalProperties:
@@ -370,8 +375,8 @@ spec:
                     - prefillParms
                     type: object
                   updatedAt:
-                    description: UpdateAt specifies the time last succesfull tuner
-                      update was performed
+                    description: UpdatedAt specifies the time last successful tuner
+                      update was performed.
                     format: date-time
                     type: string
                 type: object

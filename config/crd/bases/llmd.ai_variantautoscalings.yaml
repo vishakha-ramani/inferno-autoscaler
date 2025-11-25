@@ -321,7 +321,8 @@ spec:
                 type: object
               tunerPerfData:
                 description: TunerPerfData specifies the tuned prefill and decode
-                  parameters of the model used by the queue analyzer.
+                  parameters of the model used by the queue analyzer in model-based
+                  autoscaling.
                 properties:
                   accelerator:
                     description: Accelerator is the type of accelerator used in tuning.
@@ -378,8 +379,6 @@ spec:
                       update was performed.
                     format: date-time
                     type: string
-                required:
-                - perfParms
                 type: object
             type: object
         type: object

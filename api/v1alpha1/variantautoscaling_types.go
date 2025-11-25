@@ -22,6 +22,7 @@ type VariantAutoscalingSpec struct {
 	// ActivateModelTuner indicates whether to use the experimental model tuner.
 	// +optional
 	ActivateModelTuner bool `json:"activateModelTuner,omitempty"`
+
 	// VariantCost specifies the cost per replica for this variant (used in capacity analysis).
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
@@ -99,11 +100,12 @@ type VariantAutoscalingStatus struct {
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
-	// TunerPerfData specifies the tuned prefill and decode parameters of the model used by the queue analyzer.
-	TunerPerfData TunerPerfData `json:"tunerPerfData,omitempty"`
+	// TunerPerfData specifies the tuned prefill and decode parameters of the model used by the queue analyzer in model-based autoscaling.
+	// +kubebuilder:validation:Optional
+	TunerPerfData *TunerPerfData `json:"tunerPerfData,omitempty"`
 }
 
-// TunerPerfData captures data related to the status of the performance (queueing) model tuner for a variant.
+// TunerPerfData captures data related to the status of the performance (queueing) model tuner for a variant in model-based autoscaling.
 // It is used as a persistent store of the model tuner state, keeping the model tuner stateless.
 type TunerPerfData struct {
 	// Model specifies the unique identifier of the model used in tuning.
@@ -118,7 +120,7 @@ type TunerPerfData struct {
 	UpdatedAt metav1.Time `json:"updatedAt,omitempty"`
 
 	// PerfParms specifies the TUNED prefill and decode parameters of the queueing model.
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	PerfParms PerfParms `json:"perfParms,omitempty"`
 
 	// Normalized Innovation Squared value of the tuner update.

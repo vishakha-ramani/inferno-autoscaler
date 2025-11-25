@@ -38,6 +38,9 @@ VLLM_SVC_NODEPORT=${VLLM_SVC_NODEPORT:-30000}
 SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-"false"}
 WVA_LOG_LEVEL=${WVA_LOG_LEVEL:-"info"}
 VALUES_FILE=${VALUES_FILE:-"$WVA_PROJECT/charts/workload-variant-autoscaler/values.yaml"}
+
+# Experimental Features
+EXPERIMENTAL_HYBRID_OPTIMIZATION=${EXPERIMENTAL_HYBRID_OPTIMIZATION:-"off"} # Options: "on", "off", "model-only"; default: "off" (i.e. saturation-based only)
 EXPERIMENTAL_TUNER_ENABLED=${EXPERIMENTAL_TUNER_ENABLED:-"false"}
 EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE=${EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE:-"false"}
 
@@ -419,6 +422,7 @@ deploy_wva_controller() {
         --set vllmService.nodePort=$VLLM_SVC_NODEPORT \
         --set wva.logging.level=$WVA_LOG_LEVEL \
         --set wva.prometheus.tls.insecureSkipVerify=$SKIP_TLS_VERIFY \
+        --set wva.experimentalHybridOptimization=$EXPERIMENTAL_HYBRID_OPTIMIZATION \
         --set wva.experimental.enableModelTuner=$EXPERIMENTAL_TUNER_ENABLED \
         --set wva.experimental.autoGuessInitialState=$EXPERIMENTAL_AUTO_GUESS_INITIAL_STATE
     

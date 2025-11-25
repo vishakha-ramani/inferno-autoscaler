@@ -46,9 +46,15 @@ import (
 
 // Helper function to create a properly initialized reconciler for tests
 func createTestReconciler(k8sClient client.Client) *VariantAutoscalingReconciler {
+	mockPromAPI := &testutils.MockPromAPI{
+		QueryResults: map[string]model.Value{},
+		QueryErrors:  map[string]error{},
+	}
+
 	return &VariantAutoscalingReconciler{
-		Client: k8sClient,
-		Scheme: k8sClient.Scheme(),
+		Client:  k8sClient,
+		Scheme:  k8sClient.Scheme(),
+		PromAPI: mockPromAPI,
 	}
 }
 

@@ -322,7 +322,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 					logger.Log.Warn(err, "failed to tune system data")
 				}
 			} else {
-				logger.Log.Info("Model tuner is disabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=false), using spec parameters for all VAs")
+				logger.Log.Debug("Model tuner is disabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=false), using spec parameters for all VAs")
 				// Populate TunerPerfData with spec parameters for all VAs
 				for i := range updateList.Items {
 					va := &updateList.Items[i]

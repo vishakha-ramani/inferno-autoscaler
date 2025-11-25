@@ -616,7 +616,7 @@ func setZeroParams(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
 	va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"] = "0"
 	va.Status.TunerPerfData.PerfParms.PrefillParms["delta"] = "0"
 
-	logger.Log.Infof("Set default zero parameters for variant %s/%s",
+	logger.Log.Debugf("Set default zero parameters for variant %s/%s",
 		va.Name,
 		va.Namespace)
 }

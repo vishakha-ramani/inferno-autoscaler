@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/common/model"
+
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
@@ -44,9 +46,18 @@ var (
 		Steps:    5,
 	}
 
+	// Lightweight backoff for individual Prometheus queries (collector, etc.)
+	PrometheusQueryBackoff = wait.Backoff{
+		Duration: 500 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    4, // 500ms, 1s, 2s, 4s = ~7.5s total
+		Cap:      5 * time.Second,
+	}
+
 	// Prometheus validation backoff with longer intervals
 	// TODO: investigate why Prometheus needs longer backoff durations
-	PrometheusBackoff = wait.Backoff{
+	PrometheusValidationBackoff = wait.Backoff{
 		Duration: 5 * time.Second,
 		Factor:   2.0,
 		Jitter:   0.1,
@@ -462,6 +473,23 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
+func QueryPrometheusWithBackoff(ctx context.Context, promAPI promv1.API, query string) (val model.Value, warn promv1.Warnings, err error) {
+	if err = wait.ExponentialBackoffWithContext(ctx, PrometheusQueryBackoff, func(ctx context.Context) (bool, error) {
+		val, warn, err = promAPI.Query(ctx, query, time.Now())
+		if err != nil {
+			logger.Log.Error(err, "Query Prometheus failed, retrying - ",
+				"query: ", query,
+				"error: ", err.Error())
+			return false, err
+		}
+		return true, nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return
+}
+
 // ValidatePrometheusAPIWithBackoff validates Prometheus API connectivity with retry logic
 func ValidatePrometheusAPIWithBackoff(ctx context.Context, promAPI promv1.API, backoff wait.Backoff) error {
 	return wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
@@ -482,7 +510,7 @@ func ValidatePrometheusAPIWithBackoff(ctx context.Context, promAPI promv1.API, b
 
 // ValidatePrometheusAPI validates Prometheus API connectivity using standard Prometheus backoff
 func ValidatePrometheusAPI(ctx context.Context, promAPI promv1.API) error {
-	return ValidatePrometheusAPIWithBackoff(ctx, promAPI, PrometheusBackoff)
+	return ValidatePrometheusAPIWithBackoff(ctx, promAPI, PrometheusValidationBackoff)
 }
 
 // GetConfigValue retrieves a value from a ConfigMap with a default fallback

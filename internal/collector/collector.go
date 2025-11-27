@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	"math"
 	"strconv"
 	"time"
@@ -49,7 +50,7 @@ type MetricKV struct {
 
 // queryAndExtractMetric performs a Prometheus query and extracts the float value,
 func queryAndExtractMetric(ctx context.Context, promAPI promv1.API, query string, metricName string) (float64, error) {
-	val, warn, err := promAPI.Query(ctx, query, time.Now())
+	val, warn, err := utils.QueryPrometheusWithBackoff(ctx, promAPI, query)
 	if err != nil {
 		return 0.0, fmt.Errorf("failed to query Prometheus for %s: %w", metricName, err)
 	}
@@ -89,7 +90,7 @@ func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelN
 	// Try with namespace label first (real vLLM), fall back to just model_name (vllme emulator)
 	testQuery := fmt.Sprintf(`%s{model_name="%s",namespace="%s"}`, constants.VLLMNumRequestRunning, modelName, namespace)
 
-	val, _, err := promAPI.Query(ctx, testQuery, time.Now())
+	val, _, err := utils.QueryPrometheusWithBackoff(ctx, promAPI, testQuery)
 	if err != nil {
 		logger.Log.Error(err, "Error querying Prometheus for metrics validation",
 			"model", modelName, "namespace", namespace)
@@ -113,7 +114,7 @@ func ValidateMetricsAvailability(ctx context.Context, promAPI promv1.API, modelN
 	// If no results with namespace label, try without it (for vllme emulator compatibility)
 	if len(vec) == 0 {
 		testQueryFallback := fmt.Sprintf(`%s{model_name="%s"}`, constants.VLLMNumRequestRunning, modelName)
-		val, _, err = promAPI.Query(ctx, testQueryFallback, time.Now())
+		val, _, err = utils.QueryPrometheusWithBackoff(ctx, promAPI, testQueryFallback)
 		if err != nil {
 			return MetricsValidationResult{
 				Available: false,

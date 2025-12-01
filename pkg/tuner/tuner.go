@@ -107,21 +107,35 @@ func (t *Tuner) Run() (tunedResults *TunedResults, err error) {
 	}
 
 	// check validity of tunedResults
-	nis, err := t.validateTunedResults()
-	if err != nil {
+	nis, valErr := t.validateTunedResults()
+	if valErr != nil {
 		// unstash to return to previous filter state
 		if err := stasher.UnStash(); err != nil {
 			return nil, fmt.Errorf("failed to unstash filter state after validation failure: %w", err)
 		}
 		// Extract OLD state after unstashing
-		tunedResults, err := t.extractTunedResults()
-		if err != nil {
-			return nil, fmt.Errorf("validation failed and extraction of previous state failed: %w", err)
+		tunedResults, extractErr := t.extractTunedResults()
+		if extractErr != nil {
+			return nil, fmt.Errorf("validation failed and extraction of previous state failed: %w", extractErr)
 		}
+
+		// Validate that we actually got a previous state
+		if tunedResults == nil || tunedResults.ServiceParms == nil {
+			return nil, fmt.Errorf("validation failed (NIS=%.6f) and no previous state available: %v", nis, valErr)
+		}
+
 		// Mark validation as failed but return previous valid state
 		tunedResults.ValidationFailed = true
-		tunedResults.NIS = nis // Include the failed NIS for debugging
-		logger.Log.Warnf("Tuner validation failed (NIS=%.2f), returning previous state: %v", nis, err)
+		// Only use the measured NIS if it's non-negative, otherwise keep -1 as diagnostic
+		tunedResults.NIS = nis
+
+		// Log both the validation error and the fact we're returning the previous state
+		logger.Log.Warnf("Tuner validation failed (NIS=%.2f), validation error: %v - returning previous state: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f",
+			nis, valErr,
+			tunedResults.ServiceParms.Decode.Alpha,
+			tunedResults.ServiceParms.Decode.Beta,
+			tunedResults.ServiceParms.Prefill.Gamma,
+			tunedResults.ServiceParms.Prefill.Delta)
 		return tunedResults, nil // Return nil error and previous state with ValidationFailed set to true
 	}
 
@@ -286,7 +300,8 @@ func (t *Tuner) validateTunedResults() (float64, error) {
 	NIS := mat.Dot(innovation, tmp)
 
 	if NIS >= constants.DefaultMaxNIS {
-		return -1.0, fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
+		// Return the actual computed NIS along with an error so callers can record the measured NIS value and failure in validation.
+		return NIS, fmt.Errorf("normalized innovation squared (NIS=%.2f) exceeds threshold (%.2f), rejecting update as outlier",
 			NIS, constants.DefaultMaxNIS)
 	}
 

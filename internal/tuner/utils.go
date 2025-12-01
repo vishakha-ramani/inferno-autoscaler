@@ -488,6 +488,13 @@ func updateVAStatusWithTunedParams(
 	// convert *mat.Dense to slice of string slices to store covariance matrix in VA status
 	covMatrixStatus := denseMatrixToSliceOfStrings(tunedResults.Covariance)
 
+	// Only set NIS if it's non-negative
+	// Negative NIS indicates that values couldn't be computed
+	nisString := ""
+	if tunedResults.NIS >= 0 {
+		nisString = fmt.Sprintf("%.6f", tunedResults.NIS)
+	}
+
 	va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{
 		Model:       model,
 		Accelerator: accelerator,
@@ -502,17 +509,17 @@ func updateVAStatusWithTunedParams(
 				"delta": fmt.Sprintf("%.6f", tunedResults.ServiceParms.Prefill.Delta),
 			},
 		},
-		NIS:              fmt.Sprintf("%.6f", tunedResults.NIS),
+		NIS:              nisString,
 		CovarianceMatrix: covMatrixStatus,
 	}
 
-	logger.Log.Debugf("Updated tuner status for variant %s: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f, NIS=%.6f",
+	logger.Log.Debugf("Updated tuner status for variant %s: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f, NIS=%s",
 		va.Name,
 		tunedResults.ServiceParms.Decode.Alpha,
 		tunedResults.ServiceParms.Decode.Beta,
 		tunedResults.ServiceParms.Prefill.Gamma,
 		tunedResults.ServiceParms.Prefill.Delta,
-		tunedResults.NIS)
+		nisString)
 
 	return nil
 }

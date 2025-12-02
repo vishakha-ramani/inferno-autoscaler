@@ -149,17 +149,18 @@ var _ = Describe("Manager", Ordered, func() {
 
 var _ = Describe("Test workload-variant-autoscaler in emulated environment - single VariantAutoscaling", Ordered, func() {
 	var (
-		name           string
-		namespace      string
-		deployName     string
-		serviceName    string
-		serviceMonName string
-		appLabel       string
-		loadGenJob     *batchv1.Job
-		port           int
-		loadRate       int
-		modelName      string
-		ctx            context.Context
+		name            string
+		namespace       string
+		deployName      string
+		serviceName     string
+		serviceMonName  string
+		appLabel        string
+		loadGenJob      *batchv1.Job
+		port            int
+		loadRate        int
+		modelName       string
+		ctx             context.Context
+		initialReplicas int32
 	)
 
 	BeforeAll(func() {
@@ -180,12 +181,14 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		loadRate = 5 // requests per second
 		modelName = llamaModelId
 
+		initialReplicas = 2
+
 		By("ensuring unique app label for deployment and service")
 		utils.ValidateAppLabelUniqueness(namespace, appLabel, k8sClient, crClient)
 		utils.ValidateVariantAutoscalingUniqueness(namespace, llamaModelId, a100Acc, crClient)
 
 		By("creating llm-d-sim deployment")
-		deployment := utils.CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
+		deployment := utils.CreateLlmdSimDeployment(namespace, deployName, modelName, appLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL, initialReplicas)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create Deployment: %s", deployName))
 
@@ -454,7 +457,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
@@ -508,7 +511,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		}, 1*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
@@ -554,7 +557,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		}, 4*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, deployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", deployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
@@ -712,6 +715,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		secondModelName          string
 		port                     int
 		loadRate                 int
+		initialReplicas          int32
 		ctx                      context.Context
 	)
 
@@ -739,6 +743,8 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		secondModelName = llamaModelId
 		loadRate = 3 // requests per second
 
+		initialReplicas = 2
+
 		By("ensuring unique app labels for deployment and service")
 		utils.ValidateAppLabelUniqueness(namespace, firstAppLabel, k8sClient, crClient)
 		utils.ValidateAppLabelUniqueness(namespace, secondAppLabel, k8sClient, crClient)
@@ -746,7 +752,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		utils.ValidateVariantAutoscalingUniqueness(namespace, llamaModelId, h100Acc, crClient)
 
 		By("creating resources for the first deployment")
-		firstDeployment := utils.CreateLlmdSimDeployment(namespace, firstDeployName, firstModelName, firstAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
+		firstDeployment := utils.CreateLlmdSimDeployment(namespace, firstDeployName, firstModelName, firstAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL, initialReplicas)
 		_, err := k8sClient.AppsV1().Deployments(namespace).Create(ctx, firstDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first Deployment: %s", firstDeployName))
 
@@ -776,7 +782,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first VariantAutoscaling for: %s", firstDeployName))
 
 		By("creating resources for the second deployment")
-		secondDeployment := utils.CreateLlmdSimDeployment(namespace, secondDeployName, secondModelName, secondAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL)
+		secondDeployment := utils.CreateLlmdSimDeployment(namespace, secondDeployName, secondModelName, secondAppLabel, fmt.Sprintf("%d", port), avgTTFT, avgITL, initialReplicas)
 		_, err = k8sClient.AppsV1().Deployments(namespace).Create(ctx, secondDeployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second Deployment: %s", secondDeployName))
 
@@ -992,14 +998,14 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("verifying that the controller has updated the status")
-		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
@@ -1138,14 +1144,14 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		}, 6*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("showing the status of VAs")
-		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
@@ -1211,14 +1217,14 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 
 		By("verifying that the controller has updated the status")
 
-		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, firstDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", firstDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",
 			firstDeployName,
 			int(desiredReplicas1))
 
-		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient)
+		err = utils.LogVariantAutoscalingStatus(ctx, secondDeployName, namespace, crClient, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to log VariantAutoscaling status for: %s", secondDeployName))
 
 		fmt.Printf("Prometheus metrics for VA %s - desired replicas: %d\n",

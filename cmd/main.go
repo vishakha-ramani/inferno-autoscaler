@@ -22,6 +22,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -199,24 +200,42 @@ func main() {
 		})
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// Get REST config and configure timeouts to handle network latency
+	// This addresses issues with leader election lease renewal failures in environments
+	// with higher network latency or API server slowness.
+	restConfig := ctrl.GetConfigOrDie()
+	// Increase HTTP client timeout to accommodate network latency
+	// Default is 30s, but we increase it to 60s for better resilience
+	restConfig.Timeout = 60 * time.Second
+
+	// Configure leader election with increased timeouts to prevent lease renewal failures
+	// Default values are: LeaseDuration=15s, RenewDeadline=10s, RetryPeriod=2s
+	// Increased values provide more tolerance for network latency and API server delays
+	leaseDuration := 60 * time.Second
+	renewDeadline := 50 * time.Second
+	retryPeriod := 10 * time.Second
+
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "72dd1cf1.llm-d.ai",
+		// Leader election timeout configuration
+		LeaseDuration: &leaseDuration,
+		RenewDeadline: &renewDeadline,
+		RetryPeriod:   &retryPeriod,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
 		// speeds up voluntary leader transitions as the new leader don't have to wait
 		// LeaseDuration time first.
 		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		// This is safe to enable because the program ends immediately after the manager stops
+		// (see mgr.Start() call at the end of main()). This enables fast failover during
+		// deployments and upgrades, reducing downtime from ~60s to ~1-2s.
+		LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		setupLog.Error("unable to start manager", zap.Error(err))

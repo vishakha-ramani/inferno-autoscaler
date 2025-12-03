@@ -66,73 +66,47 @@ func setFallbackParamsInSystemData(
 	var state []float64
 	var err error
 
-	// Priority 1: If status has actual tuned results (params + covariance), use them
+	// Track if we can use previous status params as a fallback to avoid overwriting covariance matrix
+	usedStatusParams := false
+
+	// Priority 1: If status has previous tuned results (params + covariance), use them
 	if HasFullTunedResults(va) {
 		state, err = extractStateFromVAStatus(va)
-		if err == nil {
-			logger.Log.Infof("Using tuned parameters from status for variant %s/%s",
-				va.Name, va.Namespace)
-		} else {
+		if err != nil {
 			logger.Log.Debugf("Failed to extract state from status for variant %s/%s: %v",
 				va.Name, va.Namespace, err)
+		} else {
+			logger.Log.Infof("Using tuned parameters from status for variant %s/%s",
+				va.Name, va.Namespace)
+			usedStatusParams = true
 		}
 	}
 
 	// Priority 2 & 3: Order depends on autoGuessInitialState flag
 	if state == nil {
-		if autoGuessInitialState {
-			// AutoGuess enabled: try guessInitState first, then spec
-			state, err = guessInitState(server)
-			if err != nil {
-				logger.Log.Debugf("Failed to guess initial state for variant %s/%s: %v. Trying spec.",
-					va.Name, va.Namespace, err)
-
-				state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-				if err != nil {
-					logger.Log.Errorf("Failed to find state in spec for variant %s/%s: %v",
-						va.Name, va.Namespace, err)
-					return fmt.Errorf("all fallback methods failed: %w", err)
-				}
-				logger.Log.Infof("Using parameters from spec for variant %s/%s",
-					va.Name, va.Namespace)
-			} else {
-				logger.Log.Infof("Using auto-guessed initial state for variant %s/%s",
-					va.Name, va.Namespace)
-			}
-		} else {
-			// AutoGuess disabled: try spec first, then guessInitState
-			state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-			if err != nil {
-				logger.Log.Infof("Failed to find state in spec for variant %s/%s: %v. Trying to guess.",
-					va.Name, va.Namespace, err)
-
-				state, err = guessInitState(server)
-				if err != nil {
-					logger.Log.Errorf("Failed to guess initial state for variant %s/%s, model %s, accelerator %s: %v",
-						va.Name, va.Namespace, server.Model, server.CurrentAlloc.Accelerator, err)
-					return fmt.Errorf("all fallback methods failed: %w", err)
-				}
-				logger.Log.Infof("Using guessed initial state for variant %s/%s",
-					va.Name, va.Namespace)
-			} else {
-				logger.Log.Infof("Using parameters from spec for variant %s/%s",
-					va.Name, va.Namespace)
-			}
+		state, err = getInitialStateWithFallback(systemData, server, autoGuessInitialState)
+		if err != nil {
+			logger.Log.Errorf("Failed to get initial state for variant %s/%s: %v", va.Name, va.Namespace, err)
+			return fmt.Errorf("all fallback methods failed: %w", err)
 		}
+		logger.Log.Infof("Using fallback parameters for variant %s/%s: alpha=%.6f, beta=%.6f, gamma=%.6f, delta=%.6f",
+			va.Name, va.Namespace, state[constants.StateIndexAlpha], state[constants.StateIndexBeta], state[constants.StateIndexGamma], state[constants.StateIndexDelta])
 	}
 
 	// Update SystemData with the obtained parameters
 	if err := updateSystemDataWithState(systemData, server.Model, server.CurrentAlloc.Accelerator, state); err != nil {
 		logger.Log.Errorf("Failed to update SystemData for variant %s/%s, model %s, accelerator %s with state [%.6f, %.6f, %.6f, %.6f]: %v",
 			va.Name, va.Namespace, server.Model, server.CurrentAlloc.Accelerator,
-			state[0], state[1], state[2], state[3], err)
+			state[constants.StateIndexAlpha], state[constants.StateIndexBeta], state[constants.StateIndexGamma], state[constants.StateIndexDelta], err)
 		return fmt.Errorf("failed to update SystemData: %w", err)
 	}
 
-	// Also update VA status to keep it in sync
-	if err := updateVAStatusWithState(va, server.Model, server.CurrentAlloc.Accelerator, state); err != nil {
-		logger.Log.Warnf("Failed to update VA status for variant %s/%s with state [%.6f, %.6f, %.6f, %.6f]: %v",
-			va.Name, va.Namespace, state[0], state[1], state[2], state[3], err)
+	// Only update VA status if we didn't use previous status params, to preserve covariance matrix
+	if !usedStatusParams {
+		if err := updateVAStatusWithState(va, server.Model, server.CurrentAlloc.Accelerator, state); err != nil {
+			logger.Log.Warnf("Failed to update VA status for variant %s/%s with state [%.6f, %.6f, %.6f, %.6f]: %v",
+				va.Name, va.Namespace, state[constants.StateIndexAlpha], state[constants.StateIndexBeta], state[constants.StateIndexGamma], state[constants.StateIndexDelta], err)
+		}
 	}
 
 	return nil

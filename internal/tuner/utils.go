@@ -97,6 +97,41 @@ func convertAllocToEnvironment(alloc infernoConfig.AllocationData) (*tune.Enviro
 	}, nil
 }
 
+// getInitialStateWithFallback attempts to get initial state using the priority defined by autoGuessInitialState:
+// - If autoGuessInitialState=true: guess -> spec
+// - If autoGuessInitialState=false: spec -> guess
+func getInitialStateWithFallback(
+	systemData *infernoConfig.SystemData,
+	server *infernoConfig.ServerSpec,
+	autoGuessInitialState bool,
+) ([]float64, error) {
+	if autoGuessInitialState {
+		// Try guess first, fallback to spec
+		state, err := guessInitState(server)
+		if err == nil {
+			return state, nil
+		}
+
+		state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get state from guess and spec: %w", err)
+		}
+		return state, nil
+	}
+
+	// Try spec first, fallback to guess
+	state, err := findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
+	if err == nil {
+		return state, nil
+	}
+
+	state, err = guessInitState(server)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state from spec and guess: %w", err)
+	}
+	return state, nil
+}
+
 // get state and covariance matrix from VA status (if exist), otherwise return only the state params from VA spec
 func getStateAndCovariance(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
@@ -104,7 +139,7 @@ func getStateAndCovariance(
 	server *infernoConfig.ServerSpec,
 	autoGuessInitialState bool,
 ) (state, covMatrix []float64, err error) {
-	// 1. Check if VA has tuned results in status (has been tuned before)
+	// 1. Check if VA has tuned results in status (i.e. has been tuned before)
 	if HasFullTunedResults(va) {
 		state, covMatrix, err = extractStateAndCovarianceFromVAStatus(va)
 		if err != nil {
@@ -124,56 +159,11 @@ func getStateAndCovariance(
 	}
 
 	// No previously tuned results in status, or extraction failed
-	if autoGuessInitialState {
-		// If the flag is enabled: prioritize metrics-based estimation of the initial state
-		state, err = guessInitState(server)
-		if err == nil {
-			logger.Log.Debugf("Using guessed initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
-				va.Name,
-				state[constants.StateIndexAlpha],
-				state[constants.StateIndexBeta],
-				state[constants.StateIndexGamma],
-				state[constants.StateIndexDelta])
-			return state, nil, nil
-		}
-		logger.Log.Debugf("Failed to guess initial state for variant %s: %v. Trying spec.", va.Name, err)
-
-		state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get state from all sources (status/guess/spec): %w", err)
-		}
-		logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
-			va.Name,
-			state[constants.StateIndexAlpha],
-			state[constants.StateIndexBeta],
-			state[constants.StateIndexGamma],
-			state[constants.StateIndexDelta])
-		return state, nil, nil
-	}
-
-	// If the flag is not enabled: prioritize parameters in spec
-	state, err = findStateInSystemData(systemData, server.Model, server.CurrentAlloc.Accelerator)
-	if err == nil {
-		logger.Log.Debugf("Using initial state from spec for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
-			va.Name,
-			state[constants.StateIndexAlpha],
-			state[constants.StateIndexBeta],
-			state[constants.StateIndexGamma],
-			state[constants.StateIndexDelta])
-		return state, nil, nil
-	}
-	logger.Log.Debugf("Failed to find perf data in SystemData for variant %s: %v. Trying new initial parameters.", va.Name, err)
-
-	state, err = guessInitState(server)
+	// 2. Try to get state from VA spec or by guessing from collected metrics
+	state, err = getInitialStateWithFallback(systemData, server, autoGuessInitialState)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get state from all sources (status/spec/guess): %w", err)
+		return nil, nil, fmt.Errorf("failed to get initial state from all sources: %w", err)
 	}
-	logger.Log.Debugf("Using guessed initial state for variant %s: alpha= %.6f, beta= %.6f, gamma= %.6f, delta= %.6f",
-		va.Name,
-		state[constants.StateIndexAlpha],
-		state[constants.StateIndexBeta],
-		state[constants.StateIndexGamma],
-		state[constants.StateIndexDelta])
 	return state, nil, nil
 
 }
@@ -253,7 +243,8 @@ func hasValidParams(decodeParms, prefillParms map[string]string) bool {
 	return true
 }
 
-// extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
+// extractStateAndCovarianceFromVAStatus extracts the state params (alpha, beta, gamma , delta) and the covariance matrix from the VA status
+// uses extractStateFromVAStatus and extractCovarianceFromVAStatus helper functions to perform the extraction and parsing
 func extractStateAndCovarianceFromVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) (state, covMatrix []float64, err error) {
 	state, err = extractStateFromVAStatus(va)
 	if err != nil {

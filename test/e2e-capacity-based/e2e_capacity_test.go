@@ -75,8 +75,8 @@ const (
 	h100Acc      = "H100"
 
 	// Second variant with different accelerator (for cost-based testing)
-	// h100Cost = 500.0 // Higher cost accelerator
-	// a100Cost = 300.0 // Lower cost accelerator
+	h100Cost = 50.0
+	a100Cost = 30.0
 )
 
 var (
@@ -200,7 +200,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("creating VariantAutoscaling resource")
-		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, deployName, modelName, a100Acc)
+		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, deployName, modelName, a100Acc, 10.0)
 		err = crClient.Create(ctx, variantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployName))
 
@@ -548,12 +548,12 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("creating VariantAutoscaling resource for A100 variant")
-		variantAutoscalingA100 := utils.CreateVariantAutoscalingResource(namespace, deployNameA100, modelName, a100Acc)
+		variantAutoscalingA100 := utils.CreateVariantAutoscalingResource(namespace, deployNameA100, modelName, a100Acc, a100Cost)
 		err = crClient.Create(ctx, variantAutoscalingA100)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployNameA100))
 
 		By("creating VariantAutoscaling resource for H100 variant")
-		variantAutoscalingH100 := utils.CreateVariantAutoscalingResource(namespace, deployNameH100, modelName, h100Acc)
+		variantAutoscalingH100 := utils.CreateVariantAutoscalingResource(namespace, deployNameH100, modelName, h100Acc, h100Cost)
 		err = crClient.Create(ctx, variantAutoscalingH100)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployNameH100))
 

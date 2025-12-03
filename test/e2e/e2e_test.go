@@ -161,6 +161,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		modelName       string
 		ctx             context.Context
 		initialReplicas int32
+		variantCost     float64
 	)
 
 	BeforeAll(func() {
@@ -182,6 +183,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		modelName = llamaModelId
 
 		initialReplicas = 2
+		variantCost = 10.0
 
 		By("ensuring unique app label for deployment and service")
 		utils.ValidateAppLabelUniqueness(namespace, appLabel, k8sClient, crClient)
@@ -216,7 +218,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("creating VariantAutoscaling resource")
-		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, deployName, modelName, a100Acc)
+		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, deployName, modelName, a100Acc, variantCost)
 		err = crClient.Create(ctx, variantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create VariantAutoscaling for: %s", deployName))
 
@@ -713,6 +715,8 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		secondServiceMonitorName string
 		firstModelName           string
 		secondModelName          string
+		firstVariantCost         float64
+		secondVariantCost        float64
 		port                     int
 		loadRate                 int
 		initialReplicas          int32
@@ -744,6 +748,8 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		loadRate = 3 // requests per second
 
 		initialReplicas = 2
+		firstVariantCost = 10.0
+		secondVariantCost = 10.0
 
 		By("ensuring unique app labels for deployment and service")
 		utils.ValidateAppLabelUniqueness(namespace, firstAppLabel, k8sClient, crClient)
@@ -777,7 +783,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
-		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, firstDeployName, firstModelName, a100Acc)
+		variantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, firstDeployName, firstModelName, a100Acc, firstVariantCost)
 		err = crClient.Create(ctx, variantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create first VariantAutoscaling for: %s", firstDeployName))
 
@@ -799,7 +805,7 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
-		secondVariantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, secondDeployName, secondModelName, h100Acc)
+		secondVariantAutoscaling := utils.CreateVariantAutoscalingResource(namespace, secondDeployName, secondModelName, h100Acc, secondVariantCost)
 		err = crClient.Create(ctx, secondVariantAutoscaling)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to create second VariantAutoscaling for: %s", secondDeployName))
 

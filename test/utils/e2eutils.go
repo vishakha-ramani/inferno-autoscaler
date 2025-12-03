@@ -962,7 +962,7 @@ func CreateLlmdSimService(namespace, serviceName, appLabel string, nodePort, por
 }
 
 // creates a VariantAutoscaling resource with owner reference to deployment
-func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc string) *v1alpha1.VariantAutoscaling {
+func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc string, variantCost float64) *v1alpha1.VariantAutoscaling {
 	return &v1alpha1.VariantAutoscaling{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      resourceName,
@@ -972,7 +972,8 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 			},
 		},
 		Spec: v1alpha1.VariantAutoscalingSpec{
-			ModelID: modelId,
+			ModelID:     modelId,
+			VariantCost: fmt.Sprintf("%.2f", variantCost),
 			SLOClassRef: v1alpha1.ConfigMapKeyRef{
 				Name: "premium",
 				Key:  "slo",

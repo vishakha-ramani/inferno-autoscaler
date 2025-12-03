@@ -121,7 +121,7 @@ func initializeK8sClient() {
 	}
 }
 
-var _ = Describe("Test workload-variant-autoscaler - Saturation-based Mode - Single VariantAutoscaling", Ordered, func() {
+var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single VariantAutoscaling", Ordered, func() {
 	var (
 		name            string
 		namespace       string
@@ -423,7 +423,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation-based Mode - Sin
 	})
 })
 
-var _ = Describe("Test workload-variant-autoscaler - Saturation-based Mode - Multiple VariantAutoscalings", Ordered, func() {
+var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple VariantAutoscalings", Ordered, func() {
 	var (
 		nameA100           string
 		nameH100           string

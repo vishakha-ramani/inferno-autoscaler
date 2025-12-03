@@ -1,15 +1,15 @@
-name: Publish Helm Chart to GHCR
+name: Release – Docker Image & Publish Helm Chart to GHCR
 
 on:
   release:
     types: [published]
 
 permissions:
-  contents: write        # needed to commit updated Chart.yaml
-  packages: write        # needed for GHCR push
+  contents: write
+  packages: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,41 +20,77 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------------------------
-      # 2. Extract version from release tag
-      # Tag format expected: v0.0.4
+      # 2. Determine version from tag (v0.0.4 → 0.0.4)
       # -----------------------------------------
       - name: Determine version from tag
         id: version
         run: |
           RAW_TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${RAW_TAG#v}"
+          echo "tag=$RAW_TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       # -----------------------------------------
-      # 3. Update Chart.yaml with release version
+      # 3. Set up QEMU + Buildx
       # -----------------------------------------
-      - name: Update Chart.yaml
-        run: |
-          CHART_FILE="charts/workload-variant-autoscaler/Chart.yaml"
-          VERSION="${{ steps.version.outputs.version }}"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-          # Update version:
-          sed -i "s/^version:.*/version: ${VERSION}/" $CHART_FILE
-          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" $CHART_FILE
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -----------------------------------------
+      # 4. Log in to GHCR for Docker push
+      # -----------------------------------------
+      - name: Docker login GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # -----------------------------------------
+      # 5. Build and push multi-arch Docker image
+      # -----------------------------------------
+      - name: Build and push container image
+        run: |
+          IMAGE="ghcr.io/llm-d-incubation/workload-variant-autoscaler"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push \
+            -t $IMAGE:$TAG \
+            -t $IMAGE:latest .
+
+      # -----------------------------------------
+      # 6. Patch Helm chart (Chart.yaml + values.yaml)
+      # -----------------------------------------
+      - name: Update Helm chart files
+        run: |
+          CHART_DIR="charts/workload-variant-autoscaler"
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Chart.yaml updates
+          sed -i "s/^version:.*/version: ${VERSION}/"       $CHART_DIR/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${TAG}\"/" $CHART_DIR/Chart.yaml
+
+          # values.yaml—update container tag
+          sed -i "s/^  tag:.*/  tag: \"${TAG}\"/" $CHART_DIR/values.yaml
 
           echo "Updated Chart.yaml:"
-          cat $CHART_FILE
+          cat $CHART_DIR/Chart.yaml
+
+          echo "Updated values.yaml:"
+          cat $CHART_DIR/values.yaml
 
       # -----------------------------------------
-      # 4. Set up Helm
+      # 7. Install Helm
       # -----------------------------------------
       - name: Install Helm
         uses: azure/setup-helm@v3
 
       # -----------------------------------------
-      # 5. Log in to GHCR
+      # 8. Login to GHCR for chart publishing
       # -----------------------------------------
-      - name: Login to GHCR
+      - name: Login to GHCR (Helm)
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             helm registry login ghcr.io \
@@ -62,16 +98,16 @@ jobs:
               --password-stdin
 
       # -----------------------------------------
-      # 6. Package Helm chart
+      # 9. Package Helm chart
       # -----------------------------------------
       - name: Package chart
         run: |
           helm package charts/workload-variant-autoscaler --destination .
 
       # -----------------------------------------
-      # 7. Push chart to GHCR
+      # 10. Push chart to GHCR
       # -----------------------------------------
-      - name: Push to GHCR
+      - name: Push Helm chart
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_FILE="workload-variant-autoscaler-${VERSION}.tgz"
@@ -80,13 +116,15 @@ jobs:
             oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler
 
       # -----------------------------------------
-      # 8. Commit updated Chart.yaml (optional but recommended)
+      # 11. Commit updated chart files
       # -----------------------------------------
-      - name: Commit updated Chart.yaml
+      - name: Commit updated Helm chart files
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           git add charts/workload-variant-autoscaler/Chart.yaml
-          git commit -m "Update Chart.yaml to version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git add charts/workload-variant-autoscaler/values.yaml
+
+          git commit -m "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" || echo "No changes to commit"
           git push

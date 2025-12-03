@@ -22,17 +22,6 @@ type VariantAutoscalingSpec struct {
 	VariantCost string `json:"variantCost,omitempty"`
 }
 
-// ConfigMapKeyRef references a specific key within a ConfigMap.
-type ConfigMapKeyRef struct {
-	// Name is the name of the ConfigMap.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// Key is the key within the ConfigMap.
-	// +kubebuilder:validation:MinLength=1
-	Key string `json:"key"`
-}
-
 // ModelProfile provides resource and performance characteristics for the model variant.
 type ModelProfile struct {
 	// Accelerators is a list of accelerator profiles for the model variant.

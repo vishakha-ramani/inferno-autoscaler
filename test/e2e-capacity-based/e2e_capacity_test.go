@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-// Capacity-based mode workload test constants
+// Saturation-based mode workload test constants
 const (
 	loadRatePerSecond   = 8   // requests per second
 	avgITL              = 10  // ms
@@ -121,7 +121,7 @@ func initializeK8sClient() {
 	}
 }
 
-var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single VariantAutoscaling", Ordered, func() {
+var _ = Describe("Test workload-variant-autoscaler - Saturation-based Mode - Single VariantAutoscaling", Ordered, func() {
 	var (
 		name            string
 		namespace       string
@@ -419,11 +419,11 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deployName, metav1.DeleteOptions{})
 		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployName))
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Cleanup completed for single VA capacity-based E2E test\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "Cleanup completed for single VA Saturation-based E2E test\n")
 	})
 })
 
-var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple VariantAutoscalings", Ordered, func() {
+var _ = Describe("Test workload-variant-autoscaler - Saturation-based Mode - Multiple VariantAutoscalings", Ordered, func() {
 	var (
 		nameA100           string
 		nameH100           string
@@ -973,7 +973,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 				h100Cost, err := strconv.ParseFloat(vaH100.Status.CurrentAlloc.VariantCost, 64)
 				g.Expect(err).NotTo(HaveOccurred(), "H100 cost should be parseable")
 
-				// In capacity-based mode with cost-awareness, cheaper variant should get more replicas
+				// In Saturation-based mode with cost-awareness, cheaper variant should get more replicas
 				// if both can handle the load equally well
 				_, _ = fmt.Fprintf(GinkgoWriter, "Costs: A100=%.2f, H100=%.2f, Replicas: A100=%d, H100=%d\n",
 					a100Cost, h100Cost, finalA100Replicas, finalH100Replicas)
@@ -1057,6 +1057,6 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 		err = k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deployNameH100, metav1.DeleteOptions{})
 		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete Deployment: %s", deployNameH100))
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Cleanup completed for multiple VAs capacity-based E2E tests\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "Cleanup completed for multiple VAs Saturation-based E2E tests\n")
 	})
 })

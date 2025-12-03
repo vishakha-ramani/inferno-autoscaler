@@ -72,21 +72,6 @@ _Appears in:_
 | `load` _[LoadProfile](#loadprofile)_ | Load describes the workload characteristics for the current allocation. |  |  |
 
 
-#### ConfigMapKeyRef
-
-
-
-ConfigMapKeyRef references a specific key within a ConfigMap.
-
-
-
-_Appears in:_
-- [VariantAutoscalingSpec](#variantautoscalingspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the name of the ConfigMap. |  | MinLength: 1 <br /> |
-| `key` _string_ | Key is the key within the ConfigMap. |  | MinLength: 1 <br /> |
 
 
 #### LoadProfile
@@ -218,7 +203,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `modelID` _string_ | ModelID specifies the unique identifier of the model to be autoscaled. |  | MinLength: 1 <br />Required: \{\} <br /> |
-| `sloClassRef` _[ConfigMapKeyRef](#configmapkeyref)_ | SLOClassRef references the ConfigMap key containing Service Level Objective (SLO) configuration. |  | Optional: \{\} <br /> |
 | `modelProfile` _[ModelProfile](#modelprofile)_ | ModelProfile provides resource and performance characteristics for the model variant. |  | Optional: \{\} <br /> |
 | `variantCost` _string_ | VariantCost specifies the cost per replica for this variant (used in capacity analysis). | 10.0 | Optional: \{\} <br />Pattern: `^\d+(\.\d+)?$` <br /> |
 

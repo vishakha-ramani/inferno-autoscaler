@@ -129,22 +129,6 @@ spec:
                 required:
                 - accelerators
                 type: object
-              sloClassRef:
-                description: SLOClassRef references the ConfigMap key containing Service
-                  Level Objective (SLO) configuration.
-                properties:
-                  key:
-                    description: Key is the key within the ConfigMap.
-                    minLength: 1
-                    type: string
-                  name:
-                    description: Name is the name of the ConfigMap.
-                    minLength: 1
-                    type: string
-                required:
-                - key
-                - name
-                type: object
               variantCost:
                 default: "10.0"
                 description: VariantCost specifies the cost per replica for this variant

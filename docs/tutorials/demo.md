@@ -87,9 +87,6 @@ metadata:
     inference.optimization/acceleratorName: H100
 spec:
   modelID: unsloth/Meta-Llama-3.1-8B
-  sloClassRef:
-    name: premium-slo
-    key: opt-125m
   modelProfile:
     accelerators:
       - acc: "H100"

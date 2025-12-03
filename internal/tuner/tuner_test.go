@@ -129,10 +129,6 @@ func createTunerTestVA(name, namespace string, activateTuner bool) llmdVariantAu
 					},
 				},
 			},
-			SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-				Name: "premium",
-				Key:  TestModelName,
-			},
 		},
 	}
 }

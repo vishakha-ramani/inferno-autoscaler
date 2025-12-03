@@ -852,10 +852,6 @@ data:
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default/default",
-					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -1073,10 +1069,6 @@ data:
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default/default",
-					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, va1)).To(Succeed())
@@ -1105,10 +1097,6 @@ data:
 								MaxBatchSize: 4,
 							},
 						},
-					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default/default",
 					},
 				},
 			}

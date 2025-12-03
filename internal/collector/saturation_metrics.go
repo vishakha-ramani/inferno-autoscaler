@@ -282,7 +282,7 @@ func (cmc *SaturationMetricsCollector) queryQueueMetrics(
 // Uses deployment label selectors to match pods to variants.
 //
 // Matching strategy:
-// 1. If k8sClient is available: Query pods using deployment label selectors (proper Kubernetes way)
+// 1. Query for pods using deployment label selectors
 // 2. Fallback: Use naming convention (deployment-name prefix matching)
 //
 // This approach is more robust than pure name-based matching and aligns with
@@ -305,6 +305,31 @@ func (cmc *SaturationMetricsCollector) mergeMetrics(
 	}
 	for pod := range queueMetrics {
 		podSet[pod] = true
+	}
+
+	// Prometheus retains metrics from terminated pods for a time period, causing stale metrics to be pulled.
+	// We must verify each actually existing pods before using its metrics for capacity decisions.
+	if cmc.k8sClient != nil {
+		existingPods := cmc.getExistingPods(ctx, namespace, podSet)
+		stalePodCount := 0
+
+		// Filter out pods that don't exist in the cluster
+		for podName := range podSet {
+			if !existingPods[podName] {
+				stalePodCount++
+				logger.Log.Debugf("Filtering pod from stale metrics: pod=%s, namespace=%s, model=%s",
+					podName, namespace, modelID)
+				delete(podSet, podName)
+			}
+		}
+
+		if stalePodCount > 0 {
+			logger.Log.Debugf("Filtered %d pod(s) from capacity analysis: namespace=%s, model=%s, prometheusCount=%d, actualCount=%d",
+				stalePodCount, namespace, modelID, len(podSet)+stalePodCount, len(podSet))
+		}
+	} else {
+		logger.Log.Warnf("k8sClient unavailable, cannot filter pods with stale metrics: namespace=%s, model=%s",
+			namespace, modelID)
 	}
 
 	replicaMetrics := make([]interfaces.ReplicaMetrics, 0, len(podSet))
@@ -462,4 +487,37 @@ func (cmc *SaturationMetricsCollector) findDeploymentForPod(
 	}
 
 	return matchedDeployment
+}
+
+// getExistingPods gets the set of pods that actually exist in the cluster from a set of candidate pods.
+// This is used to filter out pods with stale metrics from Prometheus, which can cause incorrect scaling decisions.
+// Returns a map of pod names that currently exist in the namespace.
+func (cmc *CapacityMetricsCollector) getExistingPods(
+	ctx context.Context,
+	namespace string,
+	candidatePods map[string]bool,
+) map[string]bool {
+	existingPods := make(map[string]bool)
+
+	// List all pods in the namespace
+	podList := &corev1.PodList{}
+	listOpts := &client.ListOptions{
+		Namespace: namespace,
+	}
+
+	if err := cmc.k8sClient.List(ctx, podList, listOpts); err != nil {
+		logger.Log.Errorf("Failed to list pods for filtering: namespace=%s, error=%v", namespace, err)
+		// On error, assume all candidate pods exist to prevent false negatives
+		return candidatePods
+	}
+
+	// Build set of existing pod names
+	for _, pod := range podList.Items {
+		existingPods[pod.Name] = true
+	}
+
+	logger.Log.Debugf("Pod existence check: namespace=%s, totalPods=%d, candidatePods=%d",
+		namespace, len(podList.Items), len(candidatePods))
+
+	return existingPods
 }

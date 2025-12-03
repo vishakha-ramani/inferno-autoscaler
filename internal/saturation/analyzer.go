@@ -310,10 +310,15 @@ func (a *Analyzer) CalculateSaturationTargets(
 		stateMap[state.VariantName] = state
 	}
 
-	// Initialize all targets to ready replicas (those with metrics)
+	// Initialize all targets to current ready replicas (those with metrics) from deployment status
 	// This prevents excessive scale-up when replicas are not yet ready
 	for _, va := range saturationAnalysis.VariantAnalyses {
-		targets[va.VariantName] = va.ReplicaCount
+		state := stateMap[va.VariantName]
+		targets[va.VariantName] = state.CurrentReplicas
+		if state.CurrentReplicas != va.ReplicaCount {
+			logger.Log.Debugf("Replica mismatch detected: variant=%s, deploymentReplicas=%d, metricsCount=%d",
+				va.VariantName, state.CurrentReplicas, va.ReplicaCount)
+		}
 	}
 
 	// Check if we should preserve any desired replicas
@@ -348,7 +353,8 @@ func (a *Analyzer) CalculateSaturationTargets(
 
 		if cheapestNonPreserved != nil {
 			state := stateMap[cheapestNonPreserved.VariantName]
-			targets[cheapestNonPreserved.VariantName] = cheapestNonPreserved.ReplicaCount + 1
+			// Use deployment status (CurrentReplicas) instead of metrics count
+			targets[cheapestNonPreserved.VariantName] = state.CurrentReplicas + 1
 			logger.Log.Infof("Saturation target: scale-up cheapest variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, target=%d, reason=%s",
 				cheapestNonPreserved.VariantName, cheapestNonPreserved.Cost, state.CurrentReplicas,
 				cheapestNonPreserved.ReplicaCount, targets[cheapestNonPreserved.VariantName], saturationAnalysis.ScaleUpReason)
@@ -363,7 +369,9 @@ func (a *Analyzer) CalculateSaturationTargets(
 				continue
 			}
 			// Can't scale down if at or below minimum (1 replica)
-			if va.ReplicaCount <= 1 {
+			// Use deployment status (CurrentReplicas) instead of metrics count
+			state := stateMap[va.VariantName]
+			if state.CurrentReplicas <= 1 {
 				continue
 			}
 			// Select most expensive, with stable tie-breaking by variant name
@@ -376,7 +384,8 @@ func (a *Analyzer) CalculateSaturationTargets(
 
 		if mostExpensiveNonPreserved != nil {
 			state := stateMap[mostExpensiveNonPreserved.VariantName]
-			targets[mostExpensiveNonPreserved.VariantName] = mostExpensiveNonPreserved.ReplicaCount - 1
+			// Use deployment status (CurrentReplicas) instead of metrics count
+			targets[mostExpensiveNonPreserved.VariantName] = state.CurrentReplicas - 1
 			logger.Log.Infof("Saturation target: scale-down most expensive variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, target=%d",
 				mostExpensiveNonPreserved.VariantName, mostExpensiveNonPreserved.Cost, state.CurrentReplicas,
 				mostExpensiveNonPreserved.ReplicaCount, targets[mostExpensiveNonPreserved.VariantName])

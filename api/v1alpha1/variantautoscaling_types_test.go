@@ -27,10 +27,6 @@ func makeValidVA() *VariantAutoscaling {
 		},
 		Spec: VariantAutoscalingSpec{
 			ModelID: "model-123",
-			SLOClassRef: ConfigMapKeyRef{
-				Name: "slo-config",
-				Key:  "gold",
-			},
 			ModelProfile: ModelProfile{
 				Accelerators: []AcceleratorProfile{
 					{
@@ -99,15 +95,11 @@ func TestDeepCopyIndependence(t *testing.T) {
 	cp := orig.DeepCopy()
 
 	cp.Spec.ModelID = "model-456"
-	cp.Spec.SLOClassRef.Name = "slo-config-2"
 	cp.Spec.ModelProfile.Accelerators[0].Acc = "nvidia.com/mig-3g.20gb"
 	cp.Status.CurrentAlloc.Load.ArrivalRate = "20 rps"
 
 	if orig.Spec.ModelID == cp.Spec.ModelID {
 		t.Errorf("DeepCopy did not create independent copy for Spec.ModelID")
-	}
-	if orig.Spec.SLOClassRef.Name == cp.Spec.SLOClassRef.Name {
-		t.Errorf("DeepCopy did not create independent copy for Spec.SLOClassRef.Name")
 	}
 	if orig.Spec.ModelProfile.Accelerators[0].Acc == cp.Spec.ModelProfile.Accelerators[0].Acc {
 		t.Errorf("DeepCopy did not create independent copy for nested Accelerators slice")
@@ -171,10 +163,6 @@ func TestStatusOmitEmpty(t *testing.T) {
 		},
 		Spec: VariantAutoscalingSpec{
 			ModelID: "m",
-			SLOClassRef: ConfigMapKeyRef{
-				Name: "slo",
-				Key:  "bronze",
-			},
 			ModelProfile: ModelProfile{
 				Accelerators: []AcceleratorProfile{
 					{Acc: "gpu", AccCount: 1, PerfParms: PerfParms{DecodeParms: map[string]string{"alpha": "1", "beta": "1"}, PrefillParms: map[string]string{"gamma": "1", "delta": "1"}}, MaxBatchSize: 1},

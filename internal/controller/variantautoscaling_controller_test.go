@@ -100,10 +100,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 								},
 							},
 						},
-						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-							Name: "premium",
-							Key:  "default-default",
-						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -439,10 +435,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
-					},
 				},
 			}
 			err := k8sClient.Create(ctx, resource)
@@ -472,10 +464,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
-					},
 				},
 			}
 			err := k8sClient.Create(ctx, resource)
@@ -496,10 +484,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							// no configuration for accelerators
 						},
-					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
 					},
 				},
 			}
@@ -529,9 +513,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 								MaxBatchSize: 4,
 							},
 						},
-					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						// no configuration for SLOClassRef
 					},
 				},
 			}
@@ -654,10 +635,6 @@ data:
 									MaxBatchSize: 4,
 								},
 							},
-						},
-						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-							Name: "premium",
-							Key:  modelID,
 						},
 					},
 				}

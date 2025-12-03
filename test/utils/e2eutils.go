@@ -959,10 +959,6 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 		},
 		Spec: v1alpha1.VariantAutoscalingSpec{
 			ModelID: modelId,
-			SLOClassRef: v1alpha1.ConfigMapKeyRef{
-				Name: "premium",
-				Key:  "slo",
-			},
 			ModelProfile: v1alpha1.ModelProfile{
 				Accelerators: []v1alpha1.AcceleratorProfile{
 					{

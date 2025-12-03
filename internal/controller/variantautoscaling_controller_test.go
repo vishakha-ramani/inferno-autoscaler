@@ -100,10 +100,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 								},
 							},
 						},
-						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-							Name: "premium",
-							Key:  "default-default",
-						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -439,10 +435,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
-					},
 				},
 			}
 			err := k8sClient.Create(ctx, resource)
@@ -472,10 +464,6 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 							},
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
-					},
 				},
 			}
 			err := k8sClient.Create(ctx, resource)
@@ -497,47 +485,11 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 							// no configuration for accelerators
 						},
 					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "premium",
-						Key:  "default-default",
-					},
 				},
 			}
 			err := k8sClient.Create(ctx, resource)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("spec.modelProfile.accelerators"))
-		})
-
-		It("should handle empty SLOClassRef", func() {
-			By("Creating VariantAutoscaling with no SLOClassRef")
-			resource := &llmdVariantAutoscalingV1alpha1.VariantAutoscaling{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "empty-slo-class-ref",
-					Namespace: "default",
-				},
-				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ModelID: "default-default",
-					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
-						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
-							{
-								Acc:      "A100",
-								AccCount: 1,
-								PerfParms: llmdVariantAutoscalingV1alpha1.PerfParms{
-									DecodeParms:  map[string]string{"alpha": "0.28", "beta": "0.72"},
-									PrefillParms: map[string]string{"gamma": "0", "delta": "0"},
-								},
-								MaxBatchSize: 4,
-							},
-						},
-					},
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						// no configuration for SLOClassRef
-					},
-				},
-			}
-			err := k8sClient.Create(ctx, resource)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.sloClassRef"))
 		})
 	})
 
@@ -654,10 +606,6 @@ data:
 									MaxBatchSize: 4,
 								},
 							},
-						},
-						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-							Name: "premium",
-							Key:  modelID,
 						},
 					},
 				}

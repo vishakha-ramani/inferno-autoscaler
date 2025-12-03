@@ -452,11 +452,7 @@ metadata:
 spec:
   # Model identifier
   modelID: "unsloth/Meta-Llama-3.1-8B"
-  
-  # SLO class reference (points to ConfigMap)
-  sloClassRef:
-    name: premium-slo
-    key: opt-125m
+
   
   # Model performance profile for different accelerators
   modelProfile:

@@ -240,6 +240,9 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	// Add runnable to initialize capacity scaling config cache after cache has started
+    // This must be a runnable because the cached client is not ready until after mgr.Start()
+    // begins and the cache syncs. Using a runnable ensures initialization happens at the
+    // correct point in the controller lifecycle.
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		setupLog.Info("Loading initial capacity scaling configuration (after cache start)")
 		if err := reconciler.InitializeCapacityConfigCache(ctx); err != nil {

@@ -88,6 +88,22 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
+	// Leader election timeout configuration flags
+	// These can be overridden in manager.yaml to tune for different environments
+	// (e.g., higher values for environments with network latency or API server slowness)
+	var leaseDuration = flag.Duration("leader-election-lease-duration", 60*time.Second,
+		"The duration that non-leader candidates will wait to force acquire leadership. "+
+			"Increased from default 15s to 60s to prevent lease renewal failures in environments with network latency.")
+	var renewDeadline = flag.Duration("leader-election-renew-deadline", 50*time.Second,
+		"The duration that the acting master will retry refreshing leadership before giving up. "+
+			"Increased from default 10s to 50s to provide more tolerance for network latency and API server delays.")
+	var retryPeriod = flag.Duration("leader-election-retry-period", 10*time.Second,
+		"The duration the clients should wait between tries of actions. "+
+			"Increased from default 2s to 10s to reduce API server load and provide more time between renewal attempts.")
+	var restTimeout = flag.Duration("rest-client-timeout", 60*time.Second,
+		"The timeout for REST API calls to the Kubernetes API server. "+
+			"Increased from default ~30s to 60s for better resilience against network latency.")
+
 	flag.Parse()
 
 	setupLog, err := logger.InitLogger()
@@ -204,16 +220,14 @@ func main() {
 	// This addresses issues with leader election lease renewal failures in environments
 	// with higher network latency or API server slowness.
 	restConfig := ctrl.GetConfigOrDie()
-	// Increase HTTP client timeout to accommodate network latency
-	// Default is 30s, but we increase it to 60s for better resilience
-	restConfig.Timeout = 60 * time.Second
+	// Use configurable REST client timeout (default 60s, can be overridden via --rest-client-timeout flag)
+	restConfig.Timeout = *restTimeout
 
-	// Configure leader election with increased timeouts to prevent lease renewal failures
-	// Default values are: LeaseDuration=15s, RenewDeadline=10s, RetryPeriod=2s
-	// Increased values provide more tolerance for network latency and API server delays
-	leaseDuration := 60 * time.Second
-	renewDeadline := 50 * time.Second
-	retryPeriod := 10 * time.Second
+	// Configure leader election with configurable timeouts to prevent lease renewal failures
+	// Default values are: LeaseDuration=60s, RenewDeadline=50s, RetryPeriod=10s
+	// These can be overridden via command-line flags in manager.yaml
+	// Increased from controller-runtime defaults (15s, 10s, 2s) to provide more tolerance
+	// for network latency and API server delays
 
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
@@ -222,10 +236,10 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "72dd1cf1.llm-d.ai",
-		// Leader election timeout configuration
-		LeaseDuration: &leaseDuration,
-		RenewDeadline: &renewDeadline,
-		RetryPeriod:   &retryPeriod,
+		// Leader election timeout configuration (configurable via flags)
+		LeaseDuration: leaseDuration,
+		RenewDeadline: renewDeadline,
+		RetryPeriod:   retryPeriod,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly

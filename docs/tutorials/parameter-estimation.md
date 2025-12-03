@@ -333,9 +333,6 @@ metadata:
   namespace: <your-namespace>
 spec:
   modelID: <your-model-id>
-  sloClassRef:
-    name: service-classes-config
-    key: premium.yaml
   modelProfile:
     accelerators:
       - acc: "<accelerator-type>"  # e.g., A100

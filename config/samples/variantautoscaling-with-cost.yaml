@@ -27,11 +27,6 @@ spec:
   # Premium tier: H100 accelerator with higher cost
   variantCost: 80.0  # Cost per replica (reflects H100 premium pricing)
 
-  # SLO configuration reference
-  sloClassRef:
-    name: premium
-    key: llama-70b
-
   # Model profile for H100 accelerator
   modelProfile:
     accelerators:
@@ -69,11 +64,6 @@ spec:
 
   # Standard tier: A100 accelerator with standard cost
   variantCost: 40.0  # Cost per replica (standard A100 pricing)
-
-  # SLO configuration reference (same SLOs as premium)
-  sloClassRef:
-    name: premium
-    key: llama-70b
 
   # Model profile for A100 accelerator
   modelProfile:
@@ -113,10 +103,6 @@ spec:
   # Budget tier: Very low cost for cost-sensitive workloads
   variantCost: 5.0  # Minimal cost for T4 GPUs
 
-  sloClassRef:
-    name: freemium
-    key: llama-8b
-
   modelProfile:
     accelerators:
       - acc: "T4"
@@ -147,10 +133,6 @@ spec:
   # Gold tenant: Premium pricing for priority service
   variantCost: 25.0  # Higher cost reflects priority/SLA
 
-  sloClassRef:
-    name: premium
-    key: llama-8b
-
   modelProfile:
     accelerators:
       - acc: "A100"
@@ -179,10 +161,6 @@ spec:
   # Silver tenant: Standard pricing
   variantCost: 15.0  # Standard cost
 
-  sloClassRef:
-    name: standard
-    key: llama-8b
-
   modelProfile:
     accelerators:
       - acc: "A100"
@@ -208,10 +186,6 @@ spec:
   modelID: "meta/llama-3.1-8b"
 
   # variantCost omitted - will default to 10.0
-
-  sloClassRef:
-    name: standard
-    key: llama-8b
 
   modelProfile:
     accelerators:

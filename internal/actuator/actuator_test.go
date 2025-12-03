@@ -197,10 +197,6 @@ var _ = Describe("Actuator", func() {
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
 					ModelID: "test-model/variant-1",
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "test-slo-config",
-						Key:  "test-slo-key",
-					},
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{
@@ -346,10 +342,6 @@ var _ = Describe("Actuator", func() {
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
 					ModelID: "test-model/metrics-test",
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "test-slo-config",
-						Key:  "metrics-slo-key",
-					},
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{
@@ -437,10 +429,6 @@ var _ = Describe("Actuator", func() {
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
 					ModelID: "test-model/incomplete",
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "test-slo-config",
-						Key:  "test-slo-key",
-					},
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{
@@ -525,10 +513,6 @@ var _ = Describe("Actuator", func() {
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
 					ModelID: "test-model/validation-test",
-					SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-						Name: "test-slo-config",
-						Key:  "validation-slo-key",
-					},
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
 							{

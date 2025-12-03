@@ -202,10 +202,6 @@ var _ = Describe("Optimizer", Ordered, func() {
 								},
 							},
 						},
-						SLOClassRef: llmdVariantAutoscalingV1alpha1.ConfigMapKeyRef{
-							Name: "premium",
-							Key:  "default/default",
-						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, variantAutoscaling)).To(Succeed())

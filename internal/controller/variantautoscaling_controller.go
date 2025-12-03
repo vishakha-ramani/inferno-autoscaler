@@ -409,10 +409,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		} else if enableModelOptimizer {
 			// MODEL-ONLY MODE: Capacity-based failed but model-based succeeded, or capacity analysis unavailable - use model-based only
-
 			// If prepareVariantAutoscalings failed for all VariantAutoscalings, updateList.Items will be empty
 			if updateList == nil || len(updateList.Items) == 0 {
-				logger.Log.Errorf("Model-only optimization: no VAs prepared, activating safety net: modelID=%s", modelID)
+				logger.Log.Warnf("Model-only optimization: no VAs prepared, activating safety net: modelID=%s", modelID)
 				r.emitSafetyNetMetrics(ctx, modelVAs)
 				continue
 			}
@@ -457,7 +456,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 						Reason:             "model-based only (capacity unavailable)",
 					})
 
-					// Update vaMap with the VA that has metrics populated
 					vaMap[va.Name] = va
 				}
 			}
@@ -603,7 +601,6 @@ func convertCapacityTargetsToDecisions(
 			action = interfaces.ActionScaleDown
 		} else {
 			action = interfaces.ActionNoChange
-			continue
 		}
 
 		decision := interfaces.VariantDecision{

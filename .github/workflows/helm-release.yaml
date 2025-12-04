@@ -131,5 +131,4 @@ jobs:
           git add charts/workload-variant-autoscaler/values.yaml
 
           git commit -m "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" || echo "No changes to commit"
-          git remote set-url origin https://${{ github.actor }}:$GITHUB_TOKEN@github.com/${{ github.repository }}.git
           git push

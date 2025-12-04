@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   packages: write
+  pull-requests: write  # Required to create pull requests
   id-token: write  # Required for Gitsign OIDC authentication
 
 jobs:

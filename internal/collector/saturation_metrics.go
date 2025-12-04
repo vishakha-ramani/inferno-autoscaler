@@ -12,6 +12,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -188,7 +189,7 @@ func (cmc *SaturationMetricsCollector) queryKvCacheMetrics(
 	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
-	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(queryCtx, cmc.promAPI, query)
 	if err != nil {
 		return nil, fmt.Errorf("prometheus query failed: %w", err)
 	}
@@ -244,7 +245,7 @@ func (cmc *SaturationMetricsCollector) queryQueueMetrics(
 	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
-	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(queryCtx, cmc.promAPI, query)
 	if err != nil {
 		return nil, fmt.Errorf("prometheus query failed: %w", err)
 	}

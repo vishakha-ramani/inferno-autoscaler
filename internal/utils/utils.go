@@ -51,8 +51,7 @@ var (
 		Duration: 500 * time.Millisecond,
 		Factor:   2.0,
 		Jitter:   0.1,
-		Steps:    4, // 500ms, 1s, 2s, 4s = ~7.5s total
-		Cap:      5 * time.Second,
+		Steps:    5, // 500ms, 1s, 2s, 4s = ~7.5s total
 	}
 
 	// Prometheus validation backoff with longer intervals
@@ -474,16 +473,24 @@ func Ptr[T any](v T) *T {
 }
 
 func QueryPrometheusWithBackoff(ctx context.Context, promAPI promv1.API, query string) (val model.Value, warn promv1.Warnings, err error) {
-	if err = wait.ExponentialBackoffWithContext(ctx, PrometheusQueryBackoff, func(ctx context.Context) (bool, error) {
+	var lastErr error
+
+	err = wait.ExponentialBackoffWithContext(ctx, PrometheusQueryBackoff, func(ctx context.Context) (bool, error) {
 		val, warn, err = promAPI.Query(ctx, query, time.Now())
 		if err != nil {
-			logger.Log.Error(err, "Query Prometheus failed, retrying - ",
-				"query: ", query,
-				"error: ", err.Error())
-			return false, err
+			// Record the last error so that we can surface it if the backoff is exhausted.
+			lastErr = err
+			logger.Log.Warn("Query Prometheus failed, retrying",
+				"query", query,
+				"error", err.Error())
+			return false, nil
 		}
 		return true, nil
-	}); err != nil {
+	})
+	if err != nil {
+		if lastErr != nil {
+			return nil, nil, lastErr
+		}
 		return nil, nil, err
 	}
 

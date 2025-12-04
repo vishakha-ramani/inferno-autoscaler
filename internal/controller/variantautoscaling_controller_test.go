@@ -1070,7 +1070,7 @@ data:
 		It("should load config from ConfigMap when it exists", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "capacity-scaling-config",
+					Name:      "saturation-scaling-config",
 					Namespace: configMapNamespace,
 				},
 				Data: map[string]string{
@@ -1115,7 +1115,7 @@ queueSpareTrigger: 5`,
 		It("should apply per-model overrides correctly", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "capacity-scaling-config",
+					Name:      "saturation-scaling-config",
 					Namespace: configMapNamespace,
 				},
 				Data: map[string]string{

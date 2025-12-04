@@ -65,7 +65,7 @@ const (
 	llmDNamespace                 = "llm-d-sim"
 	gatewayName                   = "infra-sim-inference-gateway-istio"
 	WVAConfigMapName              = "workload-variant-autoscaler-variantautoscaling-config"
-	CapacityConfigMapName         = "capacity-scaling-config"
+	saturationConfigMapName       = "saturation-scaling-config"
 )
 
 // Variant and Model constants
@@ -137,7 +137,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 		ctx             context.Context
 
 		// ConfigMap reference
-		capacityConfigMapName = "capacity-scaling-config"
+		saturationConfigMapName = "saturation-scaling-config"
 	)
 
 	BeforeAll(func() {
@@ -164,8 +164,8 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 
 		By("verifying capacity-scaling ConfigMap exists before creating VA")
 		Eventually(func(g Gomega) {
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, capacityConfigMapName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", capacityConfigMapName, controllerNamespace))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", saturationConfigMapName, controllerNamespace))
 			g.Expect(cm.Data).To(HaveKey("default"), "Capacity ConfigMap should have 'default' configuration")
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
@@ -213,8 +213,8 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 	Context("ConfigMap and VA existence checks", func() {
 		It("should have capacity-scaling ConfigMap with default configuration spawned", func() {
 			By("verifying ConfigMap exists with expected structure")
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, capacityConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", capacityConfigMapName))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", saturationConfigMapName))
 
 			By("verifying default configuration exists")
 			Expect(cm.Data).To(HaveKey("default"), "ConfigMap should contain 'default' key")
@@ -225,7 +225,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 			Expect(defaultConfig).To(ContainSubstring("kvSpareTrigger"), "Default config should contain kvSpareTrigger")
 			Expect(defaultConfig).To(ContainSubstring("queueSpareTrigger"), "Default config should contain queueSpareTrigger")
 
-			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", capacityConfigMapName)
+			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", saturationConfigMapName)
 		})
 
 		It("should have VariantAutoscaling resource created", func() {
@@ -480,8 +480,8 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 
 		By("verifying capacity-scaling ConfigMap exists before creating VAs")
 		Eventually(func(g Gomega) {
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, CapacityConfigMapName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", CapacityConfigMapName, controllerNamespace))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", saturationConfigMapName, controllerNamespace))
 			g.Expect(cm.Data).To(HaveKey("default"), "Capacity ConfigMap should have 'default' configuration")
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
@@ -571,8 +571,8 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 	Context("ConfigMap and VA existence checks", func() {
 		It("should have capacity-scaling ConfigMap with default configuration spawned", func() {
 			By("verifying ConfigMap exists with expected structure")
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, CapacityConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", CapacityConfigMapName))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", saturationConfigMapName))
 
 			By("verifying default configuration exists")
 			Expect(cm.Data).To(HaveKey("default"), "ConfigMap should contain 'default' key")
@@ -583,7 +583,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 			Expect(defaultConfig).To(ContainSubstring("kvSpareTrigger"), "Default config should contain kvSpareTrigger")
 			Expect(defaultConfig).To(ContainSubstring("queueSpareTrigger"), "Default config should contain queueSpareTrigger")
 
-			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", CapacityConfigMapName)
+			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", saturationConfigMapName)
 		})
 
 		It("should have VariantAutoscaling resources created for both variants", func() {

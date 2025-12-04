@@ -1,4 +1,4 @@
-package capacity
+package saturation
 
 // Capacity analyzer constants
 const (

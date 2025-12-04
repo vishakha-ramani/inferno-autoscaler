@@ -42,13 +42,13 @@ import (
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	actuator "github.com/llm-d-incubation/workload-variant-autoscaler/internal/actuator"
-	capacity "github.com/llm-d-incubation/workload-variant-autoscaler/internal/capacity"
 	collector "github.com/llm-d-incubation/workload-variant-autoscaler/internal/collector"
 	interfaces "github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
 	analyzer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/optimizer"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/saturation"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
@@ -75,9 +75,9 @@ type VariantAutoscalingReconciler struct {
 	PromAPI promv1.API
 
 	// Capacity scaling config cache (thread-safe, updated on ConfigMap changes)
-	capacityConfigCache      map[string]interfaces.CapacityScalingConfig
-	capacityConfigCacheMutex sync.RWMutex
-	capacityConfigLoaded     bool // Track if initial load succeeded
+	saturationConfigCache      map[string]interfaces.CapacityScalingConfig
+	saturationConfigCacheMutex sync.RWMutex
+	saturationConfigLoaded     bool // Track if initial load succeeded
 }
 
 // +kubebuilder:rbac:groups=llmd.ai,resources=variantautoscalings,verbs=get;list;watch;create;update;patch;delete
@@ -100,7 +100,7 @@ const (
 	// When "model-only" runs model-based optimizer only
 	// When "off" or unset, runs capacity analyzer only (default, reactive mode)
 	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
-	saturationConfigMapName           = "capacity-scaling-config"
+	saturationConfigMapName           = "saturation-scaling-config"
 )
 
 func getNamespace() string {
@@ -373,7 +373,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		} else if enableCapacityAnalyzer && enableModelOptimizer {
 			// HYBRID MODE: Arbitrate between capacity and model-based targets - only if capacity analysis succeeded
 			if capacityAnalysis != nil && len(capacityTargets) > 0 {
-				capacityAnalyzer := capacity.NewAnalyzer()
+				capacityAnalyzer := saturation.NewAnalyzer()
 				finalDecisions = capacityAnalyzer.ArbitrateWithModelBased(
 					capacityAnalysis,
 					capacityTargets,
@@ -667,7 +667,7 @@ func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
 	}
 
 	// Analyze capacity across all variants
-	capacityAnalyzer := capacity.NewAnalyzer()
+	capacityAnalyzer := saturation.NewAnalyzer()
 	capacityAnalysis, err := capacityAnalyzer.AnalyzeModelCapacity(ctx, modelID, namespace, replicaMetrics, capacityConfig)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to analyze capacity for model %s: %w", modelID, err)
@@ -1230,12 +1230,12 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 // getCapacityConfigFromCache retrieves cached config (thread-safe read).
 // Returns a copy to prevent external modification.
 func (r *VariantAutoscalingReconciler) getCapacityConfigFromCache() map[string]interfaces.CapacityScalingConfig {
-	r.capacityConfigCacheMutex.RLock()
-	defer r.capacityConfigCacheMutex.RUnlock()
+	r.saturationConfigCacheMutex.RLock()
+	defer r.saturationConfigCacheMutex.RUnlock()
 
 	// Return copy to prevent external modification
-	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.capacityConfigCache))
-	for k, v := range r.capacityConfigCache {
+	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.saturationConfigCache))
+	for k, v := range r.saturationConfigCache {
 		configCopy[k] = v
 	}
 	return configCopy
@@ -1245,30 +1245,30 @@ func (r *VariantAutoscalingReconciler) getCapacityConfigFromCache() map[string]i
 // Returns a copy of the config map and whether the initial load succeeded.
 // This prevents race conditions between checking loaded status and getting the config.
 func (r *VariantAutoscalingReconciler) getCapacityConfigSafe() (map[string]interfaces.CapacityScalingConfig, bool) {
-	r.capacityConfigCacheMutex.RLock()
-	defer r.capacityConfigCacheMutex.RUnlock()
+	r.saturationConfigCacheMutex.RLock()
+	defer r.saturationConfigCacheMutex.RUnlock()
 
 	// Return copy to prevent external modification
-	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.capacityConfigCache))
-	for k, v := range r.capacityConfigCache {
+	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.saturationConfigCache))
+	for k, v := range r.saturationConfigCache {
 		configCopy[k] = v
 	}
-	return configCopy, r.capacityConfigLoaded
+	return configCopy, r.saturationConfigLoaded
 }
 
 // updateCapacityConfigCache updates the cache (thread-safe write).
 // Logs cache update and returns error if read fails.
 func (r *VariantAutoscalingReconciler) updateCapacityConfigCache(ctx context.Context) error {
-	configs, err := r.readCapacityScalingConfig(ctx, "capacity-scaling-config", configMapNamespace)
+	configs, err := r.readCapacityScalingConfig(ctx, saturationConfigMapName, configMapNamespace)
 	if err != nil {
 		return err
 	}
 
-	r.capacityConfigCacheMutex.Lock()
-	defer r.capacityConfigCacheMutex.Unlock()
+	r.saturationConfigCacheMutex.Lock()
+	defer r.saturationConfigCacheMutex.Unlock()
 
-	r.capacityConfigCache = configs
-	r.capacityConfigLoaded = true
+	r.saturationConfigCache = configs
+	r.saturationConfigLoaded = true
 
 	logger.Log.Infof("Capacity scaling config cache updated: entries=%d, has_default=%t",
 		len(configs),
@@ -1279,9 +1279,9 @@ func (r *VariantAutoscalingReconciler) updateCapacityConfigCache(ctx context.Con
 
 // isCapacityConfigLoaded returns whether the initial config load succeeded (thread-safe).
 func (r *VariantAutoscalingReconciler) isCapacityConfigLoaded() bool {
-	r.capacityConfigCacheMutex.RLock()
-	defer r.capacityConfigCacheMutex.RUnlock()
-	return r.capacityConfigLoaded
+	r.saturationConfigCacheMutex.RLock()
+	defer r.saturationConfigCacheMutex.RUnlock()
+	return r.saturationConfigLoaded
 }
 
 // InitializeCapacityConfigCache performs initial load of capacity scaling config cache.

@@ -308,28 +308,20 @@ func (cmc *SaturationMetricsCollector) mergeMetrics(
 	}
 
 	// Prometheus retains metrics from terminated pods for a time period, causing stale metrics to be pulled.
-	// We must verify each actually existing pods before using its metrics for capacity decisions.
-	if cmc.k8sClient != nil {
-		existingPods := cmc.getExistingPods(ctx, namespace, podSet)
-		stalePodCount := 0
+	// Verify pod existence using Prometheus kube-state-metrics to filter out stale pods.
+	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
+	existingPods := cmc.getExistingPods(ctx, namespace, deployments, podSet)
+	stalePodCount := 0
 
-		// Filter out pods that don't exist in the cluster
-		for podName := range podSet {
-			if !existingPods[podName] {
-				stalePodCount++
-				logger.Log.Debugf("Filtering pod from stale metrics: pod=%s, namespace=%s, model=%s",
-					podName, namespace, modelID)
-				delete(podSet, podName)
-			}
+	// Filter out pods that don't exist according to the queried Prometheus kube-state-metrics
+	for podName := range podSet {
+		if !existingPods[podName] {
+			stalePodCount++
+			// TODO: remove debug log after verification
+			logger.Log.Debugf("Filtering pod from stale vLLM metrics: pod=%s, namespace=%s, model=%s",
+				podName, namespace, modelID)
+			delete(podSet, podName)
 		}
-
-		if stalePodCount > 0 {
-			logger.Log.Debugf("Filtered %d pod(s) from capacity analysis: namespace=%s, model=%s, prometheusCount=%d, actualCount=%d",
-				stalePodCount, namespace, modelID, len(podSet)+stalePodCount, len(podSet))
-		}
-	} else {
-		logger.Log.Warnf("k8sClient unavailable, cannot filter pods with stale metrics: namespace=%s, model=%s",
-			namespace, modelID)
 	}
 
 	replicaMetrics := make([]interfaces.ReplicaMetrics, 0, len(podSet))
@@ -489,35 +481,66 @@ func (cmc *SaturationMetricsCollector) findDeploymentForPod(
 	return matchedDeployment
 }
 
-// getExistingPods gets the set of pods that actually exist in the cluster from a set of candidate pods.
-// This is used to filter out pods with stale metrics from Prometheus, which can cause incorrect scaling decisions.
-// Returns a map of pod names that currently exist in the namespace.
+// getExistingPods filters candidate pods using Prometheus kube_pod_info metric.
+// Queries for the current state from kube-state-metrics using deployment name filtering
+//
+// TODO(note): this approach may still be subject to staleness, as the scrape interval (typically 15-30s)
+// adds latency between pod termination and metric removal
+// Returns a map of pod names that have current metrics in Prometheus.
 func (cmc *CapacityMetricsCollector) getExistingPods(
 	ctx context.Context,
 	namespace string,
+	deployments map[string]*appsv1.Deployment,
 	candidatePods map[string]bool,
 ) map[string]bool {
 	existingPods := make(map[string]bool)
 
-	// List all pods in the namespace
-	podList := &corev1.PodList{}
-	listOpts := &client.ListOptions{
-		Namespace: namespace,
+	// Build pod name regex filter from deployment names (pod=~"deployment1-.*|deployment2-.*|deployment3-.*")
+	// To reduce the query scope
+	var podQueryFilter string
+	if len(deployments) > 0 {
+		deploymentNames := make([]string, 0, len(deployments))
+		for deploymentName := range deployments {
+			// Escape deployment name for regex and add suffix pattern
+			escapedName := escapePrometheusLabelValue(deploymentName)
+			deploymentNames = append(deploymentNames, escapedName+"-.*")
+		}
+		podQueryFilter = fmt.Sprintf(`,pod=~"%s"`, strings.Join(deploymentNames, "|"))
 	}
 
-	if err := cmc.k8sClient.List(ctx, podList, listOpts); err != nil {
-		logger.Log.Errorf("Failed to list pods for filtering: namespace=%s, error=%v", namespace, err)
+	// Query kube_pod_info for current pods in namespace with deployment name filtering
+	// kube_pod_info is a gauge metric from kube-state-metrics that reflects current pod state
+	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
+	query := fmt.Sprintf(`kube_pod_info{namespace="%s"%s}`, escapePrometheusLabelValue(namespace), podQueryFilter)
+
+	// TODO: use QueryPrometheusWithBackoff to retry with backoff (per PR #341)
+	result, warnings, err := cmc.promAPI.Query(ctx, query, time.Now())
+	if err != nil {
+		logger.Log.Errorf("Failed to query Prometheus for pod existence: namespace=%s, error=%v", namespace, err)
 		// On error, assume all candidate pods exist to prevent false negatives
 		return candidatePods
 	}
 
-	// Build set of existing pod names
-	for _, pod := range podList.Items {
-		existingPods[pod.Name] = true
+	if len(warnings) > 0 {
+		logger.Log.Warnf("Prometheus pod existence query warnings: query=%s, warnings=%v", query, warnings)
 	}
 
-	logger.Log.Debugf("Pod existence check: namespace=%s, totalPods=%d, candidatePods=%d",
-		namespace, len(podList.Items), len(candidatePods))
+	// Extract pod names from result
+	if result.Type() == model.ValVector {
+		vector := result.(model.Vector)
+		for _, sample := range vector {
+			podName := string(sample.Metric["pod"])
+			if podName == "" {
+				logger.Log.Warnf("Empty pod name in kube_pod_info metric: namespace=%s, metric=%v", namespace, sample.Metric)
+				continue
+			}
+			// Validate pod name is present in the candidate list
+			if !candidatePods[podName] {
+				continue
+			}
+			existingPods[podName] = true
+		}
+	}
 
 	return existingPods
 }

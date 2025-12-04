@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -282,14 +281,6 @@ func main() {
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error("unable to create controller", zap.String("controller", "variantautoscaling"), zap.Error(err))
 		os.Exit(1)
-	}
-
-	// Initialize capacity scaling config cache
-	setupLog.Info("Loading initial capacity scaling configuration")
-	if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {
-		setupLog.Warn("Failed to load initial capacity scaling config, will use defaults", zap.Error(err))
-	} else {
-		setupLog.Info("Capacity scaling configuration loaded successfully")
 	}
 	// +kubebuilder:scaffold:builder
 

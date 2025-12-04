@@ -3,7 +3,7 @@ wva:
 
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
-    tag: latest
+    tag: v0.4.0
   imagePullPolicy: Always
 
   metrics:

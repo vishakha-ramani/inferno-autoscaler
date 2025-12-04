@@ -92,9 +92,9 @@ jobs:
       # -----------------------------------------
       - name: Login to GHCR (Helm)
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CR_TOKEN }}
         run: |
-          echo "${{ secrets.CR_TOKEN }}" | \
+          echo "$GITHUB_TOKEN" | \
             helm registry login ghcr.io \
               --username ${{ github.actor }} \
               --password-stdin
@@ -122,7 +122,7 @@ jobs:
       # -----------------------------------------
       - name: Commit updated Helm chart files
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CR_TOKEN }}
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
@@ -131,5 +131,5 @@ jobs:
           git add charts/workload-variant-autoscaler/values.yaml
 
           git commit -m "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" || echo "No changes to commit"
-          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git
+          git remote set-url origin https://${{ github.actor }}:$GITHUB_TOKEN@github.com/${{ github.repository }}.git
           git push

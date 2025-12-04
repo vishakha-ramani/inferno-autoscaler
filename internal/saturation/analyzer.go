@@ -321,13 +321,11 @@ func (a *Analyzer) CalculateSaturationTargets(
 
 		if isStable && allMetricsAvailable {
 			// Stable VA state and all pods have report metrics: use metrics count
-			// This allows scale down when there's no load
 			targets[va.VariantName] = va.ReplicaCount
 			logger.Log.Debugf("Target initialized to metrics count (stable): variant=%s, count=%d",
 				va.VariantName, va.ReplicaCount)
 		} else {
 			// Transitional state or incomplete metrics: preserve current replica count
-			// This prevents issues with stale metrics during scale operations
 			targets[va.VariantName] = state.CurrentReplicas
 			if !allMetricsAvailable {
 				logger.Log.Debugf("Target initialized to current replicas (incomplete metrics): variant=%s, currentReplicas=%d, metricsCount=%d",
@@ -371,7 +369,7 @@ func (a *Analyzer) CalculateSaturationTargets(
 
 		if cheapestNonPreserved != nil {
 			state := stateMap[cheapestNonPreserved.VariantName]
-			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics depending on stability
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
 			baseTarget := targets[cheapestNonPreserved.VariantName]
 			targets[cheapestNonPreserved.VariantName] = baseTarget + 1
 			logger.Log.Infof("Saturation target: scale-up cheapest variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, baseTarget=%d, target=%d, reason=%s",
@@ -388,7 +386,7 @@ func (a *Analyzer) CalculateSaturationTargets(
 				continue
 			}
 			// Can't scale down if at or below minimum (1 replica)
-			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics depending on stability
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
 			baseTarget := targets[va.VariantName]
 			if baseTarget <= 1 {
 				continue
@@ -403,7 +401,7 @@ func (a *Analyzer) CalculateSaturationTargets(
 
 		if mostExpensiveNonPreserved != nil {
 			state := stateMap[mostExpensiveNonPreserved.VariantName]
-			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics depending on stability
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
 			baseTarget := targets[mostExpensiveNonPreserved.VariantName]
 			targets[mostExpensiveNonPreserved.VariantName] = baseTarget - 1
 			logger.Log.Infof("Saturation target: scale-down most expensive variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, baseTarget=%d, target=%d",

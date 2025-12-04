@@ -94,10 +94,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.CR_TOKEN }}
         run: |
-          echo "$GITHUB_TOKEN" | \
-            helm registry login ghcr.io \
-              --username ${{ github.actor }} \
-              --password-stdin
+          helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password "$GITHUB_TOKEN"
 
       # -----------------------------------------
       # 9. Package Helm chart

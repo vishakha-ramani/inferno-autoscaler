@@ -43,7 +43,7 @@ jobs:
       # 4. Log in to GHCR for Docker push
       # -----------------------------------------
       - name: Docker login GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.CR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.CR_USER }} --password-stdin
 
       # -----------------------------------------
       # 5. Build and push multi-arch Docker image
@@ -92,12 +92,11 @@ jobs:
       # -----------------------------------------
       - name: Login to GHCR (Helm)
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CR_TOKEN }}
         run: |
-          echo "${{ github.token }}" | \
-            helm registry login ghcr.io \
-              --username ${{ github.actor }} \
-              --password-stdin
+          helm registry login ghcr.io \
+            --username ${{ secrets.CR_USER }} \
+            --password "$GITHUB_TOKEN"
 
       # -----------------------------------------
       # 9. Package Helm chart
@@ -131,5 +130,5 @@ jobs:
           git add charts/workload-variant-autoscaler/values.yaml
 
           git commit -m "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" || echo "No changes to commit"
-          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git
+          git remote set-url origin https://${{ github.actor }}:$GITHUB_TOKEN@github.com/${{ github.repository }}.git
           git push

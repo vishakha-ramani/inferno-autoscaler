@@ -100,6 +100,7 @@ const (
 	// When "model-only" runs model-based optimizer only
 	// When "off" or unset, runs capacity analyzer only (default, reactive mode)
 	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
+	saturationConfigMapName           = "capacity-scaling-config"
 )
 
 func getNamespace() string {
@@ -145,6 +146,13 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 	}
 
+	//TODO simplify capacity loading configmap
+	if err := r.InitializeCapacityConfigCache(context.Background()); err != nil {
+		logger.Log.Warn("Failed to load initial capacity scaling config, will use defaults", err)
+	} else {
+		logger.Log.Info("Capacity scaling configuration loaded successfully")
+	}
+
 	if strings.EqualFold(os.Getenv("WVA_SCALE_TO_ZERO"), "true") {
 		logger.Log.Info("Scaling to zero is enabled!")
 	}
@@ -181,6 +189,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// Get capacity scaling configuration (atomic check-and-get prevents race condition)
+
 	capacityConfigMap, configLoaded := r.getCapacityConfigSafe()
 	if !configLoaded {
 		logger.Log.Warnf("Capacity scaling config not loaded yet, using defaults")
@@ -1069,48 +1078,6 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 	return &updateList, vaMap, allAnalyzerResponses, nil
 }
 
-// isCapacityScalingConfigMap checks if object is the capacity-scaling-config ConfigMap.
-func (r *VariantAutoscalingReconciler) isCapacityScalingConfigMap(obj client.Object) bool {
-	return obj.GetName() == "capacity-scaling-config" &&
-		obj.GetNamespace() == configMapNamespace
-}
-
-// handleCapacityConfigMapEvent handles capacity-scaling-config ConfigMap events.
-// Reloads cache and triggers reconciliation of all VariantAutoscaling resources.
-func (r *VariantAutoscalingReconciler) handleCapacityConfigMapEvent(ctx context.Context, obj client.Object) []reconcile.Request {
-	if !r.isCapacityScalingConfigMap(obj) {
-		return nil
-	}
-
-	// Reload cache when ConfigMap changes
-	logger.Log.Info("Capacity scaling ConfigMap changed, reloading cache")
-	if err := r.updateCapacityConfigCache(ctx); err != nil {
-		logger.Log.Errorf("Failed to reload capacity scaling config cache: error=%v", err)
-		// Continue to trigger reconciliation even if reload fails (will use existing cache or defaults)
-	}
-
-	// Trigger reconciliation for all VariantAutoscaling resources
-	vaList := &llmdVariantAutoscalingV1alpha1.VariantAutoscalingList{}
-	if err := r.List(ctx, vaList); err != nil {
-		logger.Log.Errorf("Failed to list VariantAutoscaling resources: error=%v", err)
-		return nil
-	}
-
-	requests := make([]reconcile.Request, len(vaList.Items))
-	for i, va := range vaList.Items {
-		requests[i] = reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name:      va.Name,
-				Namespace: va.Namespace,
-			},
-		}
-	}
-
-	logger.Log.Infof("Triggering reconciliation for all VariantAutoscaling resources due to ConfigMap change: count=%d", len(requests))
-
-	return requests
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
@@ -1162,7 +1129,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Watches(
 			&corev1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-				if obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace {
+				if obj.GetName() == configMapName || obj.GetName() == saturationConfigMapName && obj.GetNamespace() == configMapNamespace {
 					return []reconcile.Request{{}}
 				}
 				return nil
@@ -1185,15 +1152,6 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 			// Predicate to filter only the target ServiceMonitor
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 				return obj.GetName() == serviceMonitorName && obj.GetNamespace() == configMapNamespace
-			})),
-		).
-		// Watch capacity-scaling-config ConfigMap to reload cache on changes
-		Watches(
-			&corev1.ConfigMap{},
-			handler.EnqueueRequestsFromMapFunc(r.handleCapacityConfigMapEvent),
-			// Predicate to filter only the capacity-scaling-config ConfigMap
-			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-				return r.isCapacityScalingConfigMap(obj)
 			})),
 		).
 		Named("variantAutoscaling").

@@ -85,6 +85,8 @@ jobs:
       # 7. Install Helm
       # -----------------------------------------
       - name: Install Helm
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         uses: azure/setup-helm@v3
 
       # -----------------------------------------
@@ -97,6 +99,7 @@ jobs:
           helm registry login ghcr.io \
             --username ${{ secrets.CR_USER }} \
             --password "$GITHUB_TOKEN"
+          echo "Helm registry login successful"
 
       # -----------------------------------------
       # 9. Package Helm chart
@@ -109,6 +112,8 @@ jobs:
       # 10. Push chart to GHCR
       # -----------------------------------------
       - name: Push Helm chart
+        env:
+          GITHUB_TOKEN: ${{ secrets.CR_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_FILE="workload-variant-autoscaler-${VERSION}.tgz"

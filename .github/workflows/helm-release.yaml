@@ -43,7 +43,7 @@ jobs:
       # 4. Log in to GHCR for Docker push
       # -----------------------------------------
       - name: Docker login GHCR
-        run: echo "${{ secrets.CR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       # -----------------------------------------
       # 5. Build and push multi-arch Docker image

@@ -2,7 +2,7 @@ wva:
   enabled: true
 
   image:
-    repository: ghcr.io/llm-d/workload-variant-autoscaler
+    repository: ghcr.io/llm-d-incubation/workload-variant-autoscaler
     tag: v0.4.1
   imagePullPolicy: Always
 

@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
@@ -140,6 +141,7 @@ type MockPromAPI struct {
 	QueryErrors     map[string]error
 	QueryCallCounts map[string]int // Track number of calls per query for retry testing
 	QueryFailCounts map[string]int // Number of times to fail before succeeding (for retry testing)
+	mu              sync.RWMutex
 }
 
 func (m *MockPromAPI) Query(ctx context.Context, query string, ts time.Time, opts ...promv1.Option) (model.Value, promv1.Warnings, error) {
@@ -147,18 +149,27 @@ func (m *MockPromAPI) Query(ctx context.Context, query string, ts time.Time, opt
 	if m.QueryCallCounts == nil {
 		m.QueryCallCounts = make(map[string]int)
 	}
+
+	m.mu.Lock()
 	m.QueryCallCounts[query]++
+	callCount := m.QueryCallCounts[query]
 
 	// Check if this query should fail a certain number of times before succeeding
+	var shouldFail bool
+	var failCount int
 	if m.QueryFailCounts != nil {
-		if failCount, exists := m.QueryFailCounts[query]; exists {
-			callCount := m.QueryCallCounts[query]
+		if fc, exists := m.QueryFailCounts[query]; exists {
+			failCount = fc
 			if callCount <= failCount {
-				// Return error for the first N calls
-				return nil, nil, fmt.Errorf("transient error (attempt %d/%d)", callCount, failCount+1)
+				shouldFail = true
 			}
-			// After N failures, proceed to success path
 		}
+	}
+
+	m.mu.Unlock()
+
+	if shouldFail {
+		return nil, nil, fmt.Errorf("transient error (attempt %d/%d)", callCount, failCount+1)
 	}
 
 	// Check for permanent errors
@@ -170,7 +181,6 @@ func (m *MockPromAPI) Query(ctx context.Context, query string, ts time.Time, opt
 	if val, exists := m.QueryResults[query]; exists {
 		return val, nil, nil
 	}
-
 	// Default return vector with one sample (to pass metrics validation)
 	// This simulates Prometheus having scraped at least one metric
 	return model.Vector{

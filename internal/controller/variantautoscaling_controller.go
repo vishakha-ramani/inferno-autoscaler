@@ -74,8 +74,8 @@ type VariantAutoscalingReconciler struct {
 
 	PromAPI promv1.API
 
-	// Capacity scaling config cache (thread-safe, updated on ConfigMap changes)
-	saturationConfigCache      map[string]interfaces.CapacityScalingConfig
+	// Saturation scaling config cache (thread-safe, updated on ConfigMap changes)
+	saturationConfigCache      map[string]interfaces.SaturationScalingConfig
 	saturationConfigCacheMutex sync.RWMutex
 	saturationConfigLoaded     bool // Track if initial load succeeded
 }
@@ -96,9 +96,9 @@ const (
 	// ServiceMonitor constants for watching controller's own metrics ServiceMonitor
 	serviceMonitorName = "workload-variant-autoscaler-controller-manager-metrics-monitor"
 	// Environment variable to enable experimental hybrid-based optimization
-	// When "on", runs both capacity analyzer and model-based optimizer with arbitration
+	// When "on", runs both saturation analyzer and model-based optimizer with arbitration
 	// When "model-only" runs model-based optimizer only
-	// When "off" or unset, runs capacity analyzer only (default, reactive mode)
+	// When "off" or unset, runs saturation analyzer only (default, reactive mode)
 	EnvExperimentalHybridOptimization = "EXPERIMENTAL_HYBRID_OPTIMIZATION"
 	saturationConfigMapName           = "saturation-scaling-config"
 )
@@ -146,11 +146,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 	}
 
-	//TODO simplify capacity loading configmap
-	if err := r.InitializeCapacityConfigCache(context.Background()); err != nil {
-		logger.Log.Warn("Failed to load initial capacity scaling config, will use defaults", err)
+	//TODO simplify Saturation loading configmap
+	if err := r.InitializeSaturationConfigCache(context.Background()); err != nil {
+		logger.Log.Warn("Failed to load initial saturation scaling config, will use defaults", err)
 	} else {
-		logger.Log.Info("Capacity scaling configuration loaded successfully")
+		logger.Log.Info("saturation scaling configuration loaded successfully")
 	}
 
 	if strings.EqualFold(os.Getenv("WVA_SCALE_TO_ZERO"), "true") {
@@ -160,18 +160,18 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Check experimental hybrid optimization flag
 	optimizationMode := os.Getenv(EnvExperimentalHybridOptimization)
 	enableModelOptimizer := optimizationMode == "on" || optimizationMode == "model-only"
-	enableCapacityAnalyzer := optimizationMode == "" || optimizationMode == "off"
+	enableSaturationAnalyzer := optimizationMode == "" || optimizationMode == "off"
 
-	if enableModelOptimizer && enableCapacityAnalyzer {
-		logger.Log.Info("Operating in HYBRID mode: capacity analyzer + model-based optimizer with arbitration")
-	} else if enableModelOptimizer && !enableCapacityAnalyzer {
+	if enableModelOptimizer && enableSaturationAnalyzer {
+		logger.Log.Info("Operating in HYBRID mode: saturation analyzer + model-based optimizer with arbitration")
+	} else if enableModelOptimizer && !enableSaturationAnalyzer {
 		logger.Log.Info("Operating in MODEL-ONLY mode: model-based optimization only")
-	} else if !enableModelOptimizer && enableCapacityAnalyzer {
-		logger.Log.Info("Operating in CAPACITY-ONLY mode: reactive capacity-based scaling only")
+	} else if !enableModelOptimizer && enableSaturationAnalyzer {
+		logger.Log.Info("Operating in saturation-only mode: reactive saturation-based scaling only")
 	} else {
-		// Invalid environment variable, default to capacity-only
-		logger.Log.Info("No optimization mode enabled, defaulting to CAPACITY-ONLY mode")
-		enableCapacityAnalyzer = true
+		// Invalid environment variable, default to saturation-only
+		logger.Log.Info("No optimization mode enabled, defaulting to saturation-only mode")
+		enableSaturationAnalyzer = true
 	}
 
 	// Get list of all VAs
@@ -188,14 +188,14 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{RequeueAfter: requeueDuration}, nil
 	}
 
-	// Get capacity scaling configuration (atomic check-and-get prevents race condition)
+	// Get saturation scaling configuration (atomic check-and-get prevents race condition)
 
-	capacityConfigMap, configLoaded := r.getCapacityConfigSafe()
+	saturationConfigMap, configLoaded := r.getSaturationConfigSafe()
 	if !configLoaded {
-		logger.Log.Warnf("Capacity scaling config not loaded yet, using defaults")
+		logger.Log.Warnf("Saturation scaling config not loaded yet, using defaults")
 	}
 
-	// Group VAs by model for per-model capacity analysis
+	// Group VAs by model for per-model saturation analysis
 	modelGroups := r.groupVAsByModel(activeVAs)
 	logger.Log.Infof("Grouped VAs by model: modelCount=%d, totalVAs=%d", len(modelGroups), len(activeVAs))
 
@@ -203,7 +203,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	allDecisions := make([]interfaces.VariantDecision, 0)
 	// Track error count for final reconciliation summary
 	errorCount := 0
-	// Create VA lookup map for applyCapacityDecisions (used to access VA status and update decisions)
+	// Create VA lookup map for applySaturationDecisions (used to access VA status and update decisions)
 	// Copy slice elements to local variable to ensure stable pointers
 	// Use simple name as key since decision.VariantName is just the name (not full name with namespace)
 	vaMap := make(map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling, len(activeVAs))
@@ -215,38 +215,38 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	for modelID, modelVAs := range modelGroups {
 		logger.Log.Infof("Processing model: modelID=%s, variantCount=%d", modelID, len(modelVAs))
 
-		// PHASE 1: compute capacity analysis and/or model-based optimization
+		// PHASE 1: compute saturation analysis and/or model-based optimization
 
-		// STEP 1: Run capacity analysis (if enabled)
-		var capacityTargets map[string]int
-		var capacityAnalysis *interfaces.ModelCapacityAnalysis
+		// STEP 1: Run saturation analysis (if enabled)
+		var saturationTargets map[string]int
+		var saturationAnalysis *interfaces.ModelSaturationAnalysis
 		var variantStates []interfaces.VariantReplicaState
 
-		if enableCapacityAnalyzer {
-			// Collect metrics and populate CurrentAlloc for capacity-only mode
+		if enableSaturationAnalyzer {
+			// Collect metrics and populate CurrentAlloc for saturation-only mode
 			// This validates metrics availability and populates the VariantAutoscalings with CurrentAlloc
-			if err := r.collectMetricsForCapacityMode(ctx, modelVAs, vaMap); err != nil {
-				logger.Log.Errorf("Failed to collect metrics for capacity mode: modelID=%s, error=%v", modelID, err)
+			if err := r.collectMetricsForSaturationMode(ctx, modelVAs, vaMap); err != nil {
+				logger.Log.Errorf("Failed to collect metrics for saturation mode: modelID=%s, error=%v", modelID, err)
 				// Metrics collection error - individual VAs are skipped
 			}
 
-			// Get capacity config for this model (with fallback to default)
-			capacityConfig := interfaces.DefaultCapacityScalingConfig()
+			// Get saturation config for this model (with fallback to default)
+			saturationConfig := interfaces.DefaultSaturationScalingConfig()
 			if len(modelVAs) > 0 {
-				modelConfig := r.getCapacityScalingConfigForVariant(capacityConfigMap, modelID, modelVAs[0].Namespace)
-				capacityConfig.Merge(modelConfig)
+				modelConfig := r.getSaturationScalingConfigForVariant(saturationConfigMap, modelID, modelVAs[0].Namespace)
+				saturationConfig.Merge(modelConfig)
 			}
 
-			capacityTargets, capacityAnalysis, variantStates, err = r.runCapacityAnalysis(ctx, modelID, modelVAs, capacityConfig)
+			saturationTargets, saturationAnalysis, variantStates, err = r.runSaturationAnalysis(ctx, modelID, modelVAs, saturationConfig)
 			if err != nil {
-				logger.Log.Errorf("Capacity analysis failed for modelID=%s: %v", modelID, err)
+				logger.Log.Errorf("saturation analysis failed for modelID=%s: %v", modelID, err)
 				// Continue with model-based approach if enabled, as per requirement #1
 				if !enableModelOptimizer {
-					// In capacity-only mode, if capacity fails, skip this model
+					// In saturation-only mode, if saturation fails, skip this model
 					errorCount++
 					continue
 				}
-				// In hybrid mode, continue to run model-based (capacity failed but we can still run optimizer)
+				// In hybrid mode, continue to run model-based (saturation failed but we can still run optimizer)
 				errorCount++
 			}
 		}
@@ -261,12 +261,12 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Errorf("Unable to read accelerator configMap: %v", err)
 				errorCount++
-				// Fall back to capacity-only for this model
-				if capacityAnalysis != nil {
-					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+				// Fall back to saturation-only for this model
+				if saturationAnalysis != nil {
+					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
-					// Capacity also failed - activate safety net
-					logger.Log.Warnf("Config read failed and capacity unavailable, activating safety net: modelID=%s", modelID)
+					// saturation also failed - activate safety net
+					logger.Log.Warnf("Config read failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -277,12 +277,12 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Errorf("Unable to read serviceclass configMap: %v", err)
 				errorCount++
-				// Fall back to capacity-only for this model
-				if capacityAnalysis != nil {
-					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+				// Fall back to saturation-only for this model
+				if saturationAnalysis != nil {
+					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
-					// Capacity also failed - activate safety net
-					logger.Log.Warnf("Config read failed and capacity unavailable, activating safety net: modelID=%s", modelID)
+					// saturation also failed - activate safety net
+					logger.Log.Warnf("Config read failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -297,11 +297,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Errorf("Failed to prepare variant autoscalings: %v", err)
 				errorCount++
-				if capacityAnalysis != nil {
-					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+				if saturationAnalysis != nil {
+					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
-					// Capacity also failed - activate safety net
-					logger.Log.Warnf("Variant preparation failed and capacity unavailable, activating safety net: modelID=%s", modelID)
+					// saturation also failed - activate safety net
+					logger.Log.Warnf("Variant preparation failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -330,11 +330,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			if err != nil {
 				logger.Log.Errorf("Model-based optimization failed: %v", err)
 				errorCount++
-				if capacityAnalysis != nil {
-					finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+				if saturationAnalysis != nil {
+					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
-					// Both capacity and model-based failed - activate safety net
-					logger.Log.Warnf("Both capacity and model-based failed, activating safety net: modelID=%s", modelID)
+					// Both Saturation and model-based failed - activate safety net
+					logger.Log.Warnf("Both Saturation and model-based failed, activating safety net: modelID=%s", modelID)
 					r.emitSafetyNetMetrics(ctx, modelVAs)
 				}
 				allDecisions = append(allDecisions, finalDecisions...)
@@ -356,27 +356,27 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 		// PHASE 2: Accumulate final decisions
 
-		if enableCapacityAnalyzer && !enableModelOptimizer {
-			// CAPACITY-ONLY MODE
-			if capacityAnalysis != nil {
-				finalDecisions = convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
-				logger.Log.Infof("Capacity-only decisions made for model: %s - decision count: %d",
+		if enableSaturationAnalyzer && !enableModelOptimizer {
+			// saturation-only MODE
+			if saturationAnalysis != nil {
+				finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+				logger.Log.Infof("saturation-only decisions made for model: %s - decision count: %d",
 					modelID,
 					len(finalDecisions))
 			} else {
-				logger.Log.Errorf("Capacity analysis failed and model-based disabled, activating safety net: modelID=%s", modelID)
+				logger.Log.Errorf("saturation analysis failed and model-based disabled, activating safety net: modelID=%s", modelID)
 				errorCount++
 				// SAFETY NET: Emit fallback metrics to prevent HPA from using stale data
 				r.emitSafetyNetMetrics(ctx, modelVAs)
 				continue
 			}
-		} else if enableCapacityAnalyzer && enableModelOptimizer {
-			// HYBRID MODE: Arbitrate between capacity and model-based targets - only if capacity analysis succeeded
-			if capacityAnalysis != nil && len(capacityTargets) > 0 {
-				capacityAnalyzer := saturation.NewAnalyzer()
-				finalDecisions = capacityAnalyzer.ArbitrateWithModelBased(
-					capacityAnalysis,
-					capacityTargets,
+		} else if enableSaturationAnalyzer && enableModelOptimizer {
+			// HYBRID MODE: Arbitrate between Saturation and model-based targets - only if saturation analysis succeeded
+			if saturationAnalysis != nil && len(saturationTargets) > 0 {
+				saturationAnalyzer := saturation.NewAnalyzer()
+				finalDecisions = saturationAnalyzer.ArbitrateWithModelBased(
+					saturationAnalysis,
+					saturationTargets,
 					modelBasedTargets,
 					variantStates,
 				)
@@ -385,7 +385,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 					len(finalDecisions))
 			}
 		} else if enableModelOptimizer {
-			// MODEL-ONLY MODE: Capacity-based failed but model-based succeeded, or capacity analysis unavailable - use model-based only
+			// MODEL-ONLY MODE: saturation-based failed but model-based succeeded, or saturation analysis unavailable - use model-based only
 			// If prepareVariantAutoscalings failed for all VariantAutoscalings, updateList.Items will be empty
 			if updateList == nil || len(updateList.Items) == 0 {
 				logger.Log.Warnf("Model-only optimization: no VAs prepared, activating safety net: modelID=%s", modelID)
@@ -393,7 +393,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				continue
 			}
 
-			logger.Log.Warnf("Capacity analysis unavailable, using model-based targets only: modelID=%s", modelID)
+			logger.Log.Warnf("saturation analysis unavailable, using model-based targets only: modelID=%s", modelID)
 			for i := range updateList.Items {
 				va := &updateList.Items[i]
 				if targetReplicas, ok := modelBasedTargets[va.Name]; ok {
@@ -409,7 +409,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 						}
 					}
 
-					var action interfaces.CapacityAction
+					var action interfaces.SaturationAction
 					switch {
 					case targetReplicas > currentReplicas:
 						action = interfaces.ActionScaleUp
@@ -428,9 +428,9 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 						TargetReplicas:     targetReplicas,
 						Action:             action,
 						ModelBasedDecision: true,
-						CapacityBased:      false,
-						CapacityOnly:       false,
-						Reason:             "model-based only (capacity unavailable)",
+						SaturationBased:    false,
+						SaturationOnly:     false,
+						Reason:             "model-based only (Saturation unavailable)",
 					})
 
 					vaMap[va.Name] = va
@@ -444,8 +444,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// STEP 3: Apply all decisions
 	if len(allDecisions) > 0 {
 		logger.Log.Infof("Applying scaling decisions: totalDecisions=%d", len(allDecisions))
-		if err := r.applyCapacityDecisions(ctx, allDecisions, vaMap); err != nil {
-			logger.Log.Errorf("Failed to apply capacity decisions: %v", err)
+		if err := r.applySaturationDecisions(ctx, allDecisions, vaMap); err != nil {
+			logger.Log.Errorf("Failed to apply Saturation decisions: %v", err)
 			return ctrl.Result{RequeueAfter: requeueDuration}, nil
 		}
 	} else {
@@ -456,12 +456,12 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Warnf("Reconciliation completed with errors: mode=%s, modelsProcessed=%d, modelsFailed=%d, decisionsApplied=%d",
 			func() string {
 
-				if enableModelOptimizer && enableCapacityAnalyzer {
+				if enableModelOptimizer && enableSaturationAnalyzer {
 					return "hybrid"
 				} else if enableModelOptimizer {
 					return "model-only"
 				}
-				return "capacity-only"
+				return "saturation-only"
 			}(),
 			len(modelGroups),
 			errorCount,
@@ -469,12 +469,12 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	} else {
 		logger.Log.Infof("Reconciliation completed successfully: mode=%s, modelsProcessed=%d, decisionsApplied=%d",
 			func() string {
-				if enableModelOptimizer && enableCapacityAnalyzer {
+				if enableModelOptimizer && enableSaturationAnalyzer {
 					return "hybrid"
 				} else if enableModelOptimizer {
 					return "model-only"
 				}
-				return "capacity-only"
+				return "saturation-only"
 			}(),
 			len(modelGroups),
 			len(allDecisions))
@@ -496,7 +496,7 @@ func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.Vari
 	return active
 }
 
-// groupVAsByModel groups VariantAutoscalings by ModelID for per-model capacity analysis.
+// groupVAsByModel groups VariantAutoscalings by ModelID for per-model saturation analysis.
 // CRD validation ensures ModelID is not empty and all required fields are valid.
 func (r *VariantAutoscalingReconciler) groupVAsByModel(
 	vas []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
@@ -509,7 +509,7 @@ func (r *VariantAutoscalingReconciler) groupVAsByModel(
 	return groups
 }
 
-// buildVariantStates extracts current and desired replica counts from VAs for capacity analysis.
+// buildVariantStates extracts current and desired replica counts from VAs for saturation analysis.
 func (r *VariantAutoscalingReconciler) buildVariantStates(
 	ctx context.Context,
 	vas []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
@@ -545,19 +545,19 @@ func (r *VariantAutoscalingReconciler) buildVariantStates(
 	return states, nil
 }
 
-// convertCapacityTargetsToDecisions converts capacity-only targets to VariantDecisions.
-// Used when model-based optimizer is disabled (capacity-only mode).
-func convertCapacityTargetsToDecisions(
-	capacityTargets map[string]int,
-	capacityAnalysis *interfaces.ModelCapacityAnalysis,
+// convertsaturationTargetsToDecisions converts saturation-only targets to VariantDecisions.
+// Used when model-based optimizer is disabled (saturation-only mode).
+func convertsaturationTargetsToDecisions(
+	saturationTargets map[string]int,
+	saturationAnalysis *interfaces.ModelSaturationAnalysis,
 	variantStates []interfaces.VariantReplicaState,
 ) []interfaces.VariantDecision {
-	decisions := make([]interfaces.VariantDecision, 0, len(capacityTargets))
+	decisions := make([]interfaces.VariantDecision, 0, len(saturationTargets))
 
 	// Build variant analysis map for quick lookup
-	vaMap := make(map[string]*interfaces.VariantCapacityAnalysis)
-	for i := range capacityAnalysis.VariantAnalyses {
-		va := &capacityAnalysis.VariantAnalyses[i]
+	vaMap := make(map[string]*interfaces.VariantsaturationAnalysis)
+	for i := range saturationAnalysis.VariantAnalyses {
+		va := &saturationAnalysis.VariantAnalyses[i]
 		vaMap[va.VariantName] = va
 	}
 
@@ -567,11 +567,11 @@ func convertCapacityTargetsToDecisions(
 		stateMap[state.VariantName] = state
 	}
 
-	for variantName, targetReplicas := range capacityTargets {
+	for variantName, targetReplicas := range saturationTargets {
 		state := stateMap[variantName]
 		va := vaMap[variantName]
 
-		var action interfaces.CapacityAction
+		var action interfaces.SaturationAction
 		if targetReplicas > state.CurrentReplicas {
 			action = interfaces.ActionScaleUp
 		} else if targetReplicas < state.CurrentReplicas {
@@ -582,17 +582,17 @@ func convertCapacityTargetsToDecisions(
 
 		decision := interfaces.VariantDecision{
 			VariantName:        variantName,
-			Namespace:          capacityAnalysis.Namespace,
-			ModelID:            capacityAnalysis.ModelID,
+			Namespace:          saturationAnalysis.Namespace,
+			ModelID:            saturationAnalysis.ModelID,
 			CurrentReplicas:    state.CurrentReplicas,
 			TargetReplicas:     targetReplicas,
 			DesiredReplicas:    state.DesiredReplicas,
 			Action:             action,
-			CapacityBased:      true,
-			CapacityOnly:       true,
+			SaturationBased:    true,
+			SaturationOnly:     true,
 			ModelBasedDecision: false,
 			SafetyOverride:     false,
-			Reason:             "capacity-only mode: " + string(action),
+			Reason:             "saturation-only mode: " + string(action),
 		}
 
 		if va != nil {
@@ -608,13 +608,13 @@ func convertCapacityTargetsToDecisions(
 	return decisions
 }
 
-// runCapacityAnalysis performs capacity analysis for a model and returns capacity targets.
-func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
+// runSaturationAnalysis performs saturation analysis for a model and returns Saturation targets.
+func (r *VariantAutoscalingReconciler) runSaturationAnalysis(
 	ctx context.Context,
 	modelID string,
 	modelVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
-	capacityConfig interfaces.CapacityScalingConfig,
-) (map[string]int, *interfaces.ModelCapacityAnalysis, []interfaces.VariantReplicaState, error) {
+	SaturationConfig interfaces.SaturationScalingConfig,
+) (map[string]int, *interfaces.ModelSaturationAnalysis, []interfaces.VariantReplicaState, error) {
 	if len(modelVAs) == 0 {
 		return nil, nil, nil, fmt.Errorf("no VAs provided for model %s", modelID)
 	}
@@ -647,35 +647,35 @@ func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
 		variantAutoscalings[va.Name] = va
 	}
 
-	// Collect capacity metrics from Prometheus
-	metricsCollector := collector.NewCapacityMetricsCollector(r.PromAPI)
+	// Collect Saturation metrics from Prometheus
+	metricsCollector := collector.NewSaturationMetricsCollector(r.PromAPI)
 	metricsCollector.SetK8sClient(r.Client)
 	replicaMetrics, err := metricsCollector.CollectReplicaMetrics(ctx, modelID, namespace, deployments, variantAutoscalings, variantCosts)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to collect capacity metrics for model %s: %w", modelID, err)
+		return nil, nil, nil, fmt.Errorf("failed to collect Saturation metrics for model %s: %w", modelID, err)
 	}
 
-	logger.Log.Debugf("Collected capacity metrics: modelID=%s, namespace=%s, metricsCount=%d",
+	logger.Log.Debugf("Collected Saturation metrics: modelID=%s, namespace=%s, metricsCount=%d",
 		modelID, namespace, len(replicaMetrics))
 
-	// If no metrics available, skip capacity analysis entirely
+	// If no metrics available, skip saturation analysis entirely
 	// This prevents creating invalid decisions when pods are not ready or metrics are unavailable
 	if len(replicaMetrics) == 0 {
-		logger.Log.Infof("No capacity metrics available for model, skipping analysis: modelID=%s, namespace=%s",
+		logger.Log.Infof("No saturation metrics available for model, skipping analysis: modelID=%s, namespace=%s",
 			modelID, namespace)
 		return nil, nil, nil, nil // Return nil to signal skip due to metrics unavailable, not error
 	}
 
-	// Analyze capacity across all variants
-	capacityAnalyzer := saturation.NewAnalyzer()
-	capacityAnalysis, err := capacityAnalyzer.AnalyzeModelCapacity(ctx, modelID, namespace, replicaMetrics, capacityConfig)
+	// Analyze saturation across all variants
+	saturationAnalyzer := saturation.NewAnalyzer()
+	saturationAnalysis, err := saturationAnalyzer.AnalyzeModelSaturation(ctx, modelID, namespace, replicaMetrics, SaturationConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to analyze capacity for model %s: %w", modelID, err)
+		return nil, nil, nil, fmt.Errorf("failed to analyze Saturation for model %s: %w", modelID, err)
 	}
 
-	logger.Log.Infof("Capacity analysis completed: modelID=%s, totalReplicas=%d, nonSaturated=%d, shouldScaleUp=%v, scaleDownSafe=%v",
-		modelID, capacityAnalysis.TotalReplicas, capacityAnalysis.NonSaturatedCount,
-		capacityAnalysis.ShouldScaleUp, capacityAnalysis.ScaleDownSafe)
+	logger.Log.Infof("saturation analysis completed: modelID=%s, totalReplicas=%d, nonSaturated=%d, shouldScaleUp=%v, scaleDownSafe=%v",
+		modelID, saturationAnalysis.TotalReplicas, saturationAnalysis.NonSaturatedCount,
+		saturationAnalysis.ShouldScaleUp, saturationAnalysis.ScaleDownSafe)
 
 	// Build variant states (current and desired replicas)
 	variantStates, err := r.buildVariantStates(ctx, modelVAs)
@@ -683,17 +683,17 @@ func (r *VariantAutoscalingReconciler) runCapacityAnalysis(
 		return nil, nil, nil, fmt.Errorf("failed to build variant states for model %s: %w", modelID, err)
 	}
 
-	// Calculate capacity-based targets
-	capacityTargets := capacityAnalyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	// Calculate saturation-based targets
+	saturationTargets := saturationAnalyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
 
-	logger.Log.Debugf("Capacity targets calculated: modelID=%s, targets=%v",
-		modelID, capacityTargets)
+	logger.Log.Debugf("Saturation targets calculated: modelID=%s, targets=%v",
+		modelID, saturationTargets)
 
-	return capacityTargets, capacityAnalysis, variantStates, nil
+	return saturationTargets, saturationAnalysis, variantStates, nil
 }
 
-// collectMetricsForCapacityMode collects metrics and populates CurrentAlloc for VAs in capacity-only mode.
-func (r *VariantAutoscalingReconciler) collectMetricsForCapacityMode(
+// collectMetricsForSaturationMode collects metrics and populates CurrentAlloc for VAs in saturation-only mode.
+func (r *VariantAutoscalingReconciler) collectMetricsForSaturationMode(
 	ctx context.Context,
 	modelVAs []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	vaMap map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
@@ -784,8 +784,8 @@ func (r *VariantAutoscalingReconciler) collectMetricsForCapacityMode(
 	return nil
 }
 
-// applyCapacityDecisions updates VA status and emits metrics based on capacity decisions.
-func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
+// applySaturationDecisions updates VA status and emits metrics based on Saturation decisions.
+func (r *VariantAutoscalingReconciler) applySaturationDecisions(
 	ctx context.Context,
 	decisions []interfaces.VariantDecision,
 	vaMap map[string]*llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
@@ -821,7 +821,7 @@ func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
 		// Update CurrentAlloc from vaMap
 		updateVa.Status.CurrentAlloc = va.Status.CurrentAlloc
 
-		// Update DesiredOptimizedAlloc with capacity decision
+		// Update DesiredOptimizedAlloc with Saturation decision
 		acceleratorName := decision.AcceleratorName
 
 		updateVa.Status.DesiredOptimizedAlloc = llmdVariantAutoscalingV1alpha1.OptimizedAlloc{
@@ -836,14 +836,14 @@ func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
 			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,
 				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
 				metav1.ConditionTrue,
-				"CapacitySafetyOverride",
-				fmt.Sprintf("Capacity safety override: %s", decision.Reason))
-		} else if decision.CapacityOnly {
+				"SaturationSafetyOverride",
+				fmt.Sprintf("saturation safety override: %s", decision.Reason))
+		} else if decision.SaturationOnly {
 			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,
 				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
 				metav1.ConditionTrue,
-				"CapacityOnlyMode",
-				fmt.Sprintf("Capacity-only decision: %s (target: %d replicas)", decision.Reason, decision.TargetReplicas))
+				"SaturationOnlyMode",
+				fmt.Sprintf("saturation-only decision: %s (target: %d replicas)", decision.Reason, decision.TargetReplicas))
 		} else {
 			llmdVariantAutoscalingV1alpha1.SetCondition(&updateVa,
 				llmdVariantAutoscalingV1alpha1.TypeOptimizationReady,
@@ -857,8 +857,8 @@ func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
 		if err := act.EmitMetrics(ctx, &updateVa); err != nil {
 			logger.Log.Errorf("failed to emit metrics for external autoscalers: variant=%s, error=%v", updateVa.Name, err)
 		} else {
-			logger.Log.Infof("Successfully emitted metrics for external autoscalers: variant=%s, targetReplicas=%d, accelerator=%s, capacityOnly=%v",
-				updateVa.Name, decision.TargetReplicas, decision.AcceleratorName, decision.CapacityOnly)
+			logger.Log.Infof("Successfully emitted metrics for external autoscalers: variant=%s, targetReplicas=%d, accelerator=%s, SaturationOnly=%v",
+				updateVa.Name, decision.TargetReplicas, decision.AcceleratorName, decision.SaturationOnly)
 			updateVa.Status.Actuation.Applied = true
 		}
 
@@ -868,14 +868,14 @@ func (r *VariantAutoscalingReconciler) applyCapacityDecisions(
 			continue
 		}
 
-		logger.Log.Infof("Applied capacity decision: variant=%s, action=%s, current=%d, target=%d, reason=%s",
+		logger.Log.Infof("Applied Saturation decision: variant=%s, action=%s, current=%d, target=%d, reason=%s",
 			decision.VariantName, decision.Action, decision.CurrentReplicas, decision.TargetReplicas, decision.Reason)
 	}
 
 	return nil
 }
 
-// emitSafetyNetMetrics emits fallback metrics when capacity analysis fails.
+// emitSafetyNetMetrics emits fallback metrics when saturation analysis fails.
 // Strategy: Use previous desired replicas if available, otherwise use current replicas.
 // This prevents HPA from using completely stale metrics and provides a safe no-op signal.
 func (r *VariantAutoscalingReconciler) emitSafetyNetMetrics(
@@ -1227,39 +1227,39 @@ func (r *VariantAutoscalingReconciler) readAcceleratorConfig(ctx context.Context
 	return out, nil
 }
 
-// getCapacityConfigFromCache retrieves cached config (thread-safe read).
+// getsaturationConfigFromCache retrieves cached config (thread-safe read).
 // Returns a copy to prevent external modification.
-func (r *VariantAutoscalingReconciler) getCapacityConfigFromCache() map[string]interfaces.CapacityScalingConfig {
+func (r *VariantAutoscalingReconciler) getsaturationConfigFromCache() map[string]interfaces.SaturationScalingConfig {
 	r.saturationConfigCacheMutex.RLock()
 	defer r.saturationConfigCacheMutex.RUnlock()
 
 	// Return copy to prevent external modification
-	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.saturationConfigCache))
+	configCopy := make(map[string]interfaces.SaturationScalingConfig, len(r.saturationConfigCache))
 	for k, v := range r.saturationConfigCache {
 		configCopy[k] = v
 	}
 	return configCopy
 }
 
-// getCapacityConfigSafe atomically retrieves cached config and loaded status (thread-safe).
+// getSaturationConfigSafe atomically retrieves cached config and loaded status (thread-safe).
 // Returns a copy of the config map and whether the initial load succeeded.
 // This prevents race conditions between checking loaded status and getting the config.
-func (r *VariantAutoscalingReconciler) getCapacityConfigSafe() (map[string]interfaces.CapacityScalingConfig, bool) {
+func (r *VariantAutoscalingReconciler) getSaturationConfigSafe() (map[string]interfaces.SaturationScalingConfig, bool) {
 	r.saturationConfigCacheMutex.RLock()
 	defer r.saturationConfigCacheMutex.RUnlock()
 
 	// Return copy to prevent external modification
-	configCopy := make(map[string]interfaces.CapacityScalingConfig, len(r.saturationConfigCache))
+	configCopy := make(map[string]interfaces.SaturationScalingConfig, len(r.saturationConfigCache))
 	for k, v := range r.saturationConfigCache {
 		configCopy[k] = v
 	}
 	return configCopy, r.saturationConfigLoaded
 }
 
-// updateCapacityConfigCache updates the cache (thread-safe write).
+// updateSaturationConfigCache updates the cache (thread-safe write).
 // Logs cache update and returns error if read fails.
-func (r *VariantAutoscalingReconciler) updateCapacityConfigCache(ctx context.Context) error {
-	configs, err := r.readCapacityScalingConfig(ctx, saturationConfigMapName, configMapNamespace)
+func (r *VariantAutoscalingReconciler) updateSaturationConfigCache(ctx context.Context) error {
+	configs, err := r.readSaturationScalingConfig(ctx, saturationConfigMapName, configMapNamespace)
 	if err != nil {
 		return err
 	}
@@ -1270,60 +1270,60 @@ func (r *VariantAutoscalingReconciler) updateCapacityConfigCache(ctx context.Con
 	r.saturationConfigCache = configs
 	r.saturationConfigLoaded = true
 
-	logger.Log.Infof("Capacity scaling config cache updated: entries=%d, has_default=%t",
+	logger.Log.Infof("saturation scaling config cache updated: entries=%d, has_default=%t",
 		len(configs),
-		configs["default"] != (interfaces.CapacityScalingConfig{}))
+		configs["default"] != (interfaces.SaturationScalingConfig{}))
 
 	return nil
 }
 
-// isCapacityConfigLoaded returns whether the initial config load succeeded (thread-safe).
-func (r *VariantAutoscalingReconciler) isCapacityConfigLoaded() bool {
+// isSaturationConfigLoaded returns whether the initial config load succeeded (thread-safe).
+func (r *VariantAutoscalingReconciler) isSaturationConfigLoaded() bool {
 	r.saturationConfigCacheMutex.RLock()
 	defer r.saturationConfigCacheMutex.RUnlock()
 	return r.saturationConfigLoaded
 }
 
-// InitializeCapacityConfigCache performs initial load of capacity scaling config cache.
+// InitializeSaturationConfigCache performs initial load of saturation scaling config cache.
 // Called from main.go during controller startup. Non-fatal if load fails (uses defaults).
-func (r *VariantAutoscalingReconciler) InitializeCapacityConfigCache(ctx context.Context) error {
-	return r.updateCapacityConfigCache(ctx)
+func (r *VariantAutoscalingReconciler) InitializeSaturationConfigCache(ctx context.Context) error {
+	return r.updateSaturationConfigCache(ctx)
 }
 
-// readCapacityScalingConfig reads capacity scaling configuration from ConfigMap.
+// readSaturationScalingConfig reads saturation scaling configuration from ConfigMap.
 // Returns default config with warning if ConfigMap is not found.
 // Returns a map with key "default" and optional per-model override entries.
-// This method is called by updateCapacityConfigCache and should not be called directly.
-func (r *VariantAutoscalingReconciler) readCapacityScalingConfig(ctx context.Context, cmName, cmNamespace string) (map[string]interfaces.CapacityScalingConfig, error) {
+// This method is called by updateSaturationConfigCache and should not be called directly.
+func (r *VariantAutoscalingReconciler) readSaturationScalingConfig(ctx context.Context, cmName, cmNamespace string) (map[string]interfaces.SaturationScalingConfig, error) {
 	cm := corev1.ConfigMap{}
 	err := utils.GetConfigMapWithBackoff(ctx, r.Client, cmName, cmNamespace, &cm)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Log.Warnf("Capacity scaling ConfigMap not found, using hardcoded defaults: configmap=%s, namespace=%s",
+			logger.Log.Warnf("saturation scaling ConfigMap not found, using hardcoded defaults: configmap=%s, namespace=%s",
 				cmName, cmNamespace)
 			// Return default config only
-			return map[string]interfaces.CapacityScalingConfig{
-				"default": interfaces.DefaultCapacityScalingConfig(),
+			return map[string]interfaces.SaturationScalingConfig{
+				"default": interfaces.DefaultSaturationScalingConfig(),
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to read ConfigMap %s/%s: %w", cmNamespace, cmName, err)
 	}
 
-	configs := make(map[string]interfaces.CapacityScalingConfig)
+	configs := make(map[string]interfaces.SaturationScalingConfig)
 
 	// Parse all entries
 	for key, yamlStr := range cm.Data {
-		var config interfaces.CapacityScalingConfig
+		var config interfaces.SaturationScalingConfig
 		if err := yaml.Unmarshal([]byte(yamlStr), &config); err != nil {
-			logger.Log.Warnf("Failed to parse capacity scaling config entry, skipping: key=%s, error=%v",
+			logger.Log.Warnf("Failed to parse saturation scaling config entry, skipping: key=%s, error=%v",
 				key, err)
 			continue
 		}
 
 		// Validate configuration
 		if err := config.Validate(); err != nil {
-			logger.Log.Warnf("Invalid capacity scaling config entry, skipping: key=%s, error=%v",
+			logger.Log.Warnf("Invalid saturation scaling config entry, skipping: key=%s, error=%v",
 				key, err)
 			continue
 		}
@@ -1333,19 +1333,19 @@ func (r *VariantAutoscalingReconciler) readCapacityScalingConfig(ctx context.Con
 
 	// Ensure default exists
 	if _, ok := configs["default"]; !ok {
-		logger.Log.Warn("No 'default' entry in capacity scaling ConfigMap, using hardcoded defaults")
-		configs["default"] = interfaces.DefaultCapacityScalingConfig()
+		logger.Log.Warn("No 'default' entry in saturation scaling ConfigMap, using hardcoded defaults")
+		configs["default"] = interfaces.DefaultSaturationScalingConfig()
 	}
 
 	return configs, nil
 }
 
-// getCapacityScalingConfigForVariant retrieves config for specific model/namespace with fallback to default.
+// getSaturationScalingConfigForVariant retrieves config for specific model/namespace with fallback to default.
 // It searches for an override entry matching both model_id and namespace fields.
-func (r *VariantAutoscalingReconciler) getCapacityScalingConfigForVariant(
-	configs map[string]interfaces.CapacityScalingConfig,
+func (r *VariantAutoscalingReconciler) getSaturationScalingConfigForVariant(
+	configs map[string]interfaces.SaturationScalingConfig,
 	modelID, namespace string,
-) interfaces.CapacityScalingConfig {
+) interfaces.SaturationScalingConfig {
 	// Start with default
 	config := configs["default"]
 
@@ -1358,7 +1358,7 @@ func (r *VariantAutoscalingReconciler) getCapacityScalingConfigForVariant(
 		// Check if this override matches our model_id and namespace
 		if override.ModelID == modelID && override.Namespace == namespace {
 			config.Merge(override)
-			logger.Log.Debugf("Applied capacity scaling override: key=%s, modelID=%s, namespace=%s, config=%v",
+			logger.Log.Debugf("Applied saturation scaling override: key=%s, modelID=%s, namespace=%s, config=%v",
 				key, modelID, namespace, config)
 			break
 		}

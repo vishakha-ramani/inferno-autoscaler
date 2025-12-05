@@ -15,7 +15,7 @@ type VariantAutoscalingSpec struct {
 	// +kubebuilder:validation:Optional
 	ModelProfile ModelProfile `json:"modelProfile"`
 
-	// VariantCost specifies the cost per replica for this variant (used in capacity analysis).
+	// VariantCost specifies the cost per replica for this variant (used in saturation analysis).
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
 	// +kubebuilder:default="10.0"

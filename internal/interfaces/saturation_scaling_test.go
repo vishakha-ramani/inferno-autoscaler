@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-func TestDefaultCapacityScalingConfig(t *testing.T) {
-	config := DefaultCapacityScalingConfig()
+func TestDefaultSaturationScalingConfig(t *testing.T) {
+	config := DefaultSaturationScalingConfig()
 
 	if config.KvCacheThreshold != 0.80 {
 		t.Errorf("Expected KvCacheThreshold 0.80, got %.2f", config.KvCacheThreshold)
@@ -21,20 +21,20 @@ func TestDefaultCapacityScalingConfig(t *testing.T) {
 	}
 }
 
-func TestCapacityScalingConfigValidate(t *testing.T) {
+func TestSaturationScalingConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  CapacityScalingConfig
+		config  SaturationScalingConfig
 		wantErr bool
 	}{
 		{
 			name:    "valid default config",
-			config:  DefaultCapacityScalingConfig(),
+			config:  DefaultSaturationScalingConfig(),
 			wantErr: false,
 		},
 		{
 			name: "valid custom config",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.75,
 				QueueLengthThreshold: 10,
 				KvSpareTrigger:       0.15,
@@ -44,7 +44,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid KvCacheThreshold too high",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     1.5,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       0.1,
@@ -54,7 +54,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid KvCacheThreshold negative",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     -0.1,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       0.1,
@@ -64,7 +64,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid QueueLengthThreshold negative",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.8,
 				QueueLengthThreshold: -1,
 				KvSpareTrigger:       0.1,
@@ -74,7 +74,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid KvSpareTrigger too high",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.8,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       1.5,
@@ -84,7 +84,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid KvSpareTrigger negative",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.8,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       -0.1,
@@ -94,7 +94,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid QueueSpareTrigger negative",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.8,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       0.1,
@@ -104,7 +104,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "invalid KvCacheThreshold less than KvSpareTrigger",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.5,
 				QueueLengthThreshold: 5,
 				KvSpareTrigger:       0.6,
@@ -114,7 +114,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "edge case: zero values are valid",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     0.0,
 				QueueLengthThreshold: 0,
 				KvSpareTrigger:       0.0,
@@ -124,7 +124,7 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 		},
 		{
 			name: "edge case: max values are valid",
-			config: CapacityScalingConfig{
+			config: SaturationScalingConfig{
 				KvCacheThreshold:     1.0,
 				QueueLengthThreshold: 1000,
 				KvSpareTrigger:       1.0,
@@ -144,23 +144,23 @@ func TestCapacityScalingConfigValidate(t *testing.T) {
 	}
 }
 
-func TestCapacityScalingConfigMerge(t *testing.T) {
+func TestSaturationScalingConfigMerge(t *testing.T) {
 	tests := []struct {
 		name     string
-		base     CapacityScalingConfig
-		override CapacityScalingConfig
-		expected CapacityScalingConfig
+		base     SaturationScalingConfig
+		override SaturationScalingConfig
+		expected SaturationScalingConfig
 	}{
 		{
 			name: "full override",
-			base: DefaultCapacityScalingConfig(),
-			override: CapacityScalingConfig{
+			base: DefaultSaturationScalingConfig(),
+			override: SaturationScalingConfig{
 				KvCacheThreshold:     0.75,
 				QueueLengthThreshold: 10,
 				KvSpareTrigger:       0.15,
 				QueueSpareTrigger:    5,
 			},
-			expected: CapacityScalingConfig{
+			expected: SaturationScalingConfig{
 				KvCacheThreshold:     0.75,
 				QueueLengthThreshold: 10,
 				KvSpareTrigger:       0.15,
@@ -169,11 +169,11 @@ func TestCapacityScalingConfigMerge(t *testing.T) {
 		},
 		{
 			name: "partial override - only KvCacheThreshold",
-			base: DefaultCapacityScalingConfig(),
-			override: CapacityScalingConfig{
+			base: DefaultSaturationScalingConfig(),
+			override: SaturationScalingConfig{
 				KvCacheThreshold: 0.90,
 			},
-			expected: CapacityScalingConfig{
+			expected: SaturationScalingConfig{
 				KvCacheThreshold:     0.90,
 				QueueLengthThreshold: 5,   // from default
 				KvSpareTrigger:       0.1, // from default
@@ -182,12 +182,12 @@ func TestCapacityScalingConfigMerge(t *testing.T) {
 		},
 		{
 			name: "partial override - queue thresholds only",
-			base: DefaultCapacityScalingConfig(),
-			override: CapacityScalingConfig{
+			base: DefaultSaturationScalingConfig(),
+			override: SaturationScalingConfig{
 				QueueLengthThreshold: 20,
 				QueueSpareTrigger:    10,
 			},
-			expected: CapacityScalingConfig{
+			expected: SaturationScalingConfig{
 				KvCacheThreshold:     0.8, // from default
 				QueueLengthThreshold: 20,
 				KvSpareTrigger:       0.1, // from default
@@ -196,9 +196,9 @@ func TestCapacityScalingConfigMerge(t *testing.T) {
 		},
 		{
 			name:     "empty override - base unchanged",
-			base:     DefaultCapacityScalingConfig(),
-			override: CapacityScalingConfig{},
-			expected: DefaultCapacityScalingConfig(),
+			base:     DefaultSaturationScalingConfig(),
+			override: SaturationScalingConfig{},
+			expected: DefaultSaturationScalingConfig(),
 		},
 	}
 

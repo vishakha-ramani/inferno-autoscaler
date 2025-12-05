@@ -2,10 +2,10 @@ package interfaces
 
 import "fmt"
 
-// CapacityScalingConfig holds capacity-based scaling thresholds for a model variant.
-// Capacity scaling is enabled by default and uses these thresholds to determine when
+// SaturationScalingConfig holds saturation-based scaling thresholds for a model variant.
+// Saturation scaling is enabled by default and uses these thresholds to determine when
 // replicas are saturated and when to scale up.
-type CapacityScalingConfig struct {
+type SaturationScalingConfig struct {
 	// ModelID is the model identifier (only used in override entries)
 	ModelID string `yaml:"model_id,omitempty"`
 
@@ -25,10 +25,10 @@ type CapacityScalingConfig struct {
 	QueueSpareTrigger float64 `yaml:"queueSpareTrigger"`
 }
 
-// DefaultCapacityScalingConfig returns hardcoded default configuration.
+// DefaultSaturationScalingConfig returns hardcoded default configuration.
 // Used as fallback when ConfigMap is missing or has no 'default' entry.
-func DefaultCapacityScalingConfig() CapacityScalingConfig {
-	return CapacityScalingConfig{
+func DefaultSaturationScalingConfig() SaturationScalingConfig {
+	return SaturationScalingConfig{
 		KvCacheThreshold:     0.80,
 		QueueLengthThreshold: 5,
 		KvSpareTrigger:       0.10,
@@ -39,7 +39,7 @@ func DefaultCapacityScalingConfig() CapacityScalingConfig {
 // Merge applies non-zero values from override on top of base config.
 // This allows partial overrides where unspecified fields inherit from default.
 // Note: model_id and namespace are not merged (they're metadata fields).
-func (base *CapacityScalingConfig) Merge(override CapacityScalingConfig) {
+func (base *SaturationScalingConfig) Merge(override SaturationScalingConfig) {
 	if override.KvCacheThreshold != 0 {
 		base.KvCacheThreshold = override.KvCacheThreshold
 	}
@@ -56,7 +56,7 @@ func (base *CapacityScalingConfig) Merge(override CapacityScalingConfig) {
 
 // Validate checks for invalid threshold values.
 // Returns error with descriptive message if validation fails.
-func (c *CapacityScalingConfig) Validate() error {
+func (c *SaturationScalingConfig) Validate() error {
 	if c.KvCacheThreshold < 0 || c.KvCacheThreshold > 1 {
 		return fmt.Errorf("kvCacheThreshold must be between 0 and 1, got %.2f", c.KvCacheThreshold)
 	}

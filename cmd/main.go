@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -36,12 +37,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/controller"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/engines/saturation"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/engines/scalefromzero"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -267,6 +271,30 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error("unable to start manager", zap.Error(err))
+		os.Exit(1)
+	}
+
+	// Register optimization engine loops with the manager. Only start when leader.
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		engine := saturation.NewEngine(mgr.GetClient())
+		go engine.StartOptimizeLoop(ctx)
+		return nil
+	}))
+
+	if err != nil {
+		setupLog.Error("unable to add optimization engine loops to manager", zap.Error(err))
+		os.Exit(1)
+	}
+
+	// Register scale from zero engine loops with the manager. Only start when leader.
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		engine := scalefromzero.NewEngine(mgr.GetClient())
+		go engine.StartOptimizeLoop(ctx)
+		return nil
+	}))
+
+	if err != nil {
+		setupLog.Error("unable to add optimization engine loops to manager", zap.Error(err))
 		os.Exit(1)
 	}
 

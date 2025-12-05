@@ -126,6 +126,57 @@ func initMetricsEmitter() {
 }
 
 func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// NOTE: The reconciliation loop is being incrementally refactored so things may look a bit messy.
+	// Changes in progress:
+	// - reconcile loop will process one VA at a time. During the refactoring it does both, one and all
+
+	// BEGIN: Per VA logic
+
+	// Get the specific VA object that triggered this reconciliation
+	var va llmdVariantAutoscalingV1alpha1.VariantAutoscaling
+	if err := r.Get(ctx, req.NamespacedName, &va); err != nil { // Get returns, by default, a deep copy of the object
+		if apierrors.IsNotFound(err) {
+			logger.Log.Infof("VariantAutoscaling resource not found, may have been deleted: name=%s, namespace=%s", req.Name, req.Namespace)
+			return ctrl.Result{}, nil
+		}
+		logger.Log.Errorf("Unable to fetch VariantAutoscaling: name=%s, namespace=%s, error=%v", req.Name, req.Namespace, err)
+		return ctrl.Result{}, err
+	}
+
+	// Skip if the VA is being deleted
+	if !va.DeletionTimestamp.IsZero() {
+		logger.Log.Infof("VariantAutoscaling is being deleted, skipping reconciliation: name=%s, namespace=%s", va.Name, va.Namespace)
+		return ctrl.Result{}, nil
+	}
+	logger.Log.Infof("Reconciling VariantAutoscaling: name=%s, namespace=%s, modelID=%s", va.Name, va.Namespace, va.Spec.ModelID)
+
+	// Attempts to resolve the target model variant
+	// TODO: replace by proper lookup mechanism using spec.scaleTargetRef in future
+	scaleTargetName := va.Name
+
+	// TODO: generalize to other scale target kinds in future
+	var deploy appsv1.Deployment
+	if err := utils.GetDeploymentWithBackoff(ctx, r.Client, scaleTargetName, va.Namespace, &deploy); err != nil {
+		logger.Log.Errorf("Failed to get scale target Deployment: name=%s, namespace=%s, error=%v", scaleTargetName, va.Namespace, err)
+		llmdVariantAutoscalingV1alpha1.SetCondition(&va,
+			llmdVariantAutoscalingV1alpha1.TypeTargetResolved,
+			metav1.ConditionFalse,
+			"ScaleTargetNotFound",
+			fmt.Sprintf("Scale target Deployment not found: name=%s, namespace=%s", scaleTargetName, va.Namespace),
+		)
+		return ctrl.Result{}, err
+	}
+
+	llmdVariantAutoscalingV1alpha1.SetCondition(&va,
+		llmdVariantAutoscalingV1alpha1.TypeTargetResolved,
+		metav1.ConditionTrue,
+		"ScaleTargetFound",
+		fmt.Sprintf("Scale target Deployment found: name=%s, namespace=%s", scaleTargetName, va.Namespace),
+	)
+
+	// END: Per VA logic
+
+	// BELOW is the logic that processes all VAs together for optimization (TO BE REFACTORED)
 
 	//TODO: move interval to manager.yaml
 

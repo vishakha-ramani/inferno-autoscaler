@@ -65,6 +65,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
 
+			By("creating the required scale target ref deployment")
+			deployment := testutils.CreateLlmdSimDeployment("default", resourceName, "default-default", "default", "8000", 0, 0, 1)
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+
 			By("creating the required configmap for optimization")
 			configMap := testutils.CreateServiceClassConfigMap(ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
@@ -808,7 +812,12 @@ data:
 			}
 
 			By("Performing a full reconciliation")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "multi-test-resource-0",
+					Namespace: "default",
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that conditions are set correctly")

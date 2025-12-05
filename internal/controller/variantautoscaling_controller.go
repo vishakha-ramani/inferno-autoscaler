@@ -35,9 +35,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
@@ -1135,9 +1133,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 				return nil
 			}),
 			// Predicate to filter only the target configmap
-			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-				return obj.GetName() == configMapName && obj.GetNamespace() == configMapNamespace
-			})),
+			builder.WithPredicates(ConfigMapPredicate()),
 		).
 		// Watch ServiceMonitor for controller's own metrics
 		// This enables detection when ServiceMonitor is deleted, which would prevent
@@ -1150,54 +1146,10 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 			}(),
 			handler.EnqueueRequestsFromMapFunc(r.handleServiceMonitorEvent),
 			// Predicate to filter only the target ServiceMonitor
-			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-				return obj.GetName() == serviceMonitorName && obj.GetNamespace() == configMapNamespace
-			})),
+			builder.WithPredicates(ServiceMonitorPredicate()),
 		).
 		Named("variantAutoscaling").
-		WithEventFilter(predicate.Funcs{
-			CreateFunc: func(e event.CreateEvent) bool {
-				return true
-			},
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				gvk := e.ObjectNew.GetObjectKind().GroupVersionKind()
-				// Allow Update events for ConfigMap (needed to trigger reconcile on config changes)
-				if gvk.Kind == "ConfigMap" && gvk.Group == "" {
-					return true
-				}
-				// Allow Update events for ServiceMonitor when deletionTimestamp is set
-				// (finalizers cause deletion to emit Update events with deletionTimestamp)
-				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
-					// Check if deletionTimestamp was just set (deletion started)
-					if deletionTimestamp := e.ObjectNew.GetDeletionTimestamp(); deletionTimestamp != nil && !deletionTimestamp.IsZero() {
-						// Check if this is a newly set deletion timestamp
-						oldDeletionTimestamp := e.ObjectOld.GetDeletionTimestamp()
-						if oldDeletionTimestamp == nil || oldDeletionTimestamp.IsZero() {
-							return true // Deletion just started
-						}
-					}
-				}
-				// Block Update events for VariantAutoscaling resource.
-				// The controller reconciles all VariantAutoscaling resources periodically (every 60s by default),
-				// so individual resource update events would only cause unnecessary reconciles without benefit.
-				return false
-			},
-			DeleteFunc: func(e event.DeleteEvent) bool {
-				gvk := e.Object.GetObjectKind().GroupVersionKind()
-				// Allow Delete events for ServiceMonitor (for immediate deletion detection)
-				if gvk.Group == serviceMonitorGVK.Group && gvk.Kind == serviceMonitorGVK.Kind {
-					return true
-				}
-				// Block Delete events for VariantAutoscaling resource.
-				// The controller reconciles all VariantAutoscaling resources periodically and filters out
-				// deleted resources in filterActiveVariantAutoscalings, so individual delete events
-				// would only cause unnecessary reconciles without benefit.
-				return false
-			},
-			GenericFunc: func(e event.GenericEvent) bool {
-				return false
-			},
-		}).
+		WithEventFilter(EventFilter()).
 		Complete(r)
 }
 

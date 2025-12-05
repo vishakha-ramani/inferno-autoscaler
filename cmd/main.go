@@ -44,6 +44,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/controller"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
@@ -54,8 +55,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(llmdVariantAutoscalingV1alpha1.AddToScheme(scheme))
+	utilruntime.Must(promoperator.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

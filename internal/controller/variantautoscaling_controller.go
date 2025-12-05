@@ -29,7 +29,6 @@ import (
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
@@ -52,6 +51,7 @@ import (
 	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
 	infernoManager "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/manager"
 	infernoSolver "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/solver"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -1139,11 +1139,7 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		// This enables detection when ServiceMonitor is deleted, which would prevent
 		// Prometheus from scraping controller metrics (including optimized replicas).
 		Watches(
-			func() client.Object {
-				serviceMonitorSource := &unstructured.Unstructured{}
-				serviceMonitorSource.SetGroupVersionKind(serviceMonitorGVK)
-				return serviceMonitorSource
-			}(),
+			&promoperator.ServiceMonitor{},
 			handler.EnqueueRequestsFromMapFunc(r.handleServiceMonitorEvent),
 			// Predicate to filter only the target ServiceMonitor
 			builder.WithPredicates(ServiceMonitorPredicate()),
@@ -1409,13 +1405,13 @@ func (r *VariantAutoscalingReconciler) readOptimizationConfig(ctx context.Contex
 // metrics from being scraped. The handler exists solely for observability - logging and
 // emitting Kubernetes events to alert operators of the issue.
 func (r *VariantAutoscalingReconciler) handleServiceMonitorEvent(ctx context.Context, obj client.Object) []reconcile.Request {
-	serviceMonitor, ok := obj.(*unstructured.Unstructured)
+	serviceMonitor, ok := obj.(*promoperator.ServiceMonitor)
 	if !ok {
 		return nil
 	}
 
-	name := serviceMonitor.GetName()
-	namespace := serviceMonitor.GetNamespace()
+	name := serviceMonitor.Name
+	namespace := serviceMonitor.Namespace
 
 	// Check if ServiceMonitor is being deleted
 	if !serviceMonitor.GetDeletionTimestamp().IsZero() {

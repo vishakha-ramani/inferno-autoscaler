@@ -1,10 +1,6 @@
 module github.com/llm-d-incubation/workload-variant-autoscaler
 
-go 1.23.0
-
-godebug default=go1.23
-
-toolchain go1.23.10
+go 1.24.0
 
 require (
 	github.com/onsi/ginkgo/v2 v2.22.0

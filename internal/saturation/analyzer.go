@@ -315,6 +315,7 @@ func (a *Analyzer) CalculateSaturationTargets(
 	for _, va := range saturationAnalysis.VariantAnalyses {
 		state := stateMap[va.VariantName]
 
+		// TODO: will need to adjust this logic to address readiness based on metrics
 		// Check if the VA state is stable (DesiredReplicas and CurrentReplicas match) and all expected pods are reporting metrics
 		isStable := (state.DesiredReplicas == 0 || state.DesiredReplicas == state.CurrentReplicas)
 		allMetricsAvailable := (va.ReplicaCount == state.CurrentReplicas)

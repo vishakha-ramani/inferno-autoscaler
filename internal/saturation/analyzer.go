@@ -1,4 +1,4 @@
-package capacity
+package saturation
 
 import (
 	"context"
@@ -9,30 +9,30 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 )
 
-// Analyzer implements the CapacityAnalyzer interface
+// Analyzer implements the SaturationAnalyzer interface
 type Analyzer struct{}
 
-// NewAnalyzer creates a new capacity analyzer instance
-func NewAnalyzer() interfaces.CapacityAnalyzer {
+// NewAnalyzer creates a new saturation analyzer instance
+func NewAnalyzer() interfaces.SaturationAnalyzer {
 	return &Analyzer{}
 }
 
-// AnalyzeModelCapacity analyzes capacity for all variants of a model.
+// AnalyzeModelSaturation analyzes Saturation for all variants of a model.
 // It aggregates metrics across all replicas (from all variants) and determines:
 // 1. Which replicas are non-saturated
-// 2. Average spare capacity across non-saturated replicas
-// 3. Whether to scale up (spare capacity < trigger)
+// 2. Average spare Saturation across non-saturated replicas
+// 3. Whether to scale up (spare Saturation < trigger)
 // 4. Whether scale-down is safe (worst-case simulation)
-func (a *Analyzer) AnalyzeModelCapacity(
+func (a *Analyzer) AnalyzeModelSaturation(
 	ctx context.Context,
 	modelID string,
 	namespace string,
 	replicaMetrics []interfaces.ReplicaMetrics,
-	config interfaces.CapacityScalingConfig,
-) (*interfaces.ModelCapacityAnalysis, error) {
+	config interfaces.SaturationScalingConfig,
+) (*interfaces.ModelSaturationAnalysis, error) {
 
 	if len(replicaMetrics) == 0 {
-		return &interfaces.ModelCapacityAnalysis{
+		return &interfaces.ModelSaturationAnalysis{
 			ModelID:         modelID,
 			Namespace:       namespace,
 			AnalyzedAt:      time.Now(),
@@ -40,11 +40,11 @@ func (a *Analyzer) AnalyzeModelCapacity(
 			ShouldScaleUp:   false,
 			ShouldScaleDown: false,
 			ScaleDownSafe:   false,
-			VariantAnalyses: []interfaces.VariantCapacityAnalysis{},
+			VariantAnalyses: []interfaces.VariantSaturationAnalysis{},
 		}, nil
 	}
 
-	analysis := &interfaces.ModelCapacityAnalysis{
+	analysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:    modelID,
 		Namespace:  namespace,
 		AnalyzedAt: time.Now(),
@@ -57,7 +57,7 @@ func (a *Analyzer) AnalyzeModelCapacity(
 		variantCounts[metric.VariantName]++
 	}
 
-	// Pre-allocate slices with exact capacity
+	// Pre-allocate slices with exact Saturation
 	variantMap := make(map[string][]interfaces.ReplicaMetrics, len(variantCounts))
 	for variant, count := range variantCounts {
 		variantMap[variant] = make([]interfaces.ReplicaMetrics, 0, count)
@@ -75,7 +75,7 @@ func (a *Analyzer) AnalyzeModelCapacity(
 	var maxKvUsage float64
 	var maxQueueLen int
 
-	variantAnalyses := make([]interfaces.VariantCapacityAnalysis, 0, len(variantMap))
+	variantAnalyses := make([]interfaces.VariantSaturationAnalysis, 0, len(variantMap))
 
 	for variantName, metrics := range variantMap {
 		variantAnalysis := a.analyzeVariant(variantName, metrics, config)
@@ -99,7 +99,7 @@ func (a *Analyzer) AnalyzeModelCapacity(
 	analysis.NonSaturatedCount = nonSaturatedCount
 	analysis.VariantAnalyses = variantAnalyses
 
-	// Step 2: Calculate average spare capacity across all non-saturated replicas
+	// Step 2: Calculate average spare Saturation across all non-saturated replicas
 	if nonSaturatedCount > 0 {
 		analysis.AvgSpareKvCapacity = totalSpareKv / float64(nonSaturatedCount)
 		analysis.AvgSpareQueueLength = totalSpareQueue / float64(nonSaturatedCount)
@@ -118,7 +118,7 @@ func (a *Analyzer) AnalyzeModelCapacity(
 		config,
 	)
 
-	logger.Log.Debugf("Capacity analysis completed: modelID=%s, namespace=%s, totalReplicas=%d, nonSaturated=%d, avgSpareKv=%.3f, avgSpareQueue=%.1f, shouldScaleUp=%v, scaleDownSafe=%v",
+	logger.Log.Debugf("saturation analysis completed: modelID=%s, namespace=%s, totalReplicas=%d, nonSaturated=%d, avgSpareKv=%.3f, avgSpareQueue=%.1f, shouldScaleUp=%v, scaleDownSafe=%v",
 		modelID, namespace, analysis.TotalReplicas, nonSaturatedCount,
 		analysis.AvgSpareKvCapacity, analysis.AvgSpareQueueLength,
 		analysis.ShouldScaleUp, analysis.ScaleDownSafe)
@@ -126,14 +126,14 @@ func (a *Analyzer) AnalyzeModelCapacity(
 	return analysis, nil
 }
 
-// analyzeVariant analyzes capacity for a single variant
+// analyzeVariant analyzes Saturation for a single variant
 func (a *Analyzer) analyzeVariant(
 	variantName string,
 	metrics []interfaces.ReplicaMetrics,
-	config interfaces.CapacityScalingConfig,
-) interfaces.VariantCapacityAnalysis {
+	config interfaces.SaturationScalingConfig,
+) interfaces.VariantSaturationAnalysis {
 
-	analysis := interfaces.VariantCapacityAnalysis{
+	analysis := interfaces.VariantSaturationAnalysis{
 		VariantName:       variantName,
 		ReplicaCount:      len(metrics),
 		SaturatedReplicas: []string{},
@@ -158,7 +158,7 @@ func (a *Analyzer) analyzeVariant(
 		if isSaturated {
 			analysis.SaturatedReplicas = append(analysis.SaturatedReplicas, metric.PodName)
 		} else {
-			// Calculate spare capacity for non-saturated replica
+			// Calculate spare Saturation for non-saturated replica
 			spareKv := config.KvCacheThreshold - metric.KvCacheUsage
 			spareQueue := config.QueueLengthThreshold - float64(metric.QueueLength)
 
@@ -187,11 +187,11 @@ func (a *Analyzer) analyzeVariant(
 	return analysis
 }
 
-// shouldScaleUp determines if scale-up is needed based on spare capacity triggers
+// shouldScaleUp determines if scale-up is needed based on spare Saturation triggers
 func (a *Analyzer) shouldScaleUp(
 	avgSpareKv float64,
 	avgSpareQueue float64,
-	config interfaces.CapacityScalingConfig,
+	config interfaces.SaturationScalingConfig,
 ) (bool, string) {
 
 	kvTriggered := avgSpareKv < config.KvSpareTrigger
@@ -208,24 +208,24 @@ func (a *Analyzer) shouldScaleUp(
 		return true, fmt.Sprintf("both KV spare (%.3f < %.3f) and queue spare (%.1f < %.1f)",
 			avgSpareKv, config.KvSpareTrigger, avgSpareQueue, config.QueueSpareTrigger)
 	case kvTriggered:
-		return true, fmt.Sprintf("KV spare capacity low (%.3f < %.3f)",
+		return true, fmt.Sprintf("KV spare Saturation low (%.3f < %.3f)",
 			avgSpareKv, config.KvSpareTrigger)
 	default: // only queueTriggered is true
-		return true, fmt.Sprintf("queue spare capacity low (%.1f < %.1f)",
+		return true, fmt.Sprintf("queue spare Saturation low (%.1f < %.1f)",
 			avgSpareQueue, config.QueueSpareTrigger)
 	}
 }
 
 // isScaleDownSafe simulates realistic load redistribution after removing one replica.
 // Returns (shouldScaleDown, isSafe) where:
-// - shouldScaleDown: always false (capacity analyzer only approves, doesn't initiate scale-down)
+// - shouldScaleDown: always false (saturation analyzer only approves, doesn't initiate scale-down)
 // - isSafe: true if removing one replica would leave adequate headroom
 //
 // Algorithm: Calculates total current load across non-saturated replicas, then simulates
-// redistributing that load across (N-1) replicas to determine if spare capacity remains adequate.
+// redistributing that load across (N-1) replicas to determine if spare Saturation remains adequate.
 func (a *Analyzer) isScaleDownSafe(
 	replicaMetrics []interfaces.ReplicaMetrics,
-	config interfaces.CapacityScalingConfig,
+	config interfaces.SaturationScalingConfig,
 ) (bool, bool) {
 
 	// Collect non-saturated replicas
@@ -261,7 +261,7 @@ func (a *Analyzer) isScaleDownSafe(
 	avgKvAfterRemoval := totalKvLoad / float64(remainingCount)
 	avgQueueAfterRemoval := float64(totalQueueLoad) / float64(remainingCount)
 
-	// Calculate spare capacity after redistribution
+	// Calculate spare Saturation after redistribution
 	remainingSpareKv := config.KvCacheThreshold - avgKvAfterRemoval
 	remainingSpareQueue := config.QueueLengthThreshold - avgQueueAfterRemoval
 
@@ -276,27 +276,27 @@ func (a *Analyzer) isScaleDownSafe(
 			remainingSpareKv, config.KvSpareTrigger, kvSafe, remainingSpareQueue, config.QueueSpareTrigger, queueSafe)
 	}
 
-	// Capacity analyzer never initiates scale-down, only approves/denies
+	// Saturation analyzer never initiates scale-down, only approves/denies
 	return false, isSafe
 }
 
-// CalculateCapacityTargets determines target replicas per variant based on capacity analysis.
-// Step 1: Pure capacity-based target calculation
-// Uses replica count from capacity metrics (ready replicas) to avoid excessive scale-up.
+// CalculateSaturationTargets determines target replicas per variant based on saturation analysis.
+// Step 1: Pure saturation-based target calculation
+// Uses replica count from Saturation metrics (ready replicas) to avoid excessive scale-up.
 // Rules:
 // - If desired ≠ 0 and desired ≠ current: target = desired (preserve previous optimizer decision)
-// - Else if capacity needs scale-up: cheapest variant gets readyReplicas+1
-// - Else if capacity allows scale-down: most expensive variant gets readyReplicas-1
+// - Else if Saturation needs scale-up: cheapest variant gets readyReplicas+1
+// - Else if Saturation allows scale-down: most expensive variant gets readyReplicas-1
 // - Else: target = readyReplicas (replicas with metrics)
-func (a *Analyzer) CalculateCapacityTargets(
-	capacityAnalysis *interfaces.ModelCapacityAnalysis,
+func (a *Analyzer) CalculateSaturationTargets(
+	saturationAnalysis *interfaces.ModelSaturationAnalysis,
 	variantStates []interfaces.VariantReplicaState,
 ) map[string]int {
 
 	targets := make(map[string]int)
 
 	// Nil safety
-	if capacityAnalysis == nil || len(capacityAnalysis.VariantAnalyses) == 0 {
+	if saturationAnalysis == nil || len(saturationAnalysis.VariantAnalyses) == 0 {
 		// Default: current replicas
 		for _, state := range variantStates {
 			targets[state.VariantName] = state.CurrentReplicas
@@ -310,16 +310,38 @@ func (a *Analyzer) CalculateCapacityTargets(
 		stateMap[state.VariantName] = state
 	}
 
-	// Initialize all targets to ready replicas (those with metrics)
+	// Initialize all targets to current ready replicas (those with metrics) from deployment status
 	// This prevents excessive scale-up when replicas are not yet ready
-	for _, va := range capacityAnalysis.VariantAnalyses {
-		targets[va.VariantName] = va.ReplicaCount
+	for _, va := range saturationAnalysis.VariantAnalyses {
+		state := stateMap[va.VariantName]
+
+		// TODO: will need to adjust this logic to address readiness based on metrics
+		// Check if the VA state is stable (DesiredReplicas and CurrentReplicas match) and all expected pods are reporting metrics
+		isStable := (state.DesiredReplicas == 0 || state.DesiredReplicas == state.CurrentReplicas)
+		allMetricsAvailable := (va.ReplicaCount == state.CurrentReplicas)
+
+		if isStable && allMetricsAvailable {
+			// Stable VA state and all pods have report metrics: use metrics count
+			targets[va.VariantName] = va.ReplicaCount
+			logger.Log.Debugf("Target initialized to metrics count (stable): variant=%s, count=%d",
+				va.VariantName, va.ReplicaCount)
+		} else {
+			// Transitional state or incomplete metrics: preserve current replica count
+			targets[va.VariantName] = state.CurrentReplicas
+			if !allMetricsAvailable {
+				logger.Log.Debugf("Target initialized to current replicas (incomplete metrics): variant=%s, currentReplicas=%d, metricsCount=%d",
+					va.VariantName, state.CurrentReplicas, va.ReplicaCount)
+			} else if !isStable {
+				logger.Log.Debugf("Target initialized to current replicas (transitioning): variant=%s, desired=%d, current=%d, metricsCount=%d",
+					va.VariantName, state.DesiredReplicas, state.CurrentReplicas, va.ReplicaCount)
+			}
+		}
 	}
 
 	// Check if we should preserve any desired replicas
 	// If desired ≠ 0 and desired ≠ current, preserve desired
 	preservedVariants := make(map[string]bool)
-	for _, va := range capacityAnalysis.VariantAnalyses {
+	for _, va := range saturationAnalysis.VariantAnalyses {
 		state := stateMap[va.VariantName]
 		if state.DesiredReplicas != 0 && state.DesiredReplicas != state.CurrentReplicas {
 			targets[va.VariantName] = state.DesiredReplicas
@@ -329,12 +351,12 @@ func (a *Analyzer) CalculateCapacityTargets(
 		}
 	}
 
-	// Determine capacity action
-	if capacityAnalysis.ShouldScaleUp {
+	// Determine Saturation action
+	if saturationAnalysis.ShouldScaleUp {
 		// Find cheapest variant that doesn't have preserved desired
-		var cheapestNonPreserved *interfaces.VariantCapacityAnalysis
-		for i := range capacityAnalysis.VariantAnalyses {
-			va := &capacityAnalysis.VariantAnalyses[i]
+		var cheapestNonPreserved *interfaces.VariantSaturationAnalysis
+		for i := range saturationAnalysis.VariantAnalyses {
+			va := &saturationAnalysis.VariantAnalyses[i]
 			if preservedVariants[va.VariantName] {
 				continue
 			}
@@ -348,22 +370,26 @@ func (a *Analyzer) CalculateCapacityTargets(
 
 		if cheapestNonPreserved != nil {
 			state := stateMap[cheapestNonPreserved.VariantName]
-			targets[cheapestNonPreserved.VariantName] = cheapestNonPreserved.ReplicaCount + 1
-			logger.Log.Infof("Capacity target: scale-up cheapest variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, target=%d, reason=%s",
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
+			baseTarget := targets[cheapestNonPreserved.VariantName]
+			targets[cheapestNonPreserved.VariantName] = baseTarget + 1
+			logger.Log.Infof("Saturation target: scale-up cheapest variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, baseTarget=%d, target=%d, reason=%s",
 				cheapestNonPreserved.VariantName, cheapestNonPreserved.Cost, state.CurrentReplicas,
-				cheapestNonPreserved.ReplicaCount, targets[cheapestNonPreserved.VariantName], capacityAnalysis.ScaleUpReason)
+				cheapestNonPreserved.ReplicaCount, baseTarget, targets[cheapestNonPreserved.VariantName], saturationAnalysis.ScaleUpReason)
 		}
 
-	} else if capacityAnalysis.ScaleDownSafe {
+	} else if saturationAnalysis.ScaleDownSafe {
 		// Find most expensive variant that doesn't have preserved desired
-		var mostExpensiveNonPreserved *interfaces.VariantCapacityAnalysis
-		for i := range capacityAnalysis.VariantAnalyses {
-			va := &capacityAnalysis.VariantAnalyses[i]
+		var mostExpensiveNonPreserved *interfaces.VariantSaturationAnalysis
+		for i := range saturationAnalysis.VariantAnalyses {
+			va := &saturationAnalysis.VariantAnalyses[i]
 			if preservedVariants[va.VariantName] {
 				continue
 			}
 			// Can't scale down if at or below minimum (1 replica)
-			if va.ReplicaCount <= 1 {
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
+			baseTarget := targets[va.VariantName]
+			if baseTarget <= 1 {
 				continue
 			}
 			// Select most expensive, with stable tie-breaking by variant name
@@ -376,29 +402,31 @@ func (a *Analyzer) CalculateCapacityTargets(
 
 		if mostExpensiveNonPreserved != nil {
 			state := stateMap[mostExpensiveNonPreserved.VariantName]
-			targets[mostExpensiveNonPreserved.VariantName] = mostExpensiveNonPreserved.ReplicaCount - 1
-			logger.Log.Infof("Capacity target: scale-down most expensive variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, target=%d",
+			// The base target is from initialization: if we preserved desired, it uses that; else, it uses current/metrics
+			baseTarget := targets[mostExpensiveNonPreserved.VariantName]
+			targets[mostExpensiveNonPreserved.VariantName] = baseTarget - 1
+			logger.Log.Infof("Saturation target: scale-down most expensive variant: variant=%s, cost=%.2f, currentReplicas=%d, readyReplicas=%d, baseTarget=%d, target=%d",
 				mostExpensiveNonPreserved.VariantName, mostExpensiveNonPreserved.Cost, state.CurrentReplicas,
-				mostExpensiveNonPreserved.ReplicaCount, targets[mostExpensiveNonPreserved.VariantName])
+				mostExpensiveNonPreserved.ReplicaCount, baseTarget, targets[mostExpensiveNonPreserved.VariantName])
 		}
 	} else {
-		// No scaling action needed - capacity is adequate and stable
-		logger.Log.Debugf("Capacity targets: no scaling needed (avgSpareKv=%.3f, avgSpareQueue=%.1f, all variants stable)",
-			capacityAnalysis.AvgSpareKvCapacity, capacityAnalysis.AvgSpareQueueLength)
+		// No scaling action needed - Saturation is adequate and stable
+		logger.Log.Debugf("Saturation targets: no scaling needed (avgSpareKv=%.3f, avgSpareQueue=%.1f, all variants stable)",
+			saturationAnalysis.AvgSpareKvCapacity, saturationAnalysis.AvgSpareQueueLength)
 	}
 
 	return targets
 }
 
-// ArbitrateWithModelBased arbitrates between capacity targets and model-based optimizer targets.
+// ArbitrateWithModelBased arbitrates between Saturation targets and model-based optimizer targets.
 // Step 2: Arbitration using hybrid decision matrix
-// Applies capacity safety overrides:
-// - Capacity wants scale-up but model-based wants scale-down → veto (no change or scale-up)
-// - Model-based wants scale-down but capacity unsafe → safety block (no change)
-// - Otherwise: follow model-based recommendation if capacity allows
+// Applies saturation safety overrides:
+// - Saturation wants scale-up but model-based wants scale-down → veto (no change or scale-up)
+// - Model-based wants scale-down but Saturation unsafe → safety block (no change)
+// - Otherwise: follow model-based recommendation if Saturation allows
 func (a *Analyzer) ArbitrateWithModelBased(
-	capacityAnalysis *interfaces.ModelCapacityAnalysis,
-	capacityTargets map[string]int,
+	saturationAnalysis *interfaces.ModelSaturationAnalysis,
+	saturationTargets map[string]int,
 	modelBasedTargets map[string]int,
 	variantStates []interfaces.VariantReplicaState,
 ) []interfaces.VariantDecision {
@@ -406,10 +434,10 @@ func (a *Analyzer) ArbitrateWithModelBased(
 	decisions := make([]interfaces.VariantDecision, 0, len(variantStates))
 
 	// Build variant analysis map
-	variantAnalysisMap := make(map[string]*interfaces.VariantCapacityAnalysis)
-	if capacityAnalysis != nil {
-		for i := range capacityAnalysis.VariantAnalyses {
-			va := &capacityAnalysis.VariantAnalyses[i]
+	variantAnalysisMap := make(map[string]*interfaces.VariantSaturationAnalysis)
+	if saturationAnalysis != nil {
+		for i := range saturationAnalysis.VariantAnalyses {
+			va := &saturationAnalysis.VariantAnalyses[i]
 			variantAnalysisMap[va.VariantName] = va
 		}
 	}
@@ -423,14 +451,14 @@ func (a *Analyzer) ArbitrateWithModelBased(
 	// Arbitrate for each variant
 	for _, state := range variantStates {
 		va := variantAnalysisMap[state.VariantName]
-		capacityTarget := capacityTargets[state.VariantName]
+		saturationTarget := saturationTargets[state.VariantName]
 		modelBasedTarget := modelBasedTargets[state.VariantName]
 
 		decision := a.arbitrateVariant(
-			capacityAnalysis,
+			saturationAnalysis,
 			va,
 			state,
-			capacityTarget,
+			saturationTarget,
 			modelBasedTarget,
 		)
 
@@ -442,10 +470,10 @@ func (a *Analyzer) ArbitrateWithModelBased(
 
 // arbitrateVariant applies hybrid decision matrix for a single variant
 func (a *Analyzer) arbitrateVariant(
-	modelAnalysis *interfaces.ModelCapacityAnalysis,
-	variantAnalysis *interfaces.VariantCapacityAnalysis,
+	modelAnalysis *interfaces.ModelSaturationAnalysis,
+	variantAnalysis *interfaces.VariantSaturationAnalysis,
 	state interfaces.VariantReplicaState,
-	capacityTarget int,
+	SaturationTarget int,
 	modelBasedTarget int,
 ) interfaces.VariantDecision {
 
@@ -468,16 +496,16 @@ func (a *Analyzer) arbitrateVariant(
 	}
 
 	// Determine actions
-	var capacityAction interfaces.CapacityAction
-	if capacityTarget > state.CurrentReplicas {
-		capacityAction = interfaces.ActionScaleUp
-	} else if capacityTarget < state.CurrentReplicas {
-		capacityAction = interfaces.ActionScaleDown
+	var saturationAction interfaces.SaturationAction
+	if SaturationTarget > state.CurrentReplicas {
+		saturationAction = interfaces.ActionScaleUp
+	} else if SaturationTarget < state.CurrentReplicas {
+		saturationAction = interfaces.ActionScaleDown
 	} else {
-		capacityAction = interfaces.ActionNoChange
+		saturationAction = interfaces.ActionNoChange
 	}
 
-	var modelBasedAction interfaces.CapacityAction
+	var modelBasedAction interfaces.SaturationAction
 	if modelBasedTarget > state.CurrentReplicas {
 		modelBasedAction = interfaces.ActionScaleUp
 	} else if modelBasedTarget < state.CurrentReplicas {
@@ -488,41 +516,41 @@ func (a *Analyzer) arbitrateVariant(
 
 	// Apply hybrid decision matrix
 	switch {
-	case capacityAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionScaleDown:
-		// Capacity veto: model-based wants to scale down but capacity needs more
+	case saturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionScaleDown:
+		// Saturation veto: model-based wants to scale down but Saturation needs more
 		decision.Action = interfaces.ActionNoChange
 		decision.TargetReplicas = state.CurrentReplicas
-		decision.Reason = fmt.Sprintf("capacity veto: capacity needs scale-up (capacity=%d, model-based=%d)",
-			capacityTarget, modelBasedTarget)
+		decision.Reason = fmt.Sprintf("Saturation veto: Saturation needs scale-up (Saturation=%d, model-based=%d)",
+			SaturationTarget, modelBasedTarget)
 		decision.SafetyOverride = true
-		decision.CapacityBased = true
+		decision.SaturationBased = true
 		decision.ModelBasedDecision = true
 
 	case modelBasedAction == interfaces.ActionScaleDown && modelAnalysis != nil && !modelAnalysis.ScaleDownSafe:
-		// Safety block: model-based wants scale-down but capacity says unsafe
+		// Safety block: model-based wants scale-down but Saturation says unsafe
 		decision.Action = interfaces.ActionNoChange
 		decision.TargetReplicas = state.CurrentReplicas
-		decision.Reason = fmt.Sprintf("capacity safety block: scale-down unsafe (model-based wants %d)",
+		decision.Reason = fmt.Sprintf("saturation safety block: scale-down unsafe (model-based wants %d)",
 			modelBasedTarget)
 		decision.SafetyOverride = true
-		decision.CapacityBased = true
+		decision.SaturationBased = true
 		decision.ModelBasedDecision = true
 
-	case capacityAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionNoChange:
-		// Capacity-driven scale-up (model-based doesn't object)
+	case saturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionNoChange:
+		// Saturation-driven scale-up (model-based doesn't object)
 		decision.Action = interfaces.ActionScaleUp
-		decision.TargetReplicas = capacityTarget
-		decision.Reason = fmt.Sprintf("capacity-driven scale-up to %d", capacityTarget)
-		decision.CapacityBased = true
+		decision.TargetReplicas = SaturationTarget
+		decision.Reason = fmt.Sprintf("Saturation-driven scale-up to %d", SaturationTarget)
+		decision.SaturationBased = true
 		decision.ModelBasedDecision = false
 
 	case modelBasedAction == interfaces.ActionScaleUp || modelBasedAction == interfaces.ActionScaleDown:
-		// Follow model-based recommendation (capacity allows it)
+		// Follow model-based recommendation (Saturation allows it)
 		decision.Action = modelBasedAction
 		decision.TargetReplicas = modelBasedTarget
-		decision.Reason = fmt.Sprintf("model-based recommendation: %s to %d (capacity allows)",
+		decision.Reason = fmt.Sprintf("model-based recommendation: %s to %d (Saturation allows)",
 			modelBasedAction, modelBasedTarget)
-		decision.CapacityBased = false
+		decision.SaturationBased = false
 		decision.ModelBasedDecision = true
 
 	default:
@@ -530,14 +558,14 @@ func (a *Analyzer) arbitrateVariant(
 		decision.Action = interfaces.ActionNoChange
 		decision.TargetReplicas = state.CurrentReplicas
 		decision.Reason = "no action needed"
-		decision.CapacityBased = false
+		decision.SaturationBased = false
 		decision.ModelBasedDecision = false
 	}
 
 	logger.Log.Info("Variant decision arbitrated",
 		"variant", state.VariantName,
 		"current", state.CurrentReplicas,
-		"capacityTarget", capacityTarget,
+		"SaturationTarget", SaturationTarget,
 		"modelBasedTarget", modelBasedTarget,
 		"action", decision.Action,
 		"targetReplicas", decision.TargetReplicas,

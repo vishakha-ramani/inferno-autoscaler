@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -45,6 +44,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/controller"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
@@ -55,8 +55,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(llmdVariantAutoscalingV1alpha1.AddToScheme(scheme))
+	utilruntime.Must(promoperator.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -282,14 +282,6 @@ func main() {
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error("unable to create controller", zap.String("controller", "variantautoscaling"), zap.Error(err))
 		os.Exit(1)
-	}
-
-	// Initialize capacity scaling config cache
-	setupLog.Info("Loading initial capacity scaling configuration")
-	if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {
-		setupLog.Warn("Failed to load initial capacity scaling config, will use defaults", zap.Error(err))
-	} else {
-		setupLog.Info("Capacity scaling configuration loaded successfully")
 	}
 	// +kubebuilder:scaffold:builder
 

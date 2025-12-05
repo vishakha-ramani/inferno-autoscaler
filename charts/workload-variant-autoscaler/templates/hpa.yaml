@@ -13,17 +13,19 @@ spec:
   maxReplicas: {{ .Values.hpa.maxReplicas }}
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 0 # tune this value 
+      stabilizationWindowSeconds: 240
+      selectPolicy: Max      
       policies:
       - type: Pods
         value: 10
-        periodSeconds: 15
+        periodSeconds: 150
     scaleDown:
-      stabilizationWindowSeconds: 0 # tune this value
+      stabilizationWindowSeconds: 240
+      selectPolicy: Max
       policies:
       - type: Pods
         value: 10
-        periodSeconds: 15
+        periodSeconds: 150
   metrics:
   - type: External
     external:

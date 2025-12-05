@@ -62,9 +62,9 @@ env:
 
 **Not recommended for production.**
 
-- **Behavior**: Combines capacity analyzer with model-based optimizer
+- **Behavior**: Combines saturation analyzer with model-based optimizer
 - **How It Works**:
-  1. Runs capacity analyzer for saturation detection
+  1. Runs saturation analyzer for saturation detection
   2. Runs model-based optimizer for proactive scaling
   3. Arbitrates between the two (capacity safety overrides)
 - **Pros**: Proactive scaling (can scale before saturation)
@@ -79,7 +79,7 @@ env:
 
 **Recommendation:** Stick with CAPACITY-ONLY mode unless you have specific proactive scaling requirements.
 
-See [Capacity Analyzer Documentation](../../docs/capacity-analyzer.md) for configuration details.
+See [Saturation Analyzer Documentation](../../docs/saturation-analyzer.md) for configuration details.
 
 ## ConfigMaps
 
@@ -160,7 +160,7 @@ data:
 
 #### variantCost (Optional)
 
-Specifies the cost per replica for this variant, used in capacity-based cost optimization.
+Specifies the cost per replica for this variant, used in saturation-based cost optimization.
 
 ```yaml
 spec:
@@ -178,7 +178,7 @@ spec:
 **Use Cases:**
 - **Differentiated Pricing**: Higher cost for premium accelerators (H100) vs. standard (A100)
 - **Multi-Tenant Cost Tracking**: Assign different costs per customer/tenant
-- **Cost-Based Optimization**: Capacity analyzer prefers lower-cost variants when multiple variants can handle load
+- **Cost-Based Optimization**: Saturation analyzer prefers lower-cost variants when multiple variants can handle load
 
 **Example:**
 ```yaml
@@ -200,7 +200,7 @@ spec:
 ```
 
 **Behavior:**
-- Capacity analyzer uses `variantCost` when deciding which variant to scale
+- Saturation analyzer uses `variantCost` when deciding which variant to scale
 - If costs are equal, chooses variant with most available capacity
 - Does not affect model-based optimization (uses accelerator unit costs)
 

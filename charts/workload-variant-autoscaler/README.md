@@ -1,6 +1,6 @@
 # workload-variant-autoscaler
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.0](https://img.shields.io/badge/AppVersion-1.0-informational?style=flat-square)
+![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.4.1](https://img.shields.io/badge/AppVersion-v0.4.1-informational?style=flat-square)
 
 Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM inference workloads
 
@@ -24,7 +24,7 @@ Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM 
 | vllmService.scheme | string | `"http"` |  |
 | wva.enabled | bool | `true` |  |
 | wva.experimentalHybridOptimization | enum | `off` | supports on, off, and model-only |
-| wva.image.repository | string | `"ghcr.io/llm-d/workload-variant-autoscaler"` |  |
+| wva.image.repository | string | `"ghcr.io/llm-d-incubation/workload-variant-autoscaler"` |  |
 | wva.image.tag | string | `"latest"` |  |
 | wva.imagePullPolicy | string | `"Always"` |  |
 | wva.metrics.enabled | bool | `true` |  |
@@ -52,7 +52,7 @@ helm ls -A
 ```
 export OWNER="llm-d-incubation"
 export WVA_PROJECT="workload-variant-autoscaler"
-export WVA_RELEASE="v0.0.4"
+export WVA_RELEASE="v0.4.1"
 export WVA_NS="workload-variant-autoscaler-system"
 export MON_NS="openshift-user-workload-monitoring"
 
@@ -99,17 +99,17 @@ The Helm chart provides different configuration files for different environments
 - **TLS Verification**: Enabled (`insecureSkipVerify: false`)
 - **Logging Level**: Production (`LOG_LEVEL: info`)
 - **Security**: Strict security settings for production use
-- **Capacity-based Scaling**: Conservative thresholds for production stability
+- **Saturation-based Scaling**: Conservative thresholds for production stability
 
 #### Development Values (`values-dev.yaml`)
 - **TLS Verification**: Relaxed (`insecureSkipVerify: true`) for easier development
 - **Logging Level**: Debug (`LOG_LEVEL: debug`) for detailed development logging
 - **Security**: Relaxed settings for development and testing
-- **Capacity Scaling**: Aggressive thresholds for faster iteration
+- **Saturation Scaling**: Aggressive thresholds for faster iteration
 
-### Capacity Scaling Configuration
+### Saturation Scaling Configuration
 
-The chart includes capacity-based scaling thresholds that determine when replicas are saturated and when to scale up:
+The chart includes saturation-based scaling thresholds that determine when replicas are saturated and when to scale up:
 
 **Global Defaults** (applied to all models):
 ```yaml
@@ -134,7 +134,7 @@ wva:
         kvSpareTrigger: 0.35        # Avg spare KV <10% → scale-up
 ```
 
-See `docs/capacity-scaling-config.md` for detailed configuration documentation.
+See `docs/saturation-scaling-config.md` for detailed configuration documentation.
 
 ### Usage Examples
 

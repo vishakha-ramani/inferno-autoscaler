@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
@@ -166,6 +167,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
+
 		})
 	})
 
@@ -1121,24 +1123,105 @@ data:
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should handle mixed tuner settings")
 		})
 	})
+  
+  	Context("ServiceMonitor Watch", func() {
+		var (
+			controllerReconciler *VariantAutoscalingReconciler
+			fakeRecorder         *record.FakeRecorder
+		)
 
-	Context("convertCapacityTargetsToDecisions", func() {
+		BeforeEach(func() {
+			logger.Log = zap.NewNop().Sugar()
+			fakeRecorder = record.NewFakeRecorder(10)
+			controllerReconciler = &VariantAutoscalingReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: fakeRecorder,
+			}
+		})
+
+		Context("handleServiceMonitorEvent", func() {
+			It("should log and emit event when ServiceMonitor is being deleted", func() {
+				By("Creating a ServiceMonitor with deletion timestamp")
+				now := metav1.Now()
+				serviceMonitor := &promoperator.ServiceMonitor{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              serviceMonitorName,
+						Namespace:         configMapNamespace,
+						DeletionTimestamp: &now,
+					},
+				}
+
+				By("Calling handleServiceMonitorEvent")
+				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
+
+				By("Verifying no reconciliation is triggered")
+				Expect(result).To(BeEmpty())
+
+				By("Verifying event was emitted")
+				select {
+				case event := <-fakeRecorder.Events:
+					Expect(event).To(ContainSubstring("ServiceMonitorDeleted"))
+					Expect(event).To(ContainSubstring(serviceMonitorName))
+				case <-time.After(2 * time.Second):
+					Fail("Expected event to be emitted but none was received")
+				}
+			})
+
+			It("should not emit event when ServiceMonitor is created", func() {
+				By("Creating a ServiceMonitor without deletion timestamp")
+				serviceMonitor := &promoperator.ServiceMonitor{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      serviceMonitorName,
+						Namespace: configMapNamespace,
+					},
+				}
+
+				By("Calling handleServiceMonitorEvent")
+				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
+
+				By("Verifying no reconciliation is triggered")
+				Expect(result).To(BeEmpty())
+
+				By("Verifying no error event was emitted")
+				Consistently(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ServiceMonitorDeleted")))
+			})
+
+			It("should handle non-ServiceMonitor objects gracefully", func() {
+				By("Creating a non-ServiceMonitor object")
+				configMap := &v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-configmap",
+						Namespace: configMapNamespace,
+					},
+				}
+
+				By("Calling handleServiceMonitorEvent with non-ServiceMonitor object")
+				result := controllerReconciler.handleServiceMonitorEvent(ctx, configMap)
+
+				By("Verifying no reconciliation is triggered")
+				Expect(result).To(BeEmpty())
+			})
+		})
+	})
+
+	Context("convertSaturationTargetsToDecisions", func() {
 		BeforeEach(func() {
 			logger.Log = zap.NewNop().Sugar()
 		})
 
 		It("should include ActionNoChange decisions in the result", func() {
 			By("Creating test data where target equals current replicas")
-			capacityTargets := map[string]int{
+			saturationTargets := map[string]int{
 				"variant-a": 3, // Same as current - should be ActionNoChange
 				"variant-b": 5, // Scale up
 				"variant-c": 2, // Same as current - should be ActionNoChange
 			}
 
-			capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "test-model",
 				Namespace: "test-ns",
-				VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "variant-a", AcceleratorName: "A100", Cost: 10.0},
 					{VariantName: "variant-b", AcceleratorName: "A100", Cost: 10.0},
 					{VariantName: "variant-c", AcceleratorName: "A100", Cost: 10.0},
@@ -1151,8 +1234,8 @@ data:
 				{VariantName: "variant-c", CurrentReplicas: 2, DesiredReplicas: 2},
 			}
 
-			By("Converting capacity targets to decisions")
-			decisions := convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+			By("Converting saturation targets to decisions")
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying all variants are included in decisions")
 			Expect(len(decisions)).To(Equal(3), "All 3 variants should have decisions including ActionNoChange")
@@ -1187,14 +1270,14 @@ data:
 
 		It("should set correct fields for ActionNoChange decisions", func() {
 			By("Creating test data with only ActionNoChange scenario")
-			capacityTargets := map[string]int{
+			saturationTargets := map[string]int{
 				"stable-variant": 4,
 			}
 
-			capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "stable-model",
 				Namespace: "prod-ns",
-				VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "stable-variant", AcceleratorName: "H100", Cost: 20.0},
 				},
 			}
@@ -1204,7 +1287,7 @@ data:
 			}
 
 			By("Converting to decisions")
-			decisions := convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying decision fields")
 			Expect(len(decisions)).To(Equal(1))
@@ -1216,8 +1299,8 @@ data:
 			Expect(d.Action).To(Equal(interfaces.ActionNoChange))
 			Expect(d.CurrentReplicas).To(Equal(4))
 			Expect(d.TargetReplicas).To(Equal(4))
-			Expect(d.CapacityBased).To(BeTrue())
-			Expect(d.CapacityOnly).To(BeTrue())
+			Expect(d.SaturationBased).To(BeTrue())
+			Expect(d.SaturationOnly).To(BeTrue())
 			Expect(d.ModelBasedDecision).To(BeFalse())
 			Expect(d.AcceleratorName).To(Equal("H100"))
 			Expect(d.Cost).To(Equal(20.0))
@@ -1226,14 +1309,14 @@ data:
 
 		It("should handle scale down decisions correctly", func() {
 			By("Creating test data with scale down scenario")
-			capacityTargets := map[string]int{
+			saturationTargets := map[string]int{
 				"overprovisioned": 2,
 			}
 
-			capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "test-model",
 				Namespace: "test-ns",
-				VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "overprovisioned", AcceleratorName: "A100", Cost: 10.0},
 				},
 			}
@@ -1243,7 +1326,7 @@ data:
 			}
 
 			By("Converting to decisions")
-			decisions := convertCapacityTargetsToDecisions(capacityTargets, capacityAnalysis, variantStates)
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying scale down decision")
 			Expect(len(decisions)).To(Equal(1))
@@ -1253,7 +1336,7 @@ data:
 		})
 	})
 
-	Context("Capacity Config Cache", func() {
+	Context("saturation Config Cache", func() {
 		var (
 			ctx                  context.Context
 			controllerReconciler *VariantAutoscalingReconciler
@@ -1270,14 +1353,14 @@ data:
 
 		It("should initialize cache with defaults when ConfigMap is missing", func() {
 			By("Initializing cache")
-			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			err := controllerReconciler.InitializeSaturationConfigCache(ctx)
 
 			By("Verifying cache initialization succeeded (uses defaults)")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(controllerReconciler.isCapacityConfigLoaded()).To(BeTrue())
+			Expect(controllerReconciler.isSaturationConfigLoaded()).To(BeTrue())
 
 			By("Verifying default config is in cache")
-			configs := controllerReconciler.getCapacityConfigFromCache()
+			configs := controllerReconciler.getsaturationConfigFromCache()
 			Expect(configs).To(HaveKey("default"))
 			Expect(configs["default"].KvCacheThreshold).To(Equal(0.80))
 			Expect(configs["default"].QueueLengthThreshold).To(Equal(5.0))
@@ -1286,7 +1369,7 @@ data:
 		It("should load config from ConfigMap when it exists", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "capacity-scaling-config",
+					Name:      "saturation-scaling-config",
 					Namespace: configMapNamespace,
 				},
 				Data: map[string]string{
@@ -1301,11 +1384,11 @@ queueSpareTrigger: 5`,
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
 
 			By("Initializing cache")
-			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			err := controllerReconciler.InitializeSaturationConfigCache(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying custom config is loaded")
-			configs := controllerReconciler.getCapacityConfigFromCache()
+			configs := controllerReconciler.getsaturationConfigFromCache()
 			Expect(configs).To(HaveKey("default"))
 			Expect(configs["default"].KvCacheThreshold).To(Equal(0.75))
 			Expect(configs["default"].QueueLengthThreshold).To(Equal(10.0))
@@ -1316,22 +1399,22 @@ queueSpareTrigger: 5`,
 
 		It("should return copy of cache to prevent external modification", func() {
 			By("Initializing cache")
-			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			err := controllerReconciler.InitializeSaturationConfigCache(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting cache copy")
-			configs1 := controllerReconciler.getCapacityConfigFromCache()
-			configs2 := controllerReconciler.getCapacityConfigFromCache()
+			configs1 := controllerReconciler.getsaturationConfigFromCache()
+			configs2 := controllerReconciler.getsaturationConfigFromCache()
 
 			By("Verifying copies are independent")
-			configs1["test"] = interfaces.CapacityScalingConfig{KvCacheThreshold: 0.99}
+			configs1["test"] = interfaces.SaturationScalingConfig{KvCacheThreshold: 0.99}
 			Expect(configs2).NotTo(HaveKey("test"))
 		})
 
 		It("should apply per-model overrides correctly", func() {
 			configMap := &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "capacity-scaling-config",
+					Name:      "saturation-scaling-config",
 					Namespace: configMapNamespace,
 				},
 				Data: map[string]string{
@@ -1349,12 +1432,12 @@ kvCacheThreshold: 0.90`,
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, configMap))).To(Succeed())
 
 			By("Initializing cache")
-			err := controllerReconciler.InitializeCapacityConfigCache(ctx)
+			err := controllerReconciler.InitializeSaturationConfigCache(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting config for model with override")
-			configs := controllerReconciler.getCapacityConfigFromCache()
-			config := controllerReconciler.getCapacityScalingConfigForVariant(configs, "test/model", "test-ns")
+			configs := controllerReconciler.getsaturationConfigFromCache()
+			config := controllerReconciler.getSaturationScalingConfigForVariant(configs, "test/model", "test-ns")
 
 			By("Verifying override is applied")
 			Expect(config.KvCacheThreshold).To(Equal(0.90))
@@ -1367,3 +1450,5 @@ kvCacheThreshold: 0.90`,
 		})
 	})
 })
+
+

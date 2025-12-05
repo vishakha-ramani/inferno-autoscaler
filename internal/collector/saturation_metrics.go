@@ -20,22 +20,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// CapacityMetricsCollector collects vLLM capacity metrics from Prometheus
-type CapacityMetricsCollector struct {
+// SaturationMetricsCollector collects vLLM metrics from Prometheus
+type SaturationMetricsCollector struct {
 	promAPI   promv1.API
 	k8sClient client.Client
 }
 
-// NewCapacityMetricsCollector creates a new capacity metrics collector
-func NewCapacityMetricsCollector(promAPI promv1.API) *CapacityMetricsCollector {
-	return &CapacityMetricsCollector{
+// NewSaturationMetricsCollector creates a new metrics collector
+func NewSaturationMetricsCollector(promAPI promv1.API) *SaturationMetricsCollector {
+	return &SaturationMetricsCollector{
 		promAPI:   promAPI,
 		k8sClient: nil, // Will be set when available
 	}
 }
 
 // SetK8sClient sets the Kubernetes client for pod ownership lookups
-func (cmc *CapacityMetricsCollector) SetK8sClient(k8sClient client.Client) {
+func (cmc *SaturationMetricsCollector) SetK8sClient(k8sClient client.Client) {
 	cmc.k8sClient = k8sClient
 }
 
@@ -88,13 +88,13 @@ func contextWithRespectedDeadline(parent context.Context, desiredTimeout time.Du
 // - constants.VLLMNumRequestsWaiting (queue length)
 //
 // Uses max_over_time[1m] to capture peak values in the last minute for safety-first
-// capacity guardrails. This prevents missing saturation events that could occur between
-// instant queries and provides more conservative capacity analysis.
+// guardrails. This prevents missing saturation events that could occur between
+// instant queries and provides more conservative analysis.
 //
 // Uses deployment-to-pod mapping for accurate attribution.
 // Each deployment corresponds to a VA, and we get
 // the actual pods for each deployment using the pod lists.
-func (cmc *CapacityMetricsCollector) CollectReplicaMetrics(
+func (cmc *SaturationMetricsCollector) CollectReplicaMetrics(
 	ctx context.Context,
 	modelID string,
 	namespace string,
@@ -169,8 +169,8 @@ func (cmc *CapacityMetricsCollector) CollectReplicaMetrics(
 }
 
 // queryKvCacheMetrics queries constants.VLLMKvCacheUsagePerc metric with max_over_time[1m]
-// to capture peak KV cache usage in the last minute for conservative capacity analysis.
-func (cmc *CapacityMetricsCollector) queryKvCacheMetrics(
+// to capture peak KV cache usage in the last minute for conservative analysis.
+func (cmc *SaturationMetricsCollector) queryKvCacheMetrics(
 	ctx context.Context,
 	modelID string,
 	namespace string,
@@ -225,8 +225,8 @@ func (cmc *CapacityMetricsCollector) queryKvCacheMetrics(
 }
 
 // queryQueueMetrics queries constants.VLLMNumRequestsWaiting metric with max_over_time[1m]
-// to capture peak queue length in the last minute for conservative capacity analysis.
-func (cmc *CapacityMetricsCollector) queryQueueMetrics(
+// to capture peak queue length in the last minute for conservative saturation analysis.
+func (cmc *SaturationMetricsCollector) queryQueueMetrics(
 	ctx context.Context,
 	modelID string,
 	namespace string,
@@ -282,12 +282,12 @@ func (cmc *CapacityMetricsCollector) queryQueueMetrics(
 // Uses deployment label selectors to match pods to variants.
 //
 // Matching strategy:
-// 1. If k8sClient is available: Query pods using deployment label selectors (proper Kubernetes way)
+// 1. Query for pods using deployment label selectors
 // 2. Fallback: Use naming convention (deployment-name prefix matching)
 //
 // This approach is more robust than pure name-based matching and aligns with
 // Kubernetes best practices for pod-to-controller attribution.
-func (cmc *CapacityMetricsCollector) mergeMetrics(
+func (cmc *SaturationMetricsCollector) mergeMetrics(
 	ctx context.Context,
 	kvMetrics map[string]float64,
 	queueMetrics map[string]int,
@@ -307,6 +307,23 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 		podSet[pod] = true
 	}
 
+	// Prometheus retains metrics from terminated pods for a time period, causing stale metrics to be pulled.
+	// Verify pod existence using Prometheus kube-state-metrics to filter out stale pods.
+	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
+	existingPods := cmc.getExistingPods(ctx, namespace, deployments, podSet)
+	stalePodCount := 0
+
+	// Filter out pods that don't exist according to the queried Prometheus kube-state-metrics
+	for podName := range podSet {
+		if !existingPods[podName] {
+			stalePodCount++
+			// TODO: remove debug log after verification
+			logger.Log.Debugf("Filtering pod from stale vLLM metrics: pod=%s, namespace=%s, model=%s",
+				podName, namespace, modelID)
+			delete(podSet, podName)
+		}
+	}
+
 	replicaMetrics := make([]interfaces.ReplicaMetrics, 0, len(podSet))
 
 	// Track variant matching statistics for logging
@@ -319,12 +336,12 @@ func (cmc *CapacityMetricsCollector) mergeMetrics(
 		queueLen, hasQueue := queueMetrics[podName]
 
 		if !hasKv {
-			logger.Log.Warnf("Pod missing KV cache metrics, using 0 (may cause incorrect capacity analysis): pod=%s, model=%s, namespace=%s",
+			logger.Log.Warnf("Pod missing KV cache metrics, using 0 (may cause incorrect saturation analysis): pod=%s, model=%s, namespace=%s",
 				podName, modelID, namespace)
 			kvUsage = 0
 		}
 		if !hasQueue {
-			logger.Log.Warnf("Pod missing queue metrics, using 0 (may cause incorrect capacity analysis): pod=%s, model=%s, namespace=%s",
+			logger.Log.Warnf("Pod missing queue metrics, using 0 (may cause incorrect saturation analysis): pod=%s, model=%s, namespace=%s",
 				podName, modelID, namespace)
 			queueLen = 0
 		}
@@ -409,7 +426,7 @@ func getDeploymentNames(deployments map[string]*appsv1.Deployment) []string {
 // spec.selector to find matching pods, which is how Deployments actually manage pods.
 //
 // Returns the deployment name if found, empty string otherwise.
-func (cmc *CapacityMetricsCollector) findDeploymentForPod(
+func (cmc *SaturationMetricsCollector) findDeploymentForPod(
 	ctx context.Context,
 	podName string,
 	namespace string,
@@ -462,4 +479,68 @@ func (cmc *CapacityMetricsCollector) findDeploymentForPod(
 	}
 
 	return matchedDeployment
+}
+
+// getExistingPods filters candidate pods using Prometheus kube_pod_info metric.
+// Queries for the current state from kube-state-metrics using deployment name filtering
+//
+// TODO(note): this approach may still be subject to staleness, as the scrape interval (typically 15-30s)
+// adds latency between pod termination and metric removal
+// Returns a map of pod names that have current metrics in Prometheus.
+func (cmc *SaturationMetricsCollector) getExistingPods(
+	ctx context.Context,
+	namespace string,
+	deployments map[string]*appsv1.Deployment,
+	candidatePods map[string]bool,
+) map[string]bool {
+	existingPods := make(map[string]bool)
+
+	// Build pod name regex filter from deployment names (pod=~"deployment1-.*|deployment2-.*|deployment3-.*")
+	// To reduce the query scope
+	var podQueryFilter string
+	if len(deployments) > 0 {
+		deploymentNames := make([]string, 0, len(deployments))
+		for deploymentName := range deployments {
+			// Escape deployment name for regex and add suffix pattern
+			escapedName := escapePrometheusLabelValue(deploymentName)
+			deploymentNames = append(deploymentNames, escapedName+"-.*")
+		}
+		podQueryFilter = fmt.Sprintf(`,pod=~"%s"`, strings.Join(deploymentNames, "|"))
+	}
+
+	// Query kube_pod_info for current pods in namespace with deployment name filtering
+	// kube_pod_info is a gauge metric from kube-state-metrics that reflects current pod state
+	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
+	query := fmt.Sprintf(`kube_pod_info{namespace="%s"%s}`, escapePrometheusLabelValue(namespace), podQueryFilter)
+
+	// TODO: use QueryPrometheusWithBackoff to retry with backoff (per PR #341)
+	result, warnings, err := cmc.promAPI.Query(ctx, query, time.Now())
+	if err != nil {
+		logger.Log.Errorf("Failed to query Prometheus for pod existence: namespace=%s, error=%v", namespace, err)
+		// On error, assume all candidate pods exist to prevent false negatives
+		return candidatePods
+	}
+
+	if len(warnings) > 0 {
+		logger.Log.Warnf("Prometheus pod existence query warnings: query=%s, warnings=%v", query, warnings)
+	}
+
+	// Extract pod names from result
+	if result.Type() == model.ValVector {
+		vector := result.(model.Vector)
+		for _, sample := range vector {
+			podName := string(sample.Metric["pod"])
+			if podName == "" {
+				logger.Log.Warnf("Empty pod name in kube_pod_info metric: namespace=%s, metric=%v", namespace, sample.Metric)
+				continue
+			}
+			// Validate pod name is present in the candidate list
+			if !candidatePods[podName] {
+				continue
+			}
+			existingPods[podName] = true
+		}
+	}
+
+	return existingPods
 }

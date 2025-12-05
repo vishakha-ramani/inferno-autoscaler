@@ -46,11 +46,11 @@ const (
 	VLLMTimePerOutputTokenSecondsCount = "vllm:time_per_output_token_seconds_count"
 
 	// VLLMKvCacheUsagePerc tracks the KV cache utilization as a percentage (0.0-1.0).
-	// Used by capacity analyzer to detect KV cache saturation and prevent OOM errors.
+	// Used by saturation analyzer to detect KV cache saturation and prevent OOM errors.
 	VLLMKvCacheUsagePerc = "vllm:kv_cache_usage_perc"
 
 	// VLLMNumRequestsWaiting tracks the number of requests waiting in the queue.
-	// Used by capacity analyzer to detect request queue saturation.
+	// Used by saturation analyzer to detect request queue saturation.
 	VLLMNumRequestsWaiting = "vllm:num_requests_waiting"
 )
 

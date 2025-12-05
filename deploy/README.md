@@ -117,7 +117,7 @@ The script accepts both command-line flags and environment variables:
 bash install.sh [OPTIONS]
 
 Options:
-  -i, --wva-image IMAGE    WVA container image (default: ghcr.io/llm-d/workload-variant-autoscaler:latest)
+  -i, --wva-image IMAGE    WVA container image (default: ghcr.io/llm-d-incubation/workload-variant-autoscaler:latest)
   -m, --model MODEL        Model ID (default: unsloth/Meta-Llama-3.1-8B)
   -a, --accelerator TYPE   GPU type: A100, H100, L40S (auto-detected by default)
   -u, --undeploy          Undeploy all components
@@ -256,7 +256,7 @@ wva:
 
   # Image configuration
   image:
-    repository: ghcr.io/llm-d/workload-variant-autoscaler
+    repository: ghcr.io/llm-d-incubation/workload-variant-autoscaler
     tag: latest
   imagePullPolicy: Always
 
@@ -571,7 +571,7 @@ Each guide includes platform-specific examples, troubleshooting, and quick start
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `WVA_IMAGE_REPO` | WVA image repository | `ghcr.io/llm-d/workload-variant-autoscaler` |
+| `WVA_IMAGE_REPO` | WVA image repository | `ghcr.io/llm-d-incubation/workload-variant-autoscaler` |
 | `WVA_IMAGE_TAG` | WVA image tag | `latest` |
 | `WVA_IMAGE_PULL_POLICY` | Image pull policy | `Always` |
 

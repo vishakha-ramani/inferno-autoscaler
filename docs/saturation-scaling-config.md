@@ -1,8 +1,8 @@
-# Capacity Scaling Configuration
+# Saturation Scaling Configuration
 
 ## Overview
 
-The Workload Variant Autoscaler supports capacity-based scaling using KV cache utilization and queue length metrics. This feature is enabled by default and configured via a ConfigMap.
+The Workload Variant Autoscaler supports saturation-based scaling using KV cache utilization and queue length metrics. This feature is enabled by default and configured via a ConfigMap.
 
 **Key features:**
 - ✅ ConfigMap-based configuration with global defaults and per-model overrides
@@ -15,7 +15,7 @@ The Workload Variant Autoscaler supports capacity-based scaling using KV cache u
 
 ### ConfigMap Structure
 
-The capacity scaling configuration is stored in a ConfigMap named `capacity-scaling-config` in the Workload Variant Autoscaler controller's namespace.
+The saturation scaling configuration is stored in a ConfigMap named `capacity-scaling-config` in the Workload Variant Autoscaler controller's namespace.
 
 **Location:** `deploy/configmap-capacity-scaling.yaml`
 
@@ -45,7 +45,7 @@ queueSpareTrigger: 3
 
 ### How Scale-Up Triggers Work
 
-The capacity analyzer uses a **spare capacity model** to determine when to scale up. Instead of waiting for replicas to become fully saturated, WVA proactively scales when the average spare capacity across non-saturated replicas falls below configured thresholds.
+The saturation analyzer uses a **spare capacity model** to determine when to scale up. Instead of waiting for replicas to become fully saturated, WVA proactively scales when the average spare capacity across non-saturated replicas falls below configured thresholds.
 
 **Scale-up logic:**
 
@@ -70,7 +70,7 @@ The capacity analyzer uses a **spare capacity model** to determine when to scale
 
 This proactive approach ensures adequate headroom and prevents request drops by scaling before saturation occurs.
 
-**For detailed implementation, see:** [Capacity Analyzer Documentation](capacity-analyzer.md)
+**For detailed implementation, see:** [Saturation Analyzer Documentation](saturation-analyzer.md)
 
 ## Best Practices: Coordinating with InferenceScheduler (End Point Picker)
 
@@ -107,7 +107,7 @@ Using aligned thresholds ensures consistent capacity management across the clust
 
 ### Configuration Comparison
 
-#### WVA Capacity Scaling Configuration
+#### WVA Saturation Scaling Configuration
 
 ```yaml
 # WVA Configuration (capacity-scaling-config ConfigMap)
@@ -253,7 +253,7 @@ kubectl logs -n production deployment/gaie-granite-13b-epp | grep -i "saturation
 Simply deploy the controller without the ConfigMap. The system will log a warning and use hardcoded defaults:
 
 ```
-WARN Capacity scaling ConfigMap not found, using hardcoded defaults
+WARN Saturation scaling ConfigMap not found, using hardcoded defaults
 ```
 
 ### 2. Customizing Global Defaults
@@ -358,7 +358,7 @@ The controller validates all configuration entries on load. Invalid entries are 
 
 **Log output:**
 ```
-WARN Invalid capacity scaling config entry, skipping key=invalid-config error=kvCacheThreshold must be between 0 and 1, got 1.50
+WARN Invalid saturation scaling config entry, skipping key=invalid-config error=kvCacheThreshold must be between 0 and 1, got 1.50
 ```
 
 ## Integration with Controller
@@ -375,7 +375,7 @@ reconciler.SetupWithManager(mgr)  // Sets up ConfigMap watch
 
 // Initialize cache on startup
 if err := reconciler.InitializeCapacityConfigCache(context.Background()); err != nil {
-    setupLog.Warn("Failed to load initial capacity scaling config, will use defaults")
+    setupLog.Warn("Failed to load initial saturation scaling config, will use defaults")
 }
 ```
 
@@ -391,9 +391,9 @@ capacityConfig := r.getCapacityScalingConfigForVariant(
     va.Namespace,
 )
 
-// Use capacityConfig for capacity-based scaling decisions
+// Use capacityConfig for saturation-based scaling decisions
 if currentKvUtil >= capacityConfig.KvCacheThreshold {
-    // Apply capacity scaling logic
+    // Apply saturation scaling logic
 }
 ```
 
@@ -407,8 +407,8 @@ The controller watches the `capacity-scaling-config` ConfigMap for changes:
 
 **Log output on ConfigMap change:**
 ```
-INFO  Capacity scaling ConfigMap changed, reloading cache
-INFO  Capacity scaling config cache updated entries=3 has_default=true
+INFO  Saturation scaling ConfigMap changed, reloading cache
+INFO  Saturation scaling config cache updated entries=3 has_default=true
 INFO  Triggering reconciliation for all VariantAutoscaling resources due to ConfigMap change count=5
 ```
 
@@ -435,7 +435,7 @@ INFO  Triggering reconciliation for all VariantAutoscaling resources due to Conf
 
 **Symptom:** Warning log message
 ```
-WARN Capacity scaling ConfigMap not found, using hardcoded defaults configmap=capacity-scaling-config namespace=<workload-variant-autoscaler-namespace>
+WARN Saturation scaling ConfigMap not found, using hardcoded defaults configmap=capacity-scaling-config namespace=<workload-variant-autoscaler-namespace>
 ```
 
 **Solution:** Deploy the ConfigMap:
@@ -447,7 +447,7 @@ kubectl apply -f deploy/configmap-capacity-scaling.yaml
 
 **Symptom:** Warning log message
 ```
-WARN Invalid capacity scaling config entry, skipping key=my-config error=...
+WARN Invalid saturation scaling config entry, skipping key=my-config error=...
 ```
 
 **Solution:** Fix the validation error in the ConfigMap entry and reapply.
@@ -456,7 +456,7 @@ WARN Invalid capacity scaling config entry, skipping key=my-config error=...
 
 **Symptom:** Warning log message
 ```
-WARN No 'default' entry in capacity scaling ConfigMap, using hardcoded defaults
+WARN No 'default' entry in saturation scaling ConfigMap, using hardcoded defaults
 ```
 
 **Solution:** Add a `default` entry to the ConfigMap:
@@ -481,7 +481,7 @@ data:
 
 **Debug log (when override is applied):**
 ```
-DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b namespace=production config={...}
+DEBUG Applied saturation scaling override key=my-override modelID=ibm/granite-13b namespace=production config={...}
 ```
 
 ### Config Changes Not Taking Effect
@@ -497,13 +497,13 @@ DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b 
 
 2. **Check controller logs for reload confirmation:**
    ```bash
-   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Capacity scaling"
+   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Saturation scaling"
    ```
 
    Expected logs:
    ```
-   INFO  Capacity scaling ConfigMap changed, reloading cache
-   INFO  Capacity scaling config cache updated entries=2 has_default=true
+   INFO  Saturation scaling ConfigMap changed, reloading cache
+   INFO  Saturation scaling config cache updated entries=2 has_default=true
    INFO  Triggering reconciliation for all VariantAutoscaling resources
    ```
 
@@ -520,7 +520,7 @@ DEBUG Applied capacity scaling override key=my-override modelID=ibm/granite-13b 
 
 **Symptom:** Warning on controller startup
 ```
-WARN Failed to load initial capacity scaling config, will use defaults
+WARN Failed to load initial saturation scaling config, will use defaults
 ```
 
 **Solution:** This is non-fatal. The controller continues with hardcoded defaults. To fix:
@@ -534,7 +534,7 @@ WARN Failed to load initial capacity scaling config, will use defaults
 
 3. Verify cache loaded:
    ```bash
-   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Capacity scaling configuration loaded"
+   kubectl logs -n <workload-variant-autoscaler-namespace> deployment/wva-controller | grep "Saturation scaling configuration loaded"
    ```
 
 ## Example: Production Setup
@@ -630,3 +630,4 @@ The caching mechanism uses the following components:
 - Controller starts successfully even if ConfigMap missing
 - Uses hardcoded defaults as fallback
 - Automatically loads config once ConfigMap becomes available
+

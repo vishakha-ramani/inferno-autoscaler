@@ -5,7 +5,7 @@
 
 The Capacity Analyzer is a **fast, reactive, and safe saturation guardrail** that prevents capacity exhaustion by monitoring live vLLM metrics. It uses a **two-step decision architecture**:
 
-**Step 1: Calculate Capacity Targets** - Pure capacity-based target replicas per variant
+**Step 1: Calculate Capacity Targets** - Pure saturation-based target replicas per variant
 **Step 2: Arbitrate with Model-Based Optimizer** (optional) - Hybrid decision matrix
 
 **Key Features:**
@@ -22,7 +22,7 @@ The Capacity Analyzer is a **fast, reactive, and safe saturation guardrail** tha
 ### Components
 
 **1. Capacity Analyzer (`internal/capacity/analyzer.go`)**
-- Core analysis logic for capacity-based scaling decisions
+- Core analysis logic for saturation-based scaling decisions
 - Implements spare capacity calculations
 - Performs worst-case scale-down safety simulation
 - Makes **per-variant** scaling decisions with cost-awareness
@@ -233,7 +233,7 @@ variantStates := []interfaces.VariantReplicaState{
     {VariantName: "v2-a100", CurrentReplicas: 3, DesiredReplicas: 4},  // optimizer wanted 4 last time
 }
 
-// === STEP 1: Calculate capacity-based targets ===
+// === STEP 1: Calculate saturation-based targets ===
 capacityTargets := analyzer.CalculateCapacityTargets(analysis, variantStates)
 
 log.Printf("Capacity targets: %+v", capacityTargets)
@@ -242,7 +242,7 @@ log.Printf("Capacity targets: %+v", capacityTargets)
 // - v2-a100: preserved at 4 (desired ≠ current)
 ```
 
-### Step 1 Only: Capacity-Based Targets (No Model-Based Optimizer)
+### Step 1 Only: Saturation-Based Targets (No Model-Based Optimizer)
 
 ```go
 // Calculate capacity targets
@@ -267,7 +267,7 @@ for variantName, target := range capacityTargets {
 ### Step 1 + Step 2: Hybrid Mode (With Model-Based Optimizer)
 
 ```go
-// === STEP 1: Calculate capacity-based targets ===
+// === STEP 1: Calculate saturation-based targets ===
 capacityTargets := analyzer.CalculateCapacityTargets(analysis, variantStates)
 
 // === Get model-based optimizer targets (from your optimizer) ===
@@ -357,7 +357,7 @@ for _, va := range analysis.VariantAnalyses {
 
 ## Configuration
 
-Capacity scaling thresholds are configured via ConfigMap (see [capacity-scaling-config.md](capacity-scaling-config.md)):
+Saturation scaling thresholds are configured via ConfigMap (see [saturation-scaling-config.md](saturation-scaling-config.md)):
 
 ```yaml
 apiVersion: v1
@@ -568,6 +568,4 @@ Potential improvements:
 - Metric-based cache invalidation
 
 ## References
-
-- GitHub Issue: [#269 - Capacity Analyzer Implementation](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues/269)
-- Related: [Capacity Scaling Configuration](capacity-scaling-config.md)
+- Related: [Saturation Scaling Configuration](saturation-scaling-config.md)

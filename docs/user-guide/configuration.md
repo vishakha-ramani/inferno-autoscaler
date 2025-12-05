@@ -160,7 +160,7 @@ data:
 
 #### variantCost (Optional)
 
-Specifies the cost per replica for this variant, used in capacity-based cost optimization.
+Specifies the cost per replica for this variant, used in saturation-based cost optimization.
 
 ```yaml
 spec:

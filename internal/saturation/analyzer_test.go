@@ -352,7 +352,7 @@ func TestCalculatesaturationTargets_ScaleUpCheapest(t *testing.T) {
 		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should scale up cheapest variant (v2-cheap)
 	if targets["v2-cheap"] != 3 {
@@ -389,7 +389,7 @@ func TestCalculatesaturationTargets_ScaleDownMostExpensive(t *testing.T) {
 		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should scale down most expensive variant (v1-expensive)
 	if targets["v1-expensive"] != 1 {
@@ -425,7 +425,7 @@ func TestCalculatesaturationTargets_PreserveDesired(t *testing.T) {
 		{VariantName: "v2-cheap", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should preserve v1's desired replicas
 	if targets["v1-expensive"] != 4 {
@@ -645,7 +645,7 @@ func TestCalculatesaturationTargets_AllVariantsPreserved(t *testing.T) {
 		{VariantName: "v2", CurrentReplicas: 3, DesiredReplicas: 5},
 	}
 
-	targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should preserve both desired replicas (no additional Saturation action)
 	if targets["v1"] != 4 {
@@ -679,7 +679,7 @@ func TestCalculatesaturationTargets_EqualCosts(t *testing.T) {
 	// Run multiple times to verify determinism
 	firstSelection := ""
 	for i := 0; i < 5; i++ {
-		targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+		targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 		scaledUpCount := 0
 		var scaledUpVariant string
@@ -725,7 +725,7 @@ func TestCalculatesaturationTargets_ScaleDownBelowMinimum(t *testing.T) {
 		{VariantName: "v2", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// v1 has only 1 replica, should not be eligible for scale-down
 	// v2 should be scaled down instead (has 2 replicas, lower cost doesn't matter for scale-down)

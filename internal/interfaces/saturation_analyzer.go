@@ -99,13 +99,13 @@ type SaturationAnalyzer interface {
 		config SaturationScalingConfig,
 	) (*ModelSaturationAnalysis, error)
 
-	// CalculatesaturationTargets determines target replicas per variant based on saturation analysis.
+	// CalculateSaturationTargets determines target replicas per variant based on saturation analysis.
 	// Step 1: Pure saturation-based target calculation
 	// - Uses ready replica count (those with metrics) to avoid excessive scale-up
 	// - Preserves desired replicas when desired ≠ current (from previous optimizer run)
 	// - Uses cost-based selection (cheapest for scale-up, most expensive for scale-down)
 	// Returns: map[variantName]targetReplicas
-	CalculatesaturationTargets(
+	CalculateSaturationTargets(
 		saturationAnalysis *ModelSaturationAnalysis,
 		variantStates []VariantReplicaState,
 	) map[string]int

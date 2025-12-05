@@ -684,7 +684,7 @@ func (r *VariantAutoscalingReconciler) runSaturationAnalysis(
 	}
 
 	// Calculate saturation-based targets
-	saturationTargets := saturationAnalyzer.CalculatesaturationTargets(saturationAnalysis, variantStates)
+	saturationTargets := saturationAnalyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	logger.Log.Debugf("Saturation targets calculated: modelID=%s, targets=%v",
 		modelID, saturationTargets)

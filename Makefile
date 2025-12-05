@@ -139,7 +139,7 @@ undeploy-wva-on-k8s:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) ENVIRONMENT=kubernetes && \
 		ENVIRONMENT=kubernetes DEPLOY_LLM_D=$(DEPLOY_LLM_D)  deploy/install.sh --undeploy
 
-# E2E tests on Kind cluster for capacity-based autoscaling
+# E2E tests on Kind cluster for saturation-based autoscaling
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true

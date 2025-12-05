@@ -99,17 +99,17 @@ The Helm chart provides different configuration files for different environments
 - **TLS Verification**: Enabled (`insecureSkipVerify: false`)
 - **Logging Level**: Production (`LOG_LEVEL: info`)
 - **Security**: Strict security settings for production use
-- **Capacity-based Scaling**: Conservative thresholds for production stability
+- **Saturation-based Scaling**: Conservative thresholds for production stability
 
 #### Development Values (`values-dev.yaml`)
 - **TLS Verification**: Relaxed (`insecureSkipVerify: true`) for easier development
 - **Logging Level**: Debug (`LOG_LEVEL: debug`) for detailed development logging
 - **Security**: Relaxed settings for development and testing
-- **Capacity Scaling**: Aggressive thresholds for faster iteration
+- **Saturation Scaling**: Aggressive thresholds for faster iteration
 
-### Capacity Scaling Configuration
+### Saturation Scaling Configuration
 
-The chart includes capacity-based scaling thresholds that determine when replicas are saturated and when to scale up:
+The chart includes saturation-based scaling thresholds that determine when replicas are saturated and when to scale up:
 
 **Global Defaults** (applied to all models):
 ```yaml
@@ -134,7 +134,7 @@ wva:
         kvSpareTrigger: 0.35        # Avg spare KV <10% → scale-up
 ```
 
-See `docs/capacity-scaling-config.md` for detailed configuration documentation.
+See `docs/saturation-scaling-config.md` for detailed configuration documentation.
 
 ### Usage Examples
 

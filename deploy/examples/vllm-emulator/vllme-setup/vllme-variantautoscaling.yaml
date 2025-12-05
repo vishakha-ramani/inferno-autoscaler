@@ -13,7 +13,7 @@ spec:
   # OpenAI API compatible name of the model
   modelID: default/default
 
-  # Optional: Specify cost per replica for capacity-based cost optimization
+  # Optional: Specify cost per replica for saturation-based cost optimization
   # Used by capacity analyzer when multiple variants can handle the load
   # Default: 10.0, Validation: Must be >= 0
   # variantCost: 10.0

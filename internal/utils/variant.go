@@ -138,9 +138,11 @@ func readyVariantAutoscalings(ctx context.Context, client client.Client) ([]wvav
 			continue
 		}
 
-		if wvav1alpha1.IsConditionTrue(&va, wvav1alpha1.TypeTargetResolved) { // TODO: add a Ready condition
-			readyVAs = append(readyVAs, va) // Shallow copy
-		}
+		// TODO: Uncomment when TypeTargetResolved condition is added
+
+		// if wvav1alpha1.IsConditionTrue(&va, wvav1alpha1.TypeTargetResolved) { // TODO: add a Ready condition
+		readyVAs = append(readyVAs, va) // Shallow copy
+		// }
 	}
 
 	logger.Log.Debugw("Found VariantAutoscaling resources ready for optimization", "count", len(readyVAs))

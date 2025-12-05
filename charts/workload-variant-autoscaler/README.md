@@ -1,6 +1,6 @@
 # workload-variant-autoscaler
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.0](https://img.shields.io/badge/AppVersion-1.0-informational?style=flat-square)
+![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.4.1](https://img.shields.io/badge/AppVersion-v0.4.1-informational?style=flat-square)
 
 Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM inference workloads
 
@@ -24,7 +24,7 @@ Helm chart for Workload-Variant-Autoscaler (WVA) - GPU-aware autoscaler for LLM 
 | vllmService.scheme | string | `"http"` |  |
 | wva.enabled | bool | `true` |  |
 | wva.experimentalHybridOptimization | enum | `off` | supports on, off, and model-only |
-| wva.image.repository | string | `"ghcr.io/llm-d/workload-variant-autoscaler"` |  |
+| wva.image.repository | string | `"ghcr.io/llm-d-incubation/workload-variant-autoscaler"` |  |
 | wva.image.tag | string | `"latest"` |  |
 | wva.imagePullPolicy | string | `"Always"` |  |
 | wva.metrics.enabled | bool | `true` |  |

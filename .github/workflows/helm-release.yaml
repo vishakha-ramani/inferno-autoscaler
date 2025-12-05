@@ -16,8 +16,6 @@ on:
 permissions:
   contents: write
   packages: write
-  pull-requests: write  # Required to create pull requests
-  id-token: write  # Required for Gitsign OIDC authentication
 
 jobs:
   release:
@@ -101,7 +99,8 @@ jobs:
           sed -i "s/^version:.*/version: ${VERSION}/"       $CHART_DIR/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"${TAG}\"/" $CHART_DIR/Chart.yaml
 
-          # values.yaml—update container tag
+          # values.yaml—update repository and container tag
+          sed -i "s|^    repository:.*|    repository: ghcr.io/llm-d-incubation/workload-variant-autoscaler|" $CHART_DIR/values.yaml
           sed -i "s/^  tag:.*/  tag: \"${TAG}\"/" $CHART_DIR/values.yaml
 
           echo "Updated Chart.yaml:"
@@ -151,65 +150,34 @@ jobs:
             oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler
 
       # -----------------------------------------
-      # 11. Install Gitsign for commit signing
-      # -----------------------------------------
-      - name: Install Gitsign
-        run: |
-          curl -Lo gitsign https://github.com/sigstore/gitsign/releases/latest/download/gitsign-linux-amd64
-          chmod +x gitsign
-          sudo mv gitsign /usr/local/bin/
-
-      # -----------------------------------------
-      # 12. Commit updated chart files
+      # 11. Commit updated chart files
       # -----------------------------------------
       - name: Commit updated Helm chart files
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Configure Git user to match the person who triggered the release
+          # This ensures each person is responsible for their own release commits
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-          # Configure Git to use Gitsign for verified commits
-          git config --global gpg.format ssh
-          git config --global gpg.ssh.program /usr/local/bin/gitsign
-          git config --global commit.gpgSign true
+          # Configure remote to use github.token (belongs to the person who triggered workflow)
+          git remote set-url origin https://${{ github.token }}@github.com/${{ github.repository }}.git
 
           # Checkout the default branch (we're in detached HEAD from tag checkout)
           git fetch origin
           DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5 || echo "main")
           git checkout $DEFAULT_BRANCH
+          git pull origin $DEFAULT_BRANCH
           
-          # Create a branch for the release update (required due to branch protection)
-          RELEASE_BRANCH="release/update-chart-${{ steps.version.outputs.tag }}"
-          git checkout -b $RELEASE_BRANCH
-          
+          # Stage changes
           git add charts/workload-variant-autoscaler/Chart.yaml
           git add charts/workload-variant-autoscaler/values.yaml
 
-          git commit -m "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" || echo "No changes to commit"
-          git push origin $RELEASE_BRANCH || echo "Push failed - branch protection may require manual PR creation"
-
-      # -----------------------------------------
-      # 13. Create Pull Request
-      # -----------------------------------------
-      - name: Create Pull Request
-        if: success() || failure()  # Run even if previous step had issues
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          RELEASE_BRANCH="release/update-chart-${{ steps.version.outputs.tag }}"
-          DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5 || echo "main")
+          # Commit with message showing who created the release
+          COMMIT_MSG="Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml"
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
           
-          # Check if PR already exists
-          PR_EXISTS=$(gh pr list --head $RELEASE_BRANCH --base $DEFAULT_BRANCH --json number --jq 'length' || echo "0")
-          
-          if [ "$PR_EXISTS" = "0" ]; then
-            gh pr create \
-              --title "Release ${{ steps.version.outputs.tag }}: update Chart.yaml and values.yaml" \
-              --body "Automated update from release workflow for version ${{ steps.version.outputs.tag }}. This PR updates the Helm chart files after publishing the release." \
-              --base $DEFAULT_BRANCH \
-              --head $RELEASE_BRANCH \
-              || echo "Failed to create PR - may need manual creation"
-          else
-            echo "PR already exists for this release"
-          fi
+          # Push directly to main (bypass enabled via role-based permissions)
+          # The person who triggered the workflow must have Write/Maintain role with bypass
+          git push origin $DEFAULT_BRANCH || echo "Push failed - ensure your role has bypass permissions"

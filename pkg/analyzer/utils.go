@@ -52,7 +52,7 @@ func BinarySearch(xMin float32, xMax float32, yTarget float32,
 
 	// perform binary search
 	var xStar, yStar float32
-	for range maxIterations {
+	for i := 0; i < maxIterations; i++ {
 		xStar = 0.5 * (xMin + xMax)
 		if yStar, err = eval(xStar); err != nil {
 			return 0, 0, fmt.Errorf("invalid function evaluation: %v", err)

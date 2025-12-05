@@ -37,6 +37,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	gink "github.com/onsi/ginkgo/v2"
 	gom "github.com/onsi/gomega"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	promAPI "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -46,8 +47,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -757,12 +756,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 	}
 
 	// Check if any ServiceMonitors exist with the specified app label
-	serviceMonitorList := &unstructured.UnstructuredList{}
-	serviceMonitorList.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "monitoring.coreos.com",
-		Version: "v1",
-		Kind:    "ServiceMonitor",
-	})
+	serviceMonitorList := &promoperator.ServiceMonitorList{}
 	err = crClient.List(ctx, serviceMonitorList, client.InNamespace(namespace), client.MatchingLabels{"app": appLabel})
 	if err != nil {
 		gink.Fail(fmt.Sprintf("Failed to check existing ServiceMonitors for label uniqueness: %v", err))
@@ -791,13 +785,7 @@ func ValidateAppLabelUniqueness(namespace, appLabel string, k8sClient *kubernete
 
 	if len(serviceMonitorList.Items) > 0 {
 		for _, serviceMonitor := range serviceMonitorList.Items {
-			name, found, err := unstructured.NestedString(serviceMonitor.Object, "metadata", "name")
-			if err != nil {
-				gink.Fail(fmt.Sprintf("Wrong ServiceMonitor name: %v", err))
-			} else if !found {
-				gink.Fail("ServiceMonitor name not found")
-			}
-			conflicting = append(conflicting, fmt.Sprintf("ServiceMonitor: %s", name))
+			conflicting = append(conflicting, fmt.Sprintf("ServiceMonitor: %s", serviceMonitor.Name))
 		}
 	}
 
@@ -1018,40 +1006,34 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 }
 
 // creates a ServiceMonitor for llm-d-sim metrics collection
-func CreateLlmdSimServiceMonitor(name, namespace, targetNamespace, appLabel string) *unstructured.Unstructured {
-	serviceMonitor := &unstructured.Unstructured{}
-	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "monitoring.coreos.com",
-		Version: "v1",
-		Kind:    "ServiceMonitor",
-	})
-	serviceMonitor.SetName(name)
-	serviceMonitor.SetNamespace(namespace)
-	serviceMonitor.SetLabels(map[string]string{
-		"app":     appLabel,
-		"release": "kube-prometheus-stack",
-	})
-
-	spec := map[string]any{
-		"selector": map[string]any{
-			"matchLabels": map[string]any{
-				"app": appLabel,
+func CreateLlmdSimServiceMonitor(name, namespace, targetNamespace, appLabel string) *promoperator.ServiceMonitor {
+	return &promoperator.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app":     appLabel,
+				"release": "kube-prometheus-stack",
 			},
 		},
-		"endpoints": []any{
-			map[string]any{
-				"port":     appLabel,
-				"path":     "/metrics",
-				"interval": "15s",
+		Spec: promoperator.ServiceMonitorSpec{
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": appLabel,
+				},
 			},
-		},
-		"namespaceSelector": map[string]any{
-			"matchNames": []string{targetNamespace},
+			Endpoints: []promoperator.Endpoint{
+				{
+					Port:     appLabel,
+					Path:     "/metrics",
+					Interval: promoperator.Duration("15s"),
+				},
+			},
+			NamespaceSelector: promoperator.NamespaceSelector{
+				MatchNames: []string{targetNamespace},
+			},
 		},
 	}
-	serviceMonitor.Object["spec"] = spec
-
-	return serviceMonitor
 }
 
 // CreateHPAOnDesiredReplicaMetrics creates a HorizontalPodAutoscaler for a deployment that scales based on the inferno_desired_replicas metric

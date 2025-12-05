@@ -28,6 +28,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -90,6 +91,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(promoperator.AddToScheme(scheme))
 }
 
 // initializeK8sClient initializes the Kubernetes client for testing
@@ -399,16 +401,10 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling: %s", deployName))
 
 		// Delete ServiceMonitor
-		err = crClient.Delete(ctx, &metav1.PartialObjectMetadata{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "monitoring.coreos.com/v1",
-				Kind:       "ServiceMonitor",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceMonName,
-				Namespace: controllerMonitoringNamespace,
-			},
-		})
+		serviceMon := &promoperator.ServiceMonitor{}
+		err = crClient.Get(ctx, client.ObjectKey{Namespace: controllerMonitoringNamespace, Name: serviceMonName}, serviceMon)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get ServiceMonitor: %s", serviceMonName))
+		err = crClient.Delete(ctx, serviceMon)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", serviceMonName))
 
 		// Delete Service
@@ -1019,28 +1015,16 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling: %s", deployNameH100))
 
 		// Delete ServiceMonitors
-		err = crClient.Delete(ctx, &metav1.PartialObjectMetadata{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "monitoring.coreos.com/v1",
-				Kind:       "ServiceMonitor",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceMonNameA100,
-				Namespace: controllerMonitoringNamespace,
-			},
-		})
+		serviceMonitorA100 := &promoperator.ServiceMonitor{}
+		err = crClient.Get(ctx, client.ObjectKey{Namespace: controllerMonitoringNamespace, Name: serviceMonNameA100}, serviceMonitorA100)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get ServiceMonitor: %s", serviceMonNameA100))
+		err = crClient.Delete(ctx, serviceMonitorA100)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", serviceMonNameA100))
 
-		err = crClient.Delete(ctx, &metav1.PartialObjectMetadata{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "monitoring.coreos.com/v1",
-				Kind:       "ServiceMonitor",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceMonNameH100,
-				Namespace: controllerMonitoringNamespace,
-			},
-		})
+		serviceMonitorH100 := &promoperator.ServiceMonitor{}
+		err = crClient.Get(ctx, client.ObjectKey{Namespace: controllerMonitoringNamespace, Name: serviceMonNameH100}, serviceMonitorH100)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to get ServiceMonitor: %s", serviceMonNameH100))
+		err = crClient.Delete(ctx, serviceMonitorH100)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", serviceMonNameH100))
 
 		// Delete Services

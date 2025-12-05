@@ -487,7 +487,7 @@ func (cmc *SaturationMetricsCollector) findDeploymentForPod(
 // TODO(note): this approach may still be subject to staleness, as the scrape interval (typically 15-30s)
 // adds latency between pod termination and metric removal
 // Returns a map of pod names that have current metrics in Prometheus.
-func (cmc *CapacityMetricsCollector) getExistingPods(
+func (cmc *SaturationMetricsCollector) getExistingPods(
 	ctx context.Context,
 	namespace string,
 	deployments map[string]*appsv1.Deployment,

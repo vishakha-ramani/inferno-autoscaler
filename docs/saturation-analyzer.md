@@ -1,9 +1,9 @@
 # NOTE: we are currently updating the documentation to be aligned with the 0.4.0 release
-# Capacity Analyzer
+# Saturation Analyzer
 
 ## Overview
 
-The Capacity Analyzer is a **fast, reactive, and safe saturation guardrail** that prevents capacity exhaustion by monitoring live vLLM metrics. It uses a **two-step decision architecture**:
+The Saturation Analyzer is a **fast, reactive, and safe saturation guardrail** that prevents capacity exhaustion by monitoring live vLLM metrics. It uses a **two-step decision architecture**:
 
 **Step 1: Calculate Capacity Targets** - Pure saturation-based target replicas per variant
 **Step 2: Arbitrate with Model-Based Optimizer** (optional) - Hybrid decision matrix
@@ -21,7 +21,7 @@ The Capacity Analyzer is a **fast, reactive, and safe saturation guardrail** tha
 
 ### Components
 
-**1. Capacity Analyzer (`internal/capacity/analyzer.go`)**
+**1. Saturation Analyzer (`internal/capacity/analyzer.go`)**
 - Core analysis logic for saturation-based scaling decisions
 - Implements spare capacity calculations
 - Performs worst-case scale-down safety simulation
@@ -310,7 +310,7 @@ for _, decision := range decisions {
 
 ## Multi-Variant Analysis
 
-The capacity analyzer aggregates metrics **across all variants of the same model**:
+The saturation analyzer aggregates metrics **across all variants of the same model**:
 
 ```go
 // Example: Model "llama-70b" with 2 variants
@@ -416,9 +416,9 @@ go test -v
 
 ### Log Messages
 
-**Capacity analysis:**
+**Saturation analysis:**
 ```
-DEBUG Capacity analysis completed
+DEBUG Saturation analysis completed
   modelID=llama-70b
   namespace=prod
   totalReplicas=5
@@ -442,7 +442,7 @@ DEBUG Scale-down unsafe: insufficient headroom after redistribution
 
 **Decision arbitration (deprecated ArbitrateDecision):**
 ```
-INFO Capacity decision arbitrated
+INFO Saturation decision arbitrated
   modelID=llama-70b
   namespace=prod
   currentReplicas=3
@@ -498,7 +498,7 @@ INFO Variant decision arbitrated
 
 ### Controller Integration
 
-The capacity analyzer is integrated into the controller's reconciliation loop using the two-step architecture:
+The saturation analyzer is integrated into the controller's reconciliation loop using the two-step architecture:
 
 1. **Collect metrics** for all pods of a model (across all variants)
    - Enrich with cost from CRD spec (default: 10)
@@ -569,3 +569,4 @@ Potential improvements:
 
 ## References
 - Related: [Saturation Scaling Configuration](saturation-scaling-config.md)
+

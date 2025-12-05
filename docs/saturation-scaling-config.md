@@ -45,7 +45,7 @@ queueSpareTrigger: 3
 
 ### How Scale-Up Triggers Work
 
-The capacity analyzer uses a **spare capacity model** to determine when to scale up. Instead of waiting for replicas to become fully saturated, WVA proactively scales when the average spare capacity across non-saturated replicas falls below configured thresholds.
+The saturation analyzer uses a **spare capacity model** to determine when to scale up. Instead of waiting for replicas to become fully saturated, WVA proactively scales when the average spare capacity across non-saturated replicas falls below configured thresholds.
 
 **Scale-up logic:**
 
@@ -70,7 +70,7 @@ The capacity analyzer uses a **spare capacity model** to determine when to scale
 
 This proactive approach ensures adequate headroom and prevents request drops by scaling before saturation occurs.
 
-**For detailed implementation, see:** [Capacity Analyzer Documentation](capacity-analyzer.md)
+**For detailed implementation, see:** [Saturation Analyzer Documentation](saturation-analyzer.md)
 
 ## Best Practices: Coordinating with InferenceScheduler (End Point Picker)
 

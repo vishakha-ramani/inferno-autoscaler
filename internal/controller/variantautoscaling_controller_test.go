@@ -29,12 +29,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
@@ -160,6 +160,7 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
+
 		})
 	})
 
@@ -848,12 +849,14 @@ data:
 		Context("handleServiceMonitorEvent", func() {
 			It("should log and emit event when ServiceMonitor is being deleted", func() {
 				By("Creating a ServiceMonitor with deletion timestamp")
-				serviceMonitor := &unstructured.Unstructured{}
-				serviceMonitor.SetGroupVersionKind(serviceMonitorGVK)
-				serviceMonitor.SetName(serviceMonitorName)
-				serviceMonitor.SetNamespace(configMapNamespace)
 				now := metav1.Now()
-				serviceMonitor.SetDeletionTimestamp(&now)
+				serviceMonitor := &promoperator.ServiceMonitor{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              serviceMonitorName,
+						Namespace:         configMapNamespace,
+						DeletionTimestamp: &now,
+					},
+				}
 
 				By("Calling handleServiceMonitorEvent")
 				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
@@ -873,10 +876,12 @@ data:
 
 			It("should not emit event when ServiceMonitor is created", func() {
 				By("Creating a ServiceMonitor without deletion timestamp")
-				serviceMonitor := &unstructured.Unstructured{}
-				serviceMonitor.SetGroupVersionKind(serviceMonitorGVK)
-				serviceMonitor.SetName(serviceMonitorName)
-				serviceMonitor.SetNamespace(configMapNamespace)
+				serviceMonitor := &promoperator.ServiceMonitor{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      serviceMonitorName,
+						Namespace: configMapNamespace,
+					},
+				}
 
 				By("Calling handleServiceMonitorEvent")
 				result := controllerReconciler.handleServiceMonitorEvent(ctx, serviceMonitor)
@@ -888,8 +893,8 @@ data:
 				Consistently(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ServiceMonitorDeleted")))
 			})
 
-			It("should handle non-unstructured objects gracefully", func() {
-				By("Creating a non-unstructured object")
+			It("should handle non-ServiceMonitor objects gracefully", func() {
+				By("Creating a non-ServiceMonitor object")
 				configMap := &v1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-configmap",
@@ -897,7 +902,7 @@ data:
 					},
 				}
 
-				By("Calling handleServiceMonitorEvent with non-unstructured object")
+				By("Calling handleServiceMonitorEvent with non-ServiceMonitor object")
 				result := controllerReconciler.handleServiceMonitorEvent(ctx, configMap)
 
 				By("Verifying no reconciliation is triggered")

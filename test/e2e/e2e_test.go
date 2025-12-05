@@ -28,13 +28,12 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	promoperator "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -75,6 +74,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(promoperator.AddToScheme(scheme))
 }
 
 // initializeK8sClient initializes the Kubernetes client for testing
@@ -667,14 +667,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - sin
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", deployName))
 
 		By("deleting ServiceMonitor")
-		serviceMonitor := &unstructured.Unstructured{}
-		serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "monitoring.coreos.com",
-			Version: "v1",
-			Kind:    "ServiceMonitor",
-		})
-		serviceMonitor.SetName(serviceMonName)
-		serviceMonitor.SetNamespace(controllerMonitoringNamespace)
+		serviceMonitor := &promoperator.ServiceMonitor{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceMonName,
+				Namespace: controllerMonitoringNamespace,
+			},
+		}
 		err = crClient.Delete(ctx, serviceMonitor)
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", serviceMonName))
@@ -1250,14 +1248,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", firstDeployName))
 
-		serviceMonitor := &unstructured.Unstructured{}
-		serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "monitoring.coreos.com",
-			Version: "v1",
-			Kind:    "ServiceMonitor",
-		})
-		serviceMonitor.SetName(firstServiceMonitorName)
-		serviceMonitor.SetNamespace(controllerMonitoringNamespace)
+		serviceMonitor := &promoperator.ServiceMonitor{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      firstServiceMonitorName,
+				Namespace: controllerMonitoringNamespace,
+			},
+		}
 		err = crClient.Delete(ctx, serviceMonitor)
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", firstServiceMonitorName))
@@ -1289,14 +1285,12 @@ var _ = Describe("Test workload-variant-autoscaler in emulated environment - mul
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete VariantAutoscaling for: %s", secondDeployName))
 
-		serviceMonitor = &unstructured.Unstructured{}
-		serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "monitoring.coreos.com",
-			Version: "v1",
-			Kind:    "ServiceMonitor",
-		})
-		serviceMonitor.SetName(secondServiceMonitorName)
-		serviceMonitor.SetNamespace(controllerMonitoringNamespace)
+		serviceMonitor = &promoperator.ServiceMonitor{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secondServiceMonitorName,
+				Namespace: controllerMonitoringNamespace,
+			},
+		}
 		err = crClient.Delete(ctx, serviceMonitor)
 		err = client.IgnoreNotFound(err)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to delete ServiceMonitor: %s", secondServiceMonitorName))

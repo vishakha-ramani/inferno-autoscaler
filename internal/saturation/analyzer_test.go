@@ -1,4 +1,4 @@
-package capacity
+package saturation
 
 import (
 	"context"
@@ -16,9 +16,9 @@ func init() {
 	logger.Log = zapLogger.Sugar()
 }
 
-func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
+func TestAnalyzeModelSaturation_ScaleUp(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	tests := []struct {
 		name                string
@@ -27,7 +27,7 @@ func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
 		expectScaleUpReason string
 	}{
 		{
-			name: "scale up due to low KV spare capacity",
+			name: "scale up due to low KV spare Saturation",
 			replicaMetrics: []interfaces.ReplicaMetrics{
 				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.75, QueueLength: 2},
 				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.76, QueueLength: 2},
@@ -35,7 +35,7 @@ func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
 			expectScaleUp: true, // avg spare KV = 0.045 < 0.1
 		},
 		{
-			name: "scale up due to low queue spare capacity",
+			name: "scale up due to low queue spare Saturation",
 			replicaMetrics: []interfaces.ReplicaMetrics{
 				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 3},
 				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 3},
@@ -43,7 +43,7 @@ func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
 			expectScaleUp: true, // avg spare queue = 2 < 3
 		},
 		{
-			name: "no scale up - healthy capacity",
+			name: "no scale up - healthy Saturation",
 			replicaMetrics: []interfaces.ReplicaMetrics{
 				{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 1},
 				{PodName: "pod-2", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 1},
@@ -54,7 +54,7 @@ func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			analysis, err := analyzer.AnalyzeModelCapacity(
+			analysis, err := analyzer.AnalyzeModelSaturation(
 				context.Background(),
 				"test-model",
 				"test-ns",
@@ -74,9 +74,9 @@ func TestAnalyzeModelCapacity_ScaleUp(t *testing.T) {
 	}
 }
 
-func TestAnalyzeModelCapacity_ScaleDownSafety(t *testing.T) {
+func TestAnalyzeModelSaturation_ScaleDownSafety(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	tests := []struct {
 		name                string
@@ -111,7 +111,7 @@ func TestAnalyzeModelCapacity_ScaleDownSafety(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			analysis, err := analyzer.AnalyzeModelCapacity(
+			analysis, err := analyzer.AnalyzeModelSaturation(
 				context.Background(),
 				"test-model",
 				"test-ns",
@@ -131,9 +131,9 @@ func TestAnalyzeModelCapacity_ScaleDownSafety(t *testing.T) {
 	}
 }
 
-func TestAnalyzeModelCapacity_MultiVariant(t *testing.T) {
+func TestAnalyzeModelSaturation_MultiVariant(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	// Test with metrics from multiple variants
 	replicaMetrics := []interfaces.ReplicaMetrics{
@@ -145,7 +145,7 @@ func TestAnalyzeModelCapacity_MultiVariant(t *testing.T) {
 		{PodName: "v2-pod-2", VariantName: "variant-2", ModelID: "model-a", KvCacheUsage: 0.65, QueueLength: 2},
 	}
 
-	analysis, err := analyzer.AnalyzeModelCapacity(
+	analysis, err := analyzer.AnalyzeModelSaturation(
 		context.Background(),
 		"model-a",
 		"test-ns",
@@ -178,11 +178,11 @@ func TestAnalyzeModelCapacity_MultiVariant(t *testing.T) {
 	}
 }
 
-func TestAnalyzeModelCapacity_EmptyMetrics(t *testing.T) {
+func TestAnalyzeModelSaturation_EmptyMetrics(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
-	analysis, err := analyzer.AnalyzeModelCapacity(
+	analysis, err := analyzer.AnalyzeModelSaturation(
 		context.Background(),
 		"test-model",
 		"test-ns",
@@ -209,7 +209,7 @@ func TestAnalyzeModelCapacity_EmptyMetrics(t *testing.T) {
 
 func TestAnalyzeVariant_SaturatedReplicas(t *testing.T) {
 	analyzer := &Analyzer{}
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	metrics := []interfaces.ReplicaMetrics{
 		{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.85, QueueLength: 2}, // Saturated (KV)
@@ -242,9 +242,9 @@ func TestAnalyzeVariant_SaturatedReplicas(t *testing.T) {
 	}
 }
 
-func TestAnalyzeModelCapacity_AllSaturated(t *testing.T) {
+func TestAnalyzeModelSaturation_AllSaturated(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	// All replicas are saturated
 	replicaMetrics := []interfaces.ReplicaMetrics{
@@ -253,7 +253,7 @@ func TestAnalyzeModelCapacity_AllSaturated(t *testing.T) {
 		{PodName: "pod-3", VariantName: "v1", KvCacheUsage: 0.90, QueueLength: 7}, // Saturated (both)
 	}
 
-	analysis, err := analyzer.AnalyzeModelCapacity(
+	analysis, err := analyzer.AnalyzeModelSaturation(
 		context.Background(),
 		"test-model",
 		"test-ns",
@@ -274,18 +274,18 @@ func TestAnalyzeModelCapacity_AllSaturated(t *testing.T) {
 		t.Errorf("expected NonSaturatedCount=0, got %d", analysis.NonSaturatedCount)
 	}
 
-	// With no non-saturated replicas, average spare capacity should be 0
+	// With no non-saturated replicas, average spare Saturation should be 0
 	if analysis.AvgSpareKvCapacity != 0 {
-		t.Errorf("expected AvgSpareKvCapacity=0, got %.3f", analysis.AvgSpareKvCapacity)
+		t.Errorf("expected AvgSpareKvSaturation=0, got %.3f", analysis.AvgSpareKvCapacity)
 	}
 
 	if analysis.AvgSpareQueueLength != 0 {
 		t.Errorf("expected AvgSpareQueueLength=0, got %.1f", analysis.AvgSpareQueueLength)
 	}
 
-	// Should scale up when all replicas are saturated (0 spare capacity < triggers)
+	// Should scale up when all replicas are saturated (0 spare Saturation < triggers)
 	if !analysis.ShouldScaleUp {
-		t.Errorf("expected ShouldScaleUp=true when all saturated (urgently needs more capacity)")
+		t.Errorf("expected ShouldScaleUp=true when all saturated (urgently needs more Saturation)")
 	}
 
 	// Scale-down should be unsafe
@@ -294,9 +294,9 @@ func TestAnalyzeModelCapacity_AllSaturated(t *testing.T) {
 	}
 }
 
-func TestAnalyzeModelCapacity_TimestampSet(t *testing.T) {
+func TestAnalyzeModelSaturation_TimestampSet(t *testing.T) {
 	analyzer := NewAnalyzer()
-	config := interfaces.DefaultCapacityScalingConfig()
+	config := interfaces.DefaultSaturationScalingConfig()
 
 	before := time.Now()
 
@@ -304,7 +304,7 @@ func TestAnalyzeModelCapacity_TimestampSet(t *testing.T) {
 		{PodName: "pod-1", VariantName: "v1", KvCacheUsage: 0.50, QueueLength: 2, Cost: 10},
 	}
 
-	analysis, err := analyzer.AnalyzeModelCapacity(
+	analysis, err := analyzer.AnalyzeModelSaturation(
 		context.Background(),
 		"test-model",
 		"test-ns",
@@ -329,17 +329,17 @@ func TestAnalyzeModelCapacity_TimestampSet(t *testing.T) {
 	}
 }
 
-// Tests for two-step decision logic (CalculateCapacityTargets + ArbitrateWithModelBased)
+// Tests for two-step decision logic (CalculatesaturationTargets + ArbitrateWithModelBased)
 
-func TestCalculateCapacityTargets_ScaleUpCheapest(t *testing.T) {
+func TestCalculatesaturationTargets_ScaleUpCheapest(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
-		ScaleUpReason: "KV spare capacity low",
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		ScaleUpReason: "KV spare Saturation low",
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
@@ -352,7 +352,7 @@ func TestCalculateCapacityTargets_ScaleUpCheapest(t *testing.T) {
 		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should scale up cheapest variant (v2-cheap)
 	if targets["v2-cheap"] != 3 {
@@ -368,15 +368,15 @@ func TestCalculateCapacityTargets_ScaleUpCheapest(t *testing.T) {
 	}
 }
 
-func TestCalculateCapacityTargets_ScaleDownMostExpensive(t *testing.T) {
+func TestCalculatesaturationTargets_ScaleDownMostExpensive(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: true,
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
@@ -389,7 +389,7 @@ func TestCalculateCapacityTargets_ScaleDownMostExpensive(t *testing.T) {
 		{VariantName: "v3-medium", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should scale down most expensive variant (v1-expensive)
 	if targets["v1-expensive"] != 1 {
@@ -405,15 +405,15 @@ func TestCalculateCapacityTargets_ScaleDownMostExpensive(t *testing.T) {
 	}
 }
 
-func TestCalculateCapacityTargets_PreserveDesired(t *testing.T) {
+func TestCalculatesaturationTargets_PreserveDesired(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
-		ScaleUpReason: "KV spare capacity low",
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		ScaleUpReason: "KV spare Saturation low",
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 		},
@@ -425,28 +425,28 @@ func TestCalculateCapacityTargets_PreserveDesired(t *testing.T) {
 		{VariantName: "v2-cheap", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// Should preserve v1's desired replicas
 	if targets["v1-expensive"] != 4 {
 		t.Errorf("expected v1-expensive target=4 (preserved desired), got %d", targets["v1-expensive"])
 	}
 
-	// v2 should be scaled up (cheapest non-preserved variant) since capacity still needs scale-up
+	// v2 should be scaled up (cheapest non-preserved variant) since Saturation still needs scale-up
 	if targets["v2-cheap"] != 3 {
-		t.Errorf("expected v2-cheap target=3 (cheapest for capacity scale-up), got %d", targets["v2-cheap"])
+		t.Errorf("expected v2-cheap target=3 (cheapest for Saturation scale-up), got %d", targets["v2-cheap"])
 	}
 }
 
-func TestArbitrateWithModelBased_CapacityVeto(t *testing.T) {
+func TestArbitrateWithModelBased_SaturationVeto(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleDownSafe: false,
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -455,13 +455,13 @@ func TestArbitrateWithModelBased_CapacityVeto(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	// Capacity wants scale-up (target=4), but model-based wants scale-down (target=2)
-	capacityTargets := map[string]int{"v1": 4}
+	// Saturation wants scale-up (target=4), but model-based wants scale-down (target=2)
+	saturationTargets := map[string]int{"v1": 4}
 	modelBasedTargets := map[string]int{"v1": 2}
 
 	decisions := analyzer.ArbitrateWithModelBased(
-		capacityAnalysis,
-		capacityTargets,
+		saturationAnalysis,
+		saturationTargets,
 		modelBasedTargets,
 		variantStates,
 	)
@@ -489,12 +489,12 @@ func TestArbitrateWithModelBased_CapacityVeto(t *testing.T) {
 func TestArbitrateWithModelBased_SafetyBlock(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: false, // Unsafe to scale down
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -503,14 +503,14 @@ func TestArbitrateWithModelBased_SafetyBlock(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	// Both capacity and model-based want current (no change)
+	// Both Saturation and model-based want current (no change)
 	// But model-based wants scale-down
-	capacityTargets := map[string]int{"v1": 3}
+	saturationTargets := map[string]int{"v1": 3}
 	modelBasedTargets := map[string]int{"v1": 2}
 
 	decisions := analyzer.ArbitrateWithModelBased(
-		capacityAnalysis,
-		capacityTargets,
+		saturationAnalysis,
+		saturationTargets,
 		modelBasedTargets,
 		variantStates,
 	)
@@ -530,12 +530,12 @@ func TestArbitrateWithModelBased_SafetyBlock(t *testing.T) {
 func TestArbitrateWithModelBased_FollowModelBased(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: true, // Safe to scale down
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -544,13 +544,13 @@ func TestArbitrateWithModelBased_FollowModelBased(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	// Capacity says current is fine (target=3), model-based wants scale-up (target=5)
-	capacityTargets := map[string]int{"v1": 3}
+	// Saturation says current is fine (target=3), model-based wants scale-up (target=5)
+	saturationTargets := map[string]int{"v1": 3}
 	modelBasedTargets := map[string]int{"v1": 5}
 
 	decisions := analyzer.ArbitrateWithModelBased(
-		capacityAnalysis,
-		capacityTargets,
+		saturationAnalysis,
+		saturationTargets,
 		modelBasedTargets,
 		variantStates,
 	)
@@ -575,15 +575,15 @@ func TestArbitrateWithModelBased_FollowModelBased(t *testing.T) {
 	}
 }
 
-func TestArbitrateWithModelBased_CapacityDriven(t *testing.T) {
+func TestArbitrateWithModelBased_SaturationDriven(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleUpReason: "KV spare low",
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -592,30 +592,30 @@ func TestArbitrateWithModelBased_CapacityDriven(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	// Capacity wants scale-up (target=4), model-based says no change (target=3)
-	capacityTargets := map[string]int{"v1": 4}
+	// Saturation wants scale-up (target=4), model-based says no change (target=3)
+	saturationTargets := map[string]int{"v1": 4}
 	modelBasedTargets := map[string]int{"v1": 3}
 
 	decisions := analyzer.ArbitrateWithModelBased(
-		capacityAnalysis,
-		capacityTargets,
+		saturationAnalysis,
+		saturationTargets,
 		modelBasedTargets,
 		variantStates,
 	)
 
 	decision := decisions[0]
 
-	// Should scale up based on capacity
+	// Should scale up based on Saturation
 	if decision.Action != interfaces.ActionScaleUp {
-		t.Errorf("expected scale-up (capacity-driven), got %s", decision.Action)
+		t.Errorf("expected scale-up (Saturation-driven), got %s", decision.Action)
 	}
 
 	if decision.TargetReplicas != 4 {
-		t.Errorf("expected target=4 (capacity), got %d", decision.TargetReplicas)
+		t.Errorf("expected target=4 (Saturation), got %d", decision.TargetReplicas)
 	}
 
-	if !decision.CapacityBased {
-		t.Errorf("expected CapacityBased=true")
+	if !decision.SaturationBased {
+		t.Errorf("expected SaturationBased=true")
 	}
 
 	if decision.ModelBasedDecision {
@@ -625,15 +625,15 @@ func TestArbitrateWithModelBased_CapacityDriven(t *testing.T) {
 
 // Additional critical test cases for edge scenarios
 
-func TestCalculateCapacityTargets_AllVariantsPreserved(t *testing.T) {
+func TestCalculatesaturationTargets_AllVariantsPreserved(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
-		ShouldScaleUp: true, // Capacity wants scale-up
-		ScaleUpReason: "KV spare capacity low",
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		ShouldScaleUp: true, // Saturation wants scale-up
+		ScaleUpReason: "KV spare Saturation low",
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v2", Cost: 10, ReplicaCount: 3},
 		},
@@ -645,9 +645,9 @@ func TestCalculateCapacityTargets_AllVariantsPreserved(t *testing.T) {
 		{VariantName: "v2", CurrentReplicas: 3, DesiredReplicas: 5},
 	}
 
-	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
-	// Should preserve both desired replicas (no additional capacity action)
+	// Should preserve both desired replicas (no additional Saturation action)
 	if targets["v1"] != 4 {
 		t.Errorf("expected v1 target=4 (preserved desired), got %d", targets["v1"])
 	}
@@ -656,14 +656,14 @@ func TestCalculateCapacityTargets_AllVariantsPreserved(t *testing.T) {
 	}
 }
 
-func TestCalculateCapacityTargets_EqualCosts(t *testing.T) {
+func TestCalculatesaturationTargets_EqualCosts(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v-zebra", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically last
 			{VariantName: "v-alpha", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically first
 			{VariantName: "v-middle", Cost: 10, ReplicaCount: 2}, // Same cost, middle
@@ -679,7 +679,7 @@ func TestCalculateCapacityTargets_EqualCosts(t *testing.T) {
 	// Run multiple times to verify determinism
 	firstSelection := ""
 	for i := 0; i < 5; i++ {
-		targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+		targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 		scaledUpCount := 0
 		var scaledUpVariant string
@@ -707,14 +707,14 @@ func TestCalculateCapacityTargets_EqualCosts(t *testing.T) {
 	}
 }
 
-func TestCalculateCapacityTargets_ScaleDownBelowMinimum(t *testing.T) {
+func TestCalculatesaturationTargets_ScaleDownBelowMinimum(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
-		ScaleDownSafe: true, // Capacity allows scale-down
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		ScaleDownSafe: true, // Saturation allows scale-down
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 20, ReplicaCount: 1}, // Only 1 replica
 			{VariantName: "v2", Cost: 10, ReplicaCount: 2},
 		},
@@ -725,7 +725,7 @@ func TestCalculateCapacityTargets_ScaleDownBelowMinimum(t *testing.T) {
 		{VariantName: "v2", CurrentReplicas: 2, DesiredReplicas: 0},
 	}
 
-	targets := analyzer.CalculateCapacityTargets(capacityAnalysis, variantStates)
+	targets := analyzer.CalculateSaturationTargets(saturationAnalysis, variantStates)
 
 	// v1 has only 1 replica, should not be eligible for scale-down
 	// v2 should be scaled down instead (has 2 replicas, lower cost doesn't matter for scale-down)
@@ -740,12 +740,12 @@ func TestCalculateCapacityTargets_ScaleDownBelowMinimum(t *testing.T) {
 func TestArbitrateWithModelBased_BothAgree(t *testing.T) {
 	analyzer := NewAnalyzer()
 
-	capacityAnalysis := &interfaces.ModelCapacityAnalysis{
+	saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleDownSafe: false,
-		VariantAnalyses: []interfaces.VariantCapacityAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -754,12 +754,12 @@ func TestArbitrateWithModelBased_BothAgree(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	// Both capacity and model-based want to scale to 5
-	capacityTargets := map[string]int{"v1": 5}
+	// Both Saturation and model-based want to scale to 5
+	saturationTargets := map[string]int{"v1": 5}
 	modelBasedTargets := map[string]int{"v1": 5}
 
 	decisions := analyzer.ArbitrateWithModelBased(
-		capacityAnalysis, capacityTargets, modelBasedTargets, variantStates)
+		saturationAnalysis, saturationTargets, modelBasedTargets, variantStates)
 
 	if len(decisions) != 1 {
 		t.Fatalf("expected 1 decision, got %d", len(decisions))
@@ -784,12 +784,12 @@ func TestArbitrateWithModelBased_NilAnalysis(t *testing.T) {
 		{VariantName: "v1", CurrentReplicas: 3, DesiredReplicas: 0},
 	}
 
-	capacityTargets := map[string]int{"v1": 3}
+	saturationTargets := map[string]int{"v1": 3}
 	modelBasedTargets := map[string]int{"v1": 4}
 
-	// Should not panic with nil capacityAnalysis
+	// Should not panic with nil saturationAnalysis
 	decisions := analyzer.ArbitrateWithModelBased(
-		nil, capacityTargets, modelBasedTargets, variantStates)
+		nil, saturationTargets, modelBasedTargets, variantStates)
 
 	if len(decisions) != 1 {
 		t.Errorf("expected 1 decision even with nil analysis, got %d", len(decisions))

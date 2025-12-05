@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2ecapacity
+package e2esaturation
 
 import (
 	"context"
@@ -65,7 +65,7 @@ const (
 	llmDNamespace                 = "llm-d-sim"
 	gatewayName                   = "infra-sim-inference-gateway-istio"
 	WVAConfigMapName              = "workload-variant-autoscaler-variantautoscaling-config"
-	CapacityConfigMapName         = "capacity-scaling-config"
+	saturationConfigMapName       = "saturation-scaling-config"
 )
 
 // Variant and Model constants
@@ -137,7 +137,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 		ctx             context.Context
 
 		// ConfigMap reference
-		capacityConfigMapName = "capacity-scaling-config"
+		saturationConfigMapName = "saturation-scaling-config"
 	)
 
 	BeforeAll(func() {
@@ -162,11 +162,11 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-		By("verifying capacity-scaling ConfigMap exists before creating VA")
+		By("verifying saturation-scaling ConfigMap exists before creating VA")
 		Eventually(func(g Gomega) {
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, capacityConfigMapName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", capacityConfigMapName, controllerNamespace))
-			g.Expect(cm.Data).To(HaveKey("default"), "Capacity ConfigMap should have 'default' configuration")
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("saturation ConfigMap %s should exist in namespace %s", saturationConfigMapName, controllerNamespace))
+			g.Expect(cm.Data).To(HaveKey("default"), "saturation ConfigMap should have 'default' configuration")
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("ensuring unique app label for deployment and service")
@@ -211,10 +211,10 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 	})
 
 	Context("ConfigMap and VA existence checks", func() {
-		It("should have capacity-scaling ConfigMap with default configuration spawned", func() {
+		It("should have saturation-scaling ConfigMap with default configuration spawned", func() {
 			By("verifying ConfigMap exists with expected structure")
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, capacityConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", capacityConfigMapName))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", saturationConfigMapName))
 
 			By("verifying default configuration exists")
 			Expect(cm.Data).To(HaveKey("default"), "ConfigMap should contain 'default' key")
@@ -225,7 +225,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Single Va
 			Expect(defaultConfig).To(ContainSubstring("kvSpareTrigger"), "Default config should contain kvSpareTrigger")
 			Expect(defaultConfig).To(ContainSubstring("queueSpareTrigger"), "Default config should contain queueSpareTrigger")
 
-			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", capacityConfigMapName)
+			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", saturationConfigMapName)
 		})
 
 		It("should have VariantAutoscaling resource created", func() {
@@ -478,11 +478,11 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-		By("verifying capacity-scaling ConfigMap exists before creating VAs")
+		By("verifying saturation-scaling ConfigMap exists before creating VAs")
 		Eventually(func(g Gomega) {
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, CapacityConfigMapName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Capacity ConfigMap %s should exist in namespace %s", CapacityConfigMapName, controllerNamespace))
-			g.Expect(cm.Data).To(HaveKey("default"), "Capacity ConfigMap should have 'default' configuration")
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("saturation ConfigMap %s should exist in namespace %s", saturationConfigMapName, controllerNamespace))
+			g.Expect(cm.Data).To(HaveKey("default"), "saturation ConfigMap should have 'default' configuration")
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("ensuring unique app labels for deployments and services")
@@ -569,10 +569,10 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 	})
 
 	Context("ConfigMap and VA existence checks", func() {
-		It("should have capacity-scaling ConfigMap with default configuration spawned", func() {
+		It("should have saturation-scaling ConfigMap with default configuration spawned", func() {
 			By("verifying ConfigMap exists with expected structure")
-			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, CapacityConfigMapName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", CapacityConfigMapName))
+			cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(ctx, saturationConfigMapName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("ConfigMap %s should exist", saturationConfigMapName))
 
 			By("verifying default configuration exists")
 			Expect(cm.Data).To(HaveKey("default"), "ConfigMap should contain 'default' key")
@@ -583,7 +583,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 			Expect(defaultConfig).To(ContainSubstring("kvSpareTrigger"), "Default config should contain kvSpareTrigger")
 			Expect(defaultConfig).To(ContainSubstring("queueSpareTrigger"), "Default config should contain queueSpareTrigger")
 
-			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", CapacityConfigMapName)
+			_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %s verified with default configuration\n", saturationConfigMapName)
 		})
 
 		It("should have VariantAutoscaling resources created for both variants", func() {
@@ -629,7 +629,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 
 	Context("Before load - initial replica count", func() {
 		It("should have correct initial replica counts before applying load", func() {
-			// TODO: Re-enable once MetricsAvailable condition is properly persisted in capacity mode
+			// TODO: Re-enable once MetricsAvailable condition is properly persisted in saturation mode
 			// By("waiting for A100 variant CurrentAlloc to be populated with metrics data")
 			// Eventually(func(g Gomega) {
 			// 	vaA100 := &v1alpha1.VariantAutoscaling{}
@@ -639,7 +639,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 			// 	}, vaA100)
 			// 	g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployNameA100))
 			//
-			// 	// In capacity mode, wait for MetricsAvailable condition
+			// 	// In saturation mode, wait for MetricsAvailable condition
 			// 	metricsCondition := v1alpha1.GetCondition(vaA100, v1alpha1.TypeMetricsAvailable)
 			// 	g.Expect(metricsCondition).NotTo(BeNil(),
 			// 		fmt.Sprintf("VariantAutoscaling %s should have MetricsAvailable condition", vaA100.Name))
@@ -656,7 +656,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 			// 	}, vaH100)
 			// 	g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployNameH100))
 			//
-			// 	// In capacity mode, wait for MetricsAvailable condition
+			// 	// In saturation mode, wait for MetricsAvailable condition
 			// 	metricsCondition := v1alpha1.GetCondition(vaH100, v1alpha1.TypeMetricsAvailable)
 			// 	g.Expect(metricsCondition).NotTo(BeNil(),
 			// 		fmt.Sprintf("VariantAutoscaling %s should have MetricsAvailable condition", vaH100.Name))
@@ -673,7 +673,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 				}, vaA100)
 				g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployNameA100))
 
-				// In capacity mode, wait for CurrentAlloc to be populated (no MetricsAvailable condition)
+				// In saturation mode, wait for CurrentAlloc to be populated (no MetricsAvailable condition)
 				g.Expect(vaA100.Status.CurrentAlloc.Accelerator).NotTo(BeEmpty(),
 					"CurrentAlloc should be populated with accelerator info")
 				g.Expect(vaA100.Status.CurrentAlloc.NumReplicas).To(BeNumerically(">=", 0),
@@ -688,7 +688,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 				}, vaH100)
 				g.Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Should be able to fetch VariantAutoscaling for: %s", deployNameH100))
 
-				// In capacity mode, wait for CurrentAlloc to be populated (no MetricsAvailable condition)
+				// In saturation mode, wait for CurrentAlloc to be populated (no MetricsAvailable condition)
 				g.Expect(vaH100.Status.CurrentAlloc.Accelerator).NotTo(BeEmpty(),
 					"CurrentAlloc should be populated with accelerator info")
 				g.Expect(vaH100.Status.CurrentAlloc.NumReplicas).To(BeNumerically(">=", 0),
@@ -979,7 +979,7 @@ var _ = Describe("Test workload-variant-autoscaler - Saturation Mode - Multiple 
 					a100Cost, h100Cost, finalA100Replicas, finalH100Replicas)
 
 				// The cheaper variant (A100) should have at least as many replicas as the expensive one
-				// This verifies cost-aware scaling in capacity mode
+				// This verifies cost-aware scaling in saturation mode
 				if a100Cost < h100Cost {
 					g.Expect(finalA100Replicas).To(BeNumerically(">=", finalH100Replicas),
 						"Cheaper A100 variant should have at least as many replicas as expensive H100")

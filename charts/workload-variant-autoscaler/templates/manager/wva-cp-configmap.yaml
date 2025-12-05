@@ -15,7 +15,7 @@ kind: ConfigMap
 # - queueSpareTrigger: Scale-up signal if avg spare queue capacity < trigger (integer)
 #
 metadata:
-  name: capacity-scaling-config
+  name: saturation-scaling-config
   namespace: {{ .Release.Namespace }}
 data:
   # Global defaults applied to all variants unless overridden

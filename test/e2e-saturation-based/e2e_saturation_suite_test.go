@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2ecapacity
+package e2esaturation
 
 import (
 	"context"
@@ -54,12 +54,12 @@ const (
 	gpuTypes             = "mix"
 )
 
-// TestCapacityE2E runs the end-to-end (e2e) test suite for capacity-based (saturation-based) mode.
-// This suite validates reactive capacity-based scaling behavior using KV cache and queue metrics.
-func TestCapacityE2E(t *testing.T) {
+// TestSaturationE2E runs the end-to-end (e2e) test suite for saturation-based (saturation-based) mode.
+// This suite validates reactive saturation-based scaling behavior using KV cache and queue metrics.
+func TestSaturationE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting workload-variant-autoscaler capacity-based test suite\n")
-	RunSpecs(t, "e2e capacity suite")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting workload-variant-autoscaler saturation-based test suite\n")
+	RunSpecs(t, "e2e saturation suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -105,42 +105,42 @@ var _ = BeforeSuite(func() {
 		}
 	}, 2*time.Minute, 1*time.Second).Should(Succeed())
 
-	// Verify configuration for capacity-based mode
+	// Verify configuration for saturation-based mode
 	By("verifying ConfigMap has saturation-only mode configured")
 	cm, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(context.Background(), WVAConfigMapName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "Should be able to get ConfigMap: "+WVAConfigMapName)
 
 	// Verify saturation-only mode is set
 	flagHybridOptimization := cm.Data["EXPERIMENTAL_HYBRID_OPTIMIZATION"]
-	Expect(flagHybridOptimization).To(Or(Equal("off"), Equal("")), fmt.Sprintf("EXPERIMENTAL_HYBRID_OPTIMIZATION should be 'off' or unset (default) for capacity-based tests, got: %s", flagHybridOptimization))
+	Expect(flagHybridOptimization).To(Or(Equal("off"), Equal("")), fmt.Sprintf("EXPERIMENTAL_HYBRID_OPTIMIZATION should be 'off' or unset (default) for saturation-based tests, got: %s", flagHybridOptimization))
 
-	_, _ = fmt.Fprintf(GinkgoWriter, "Capacity-based mode verified: EXPERIMENTAL_HYBRID_OPTIMIZATION=%s\n",
+	_, _ = fmt.Fprintf(GinkgoWriter, "saturation-based mode verified: EXPERIMENTAL_HYBRID_OPTIMIZATION=%s\n",
 		cm.Data["EXPERIMENTAL_HYBRID_OPTIMIZATION"])
 
 	if cm.Data["WVA_SCALE_TO_ZERO"] == "true" {
 		MinimumReplicas = 0
 	}
 
-	// Update capacity-scaling ConfigMap with relaxed thresholds for easy scale-down testing
-	By("updating capacity-scaling ConfigMap with relaxed thresholds")
-	capacityCM, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(context.Background(), CapacityConfigMapName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Should be able to get ConfigMap: "+CapacityConfigMapName)
+	// Update saturation-scaling ConfigMap with relaxed thresholds for easy scale-down testing
+	By("updating saturation-scaling ConfigMap with relaxed thresholds")
+	saturationCM, err := k8sClient.CoreV1().ConfigMaps(controllerNamespace).Get(context.Background(), saturationConfigMapName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Should be able to get ConfigMap: "+saturationConfigMapName)
 
 	// Relaxed configuration for easy scale-down:
 	// - Lower saturation thresholds means more replicas are considered "non-saturated"
 	// - Higher spare triggers means more headroom required after scale-down
-	capacityCM.Data["default"] = fmt.Sprintf(`kvCacheThreshold: %.2f
+	saturationCM.Data["default"] = fmt.Sprintf(`kvCacheThreshold: %.2f
 queueLengthThreshold: %.2f
 kvSpareTrigger: %.2f
 queueSpareTrigger: %.2f`, KvCacheThreshold, QueueLengthThreshold, kvSpareTrigger, queueSpareTrigger)
 
-	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Update(context.Background(), capacityCM, metav1.UpdateOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Should be able to update ConfigMap: "+CapacityConfigMapName)
+	_, err = k8sClient.CoreV1().ConfigMaps(controllerNamespace).Update(context.Background(), saturationCM, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Should be able to update ConfigMap: "+saturationConfigMapName)
 
-	_, _ = fmt.Fprintf(GinkgoWriter, "Updated capacity-scaling-config with relaxed thresholds: kvCache=%.2f, queue=%.2f, kvSpare=%.2f, queueSpare=%.2f\n", KvCacheThreshold, QueueLengthThreshold, kvSpareTrigger, queueSpareTrigger)
+	_, _ = fmt.Fprintf(GinkgoWriter, "Updated saturation-scaling-config with relaxed thresholds: kvCache=%.2f, queue=%.2f, kvSpare=%.2f, queueSpare=%.2f\n", KvCacheThreshold, QueueLengthThreshold, kvSpareTrigger, queueSpareTrigger)
 
-	// Restart controller pods to pick up new capacity-scaling configuration
-	By("restarting controller-manager pods to load new capacity configuration")
+	// Restart controller pods to pick up new saturation-scaling configuration
+	By("restarting controller-manager pods to load new saturation configuration")
 	podList, err := k8sClient.CoreV1().Pods(controllerNamespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=workload-variant-autoscaler",
 	})
@@ -163,7 +163,7 @@ queueSpareTrigger: %.2f`, KvCacheThreshold, QueueLengthThreshold, kvSpareTrigger
 		}
 	}, 2*time.Minute, 1*time.Second).Should(Succeed())
 
-	_, _ = fmt.Fprintf(GinkgoWriter, "Controller pods restarted and running with new capacity configuration\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Controller pods restarted and running with new saturation configuration\n")
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

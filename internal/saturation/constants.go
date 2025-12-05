@@ -1,6 +1,6 @@
-package capacity
+package saturation
 
-// Capacity analyzer constants
+// Saturation analyzer constants
 const (
 	// MinNonSaturatedReplicasForScaleDown is the minimum number of non-saturated replicas
 	// required before scale-down is considered safe. With fewer replicas, the system

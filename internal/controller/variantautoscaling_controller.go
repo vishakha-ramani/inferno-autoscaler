@@ -154,7 +154,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// TODO: replace by proper lookup mechanism using spec.scaleTargetRef in future
 	scaleTargetName := va.Name
 
-	// TODO: generalize to other scale target kinds in future
+	// TODO: generalize to other scale target kind in future
 	var deploy appsv1.Deployment
 	if err := utils.GetDeploymentWithBackoff(ctx, r.Client, scaleTargetName, va.Namespace, &deploy); err != nil {
 		logger.Log.Errorf("Failed to get scale target Deployment: name=%s, namespace=%s, error=%v", scaleTargetName, va.Namespace, err)
@@ -164,9 +164,20 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			"ScaleTargetNotFound",
 			fmt.Sprintf("Scale target Deployment not found: name=%s, namespace=%s", scaleTargetName, va.Namespace),
 		)
+
+		// Update VA status
+		// TODO: refactor to use retry utility function.
+		// UpdateStatusWithBackoff does not work as it goes not refresh the object before update
+		// UpdateStatusWithOptimisticLocking is too complex and not suitable for this case
+		if err := r.Status().Update(ctx, &va); err != nil {
+			logger.Log.Errorf("Failed to update VariantAutoscaling status: name=%s, namespace=%s, error=%v", va.Name, va.Namespace, err)
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{}, err
 	}
 
+	// TODO: Refactor to record mutation and apply as one update operation.
 	llmdVariantAutoscalingV1alpha1.SetCondition(&va,
 		llmdVariantAutoscalingV1alpha1.TypeTargetResolved,
 		metav1.ConditionTrue,
@@ -223,14 +234,11 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		enableSaturationAnalyzer = true
 	}
 
-	// Get list of all VAs
-	var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-	if err := r.List(ctx, &variantAutoscalingList); err != nil {
-		logger.Log.Errorf("unable to list variantAutoscaling resources: %v", err)
+	activeVAs, err := utils.ActiveVariantAutoscaling(ctx, r.Client)
+	if err != nil {
+		logger.Log.Errorf("unable to get active variant autoscalings: %v", err)
 		return ctrl.Result{}, err
 	}
-
-	activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
 
 	if len(activeVAs) == 0 {
 		logger.Log.Infof("No active VariantAutoscalings found, skipping optimization")
@@ -244,8 +252,8 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Log.Warnf("Saturation scaling config not loaded yet, using defaults")
 	}
 
-	// Group VAs by model for per-model saturation analysis
-	modelGroups := r.groupVAsByModel(activeVAs)
+	// Group VAs by model for per-model capacity analysis
+	modelGroups := utils.GroupVariantAutoscalingByModel(activeVAs)
 	logger.Log.Infof("Grouped VAs by model: modelCount=%d, totalVAs=%d", len(modelGroups), len(activeVAs))
 
 	// Process each model independently
@@ -532,33 +540,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{RequeueAfter: requeueDuration}, nil
 }
 
-// filterActiveVariantAutoscalings returns only those VAs not marked for deletion.
-func filterActiveVariantAutoscalings(items []llmdVariantAutoscalingV1alpha1.VariantAutoscaling) []llmdVariantAutoscalingV1alpha1.VariantAutoscaling {
-	active := make([]llmdVariantAutoscalingV1alpha1.VariantAutoscaling, 0, len(items))
-	for _, va := range items {
-		if va.DeletionTimestamp.IsZero() {
-			active = append(active, va)
-		} else {
-			logger.Log.Infof("skipping deleted variantAutoscaling - variantAutoscaling-name: %s", va.Name)
-		}
-	}
-	return active
-}
-
-// groupVAsByModel groups VariantAutoscalings by ModelID for per-model saturation analysis.
-// CRD validation ensures ModelID is not empty and all required fields are valid.
-func (r *VariantAutoscalingReconciler) groupVAsByModel(
-	vas []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
-) map[string][]llmdVariantAutoscalingV1alpha1.VariantAutoscaling {
-	groups := make(map[string][]llmdVariantAutoscalingV1alpha1.VariantAutoscaling)
-	for _, va := range vas {
-		modelID := va.Spec.ModelID
-		groups[modelID] = append(groups[modelID], va)
-	}
-	return groups
-}
-
-// buildVariantStates extracts current and desired replica counts from VAs for saturation analysis.
+// buildVariantStates extracts current and desired replica counts from VAs for capacity analysis.
 func (r *VariantAutoscalingReconciler) buildVariantStates(
 	ctx context.Context,
 	vas []llmdVariantAutoscalingV1alpha1.VariantAutoscaling,

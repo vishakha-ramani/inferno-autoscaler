@@ -20,9 +20,9 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/engines/executor"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 )
@@ -31,51 +31,39 @@ import (
 // The actual logic for the scale-from-zero engine should be implemented here.
 
 type Engine struct {
-	client client.Client
+	client   client.Client
+	executor executor.Executor
 	// Add fields as necessary for the engine's state and configuration.
 }
 
 // NewEngine creates a new instance of the scale-from-zero engine.
 func NewEngine(client client.Client) *Engine {
-	return &Engine{
+	engine := Engine{
 		client: client,
-		// Initialize fields as necessary.
 	}
+
+	// TODO: replace by an hybrid, polling and reactive executor when available
+	engine.executor = executor.NewPollingExecutor(executor.PollingConfig{
+		Config: executor.Config{
+			OptimizeFunc: engine.optimize,
+		},
+		Interval:     100 * time.Millisecond, // frequent polling to quickly detect scale-from-zero opportunities
+		RetryBackoff: 100 * time.Millisecond,
+	})
+
+	return &engine
 }
 
 // StartOptimizeLoop starts the optimization loop for the scale-from-zero engine.
 // It runs until the context is cancelled.
 func (e *Engine) StartOptimizeLoop(ctx context.Context) {
-	wait.UntilWithContext(ctx, func(ctx context.Context) {
-		for { // Infinite retry loop in case of optimization errors.
-			select {
-			case <-ctx.Done():
-				logger.Log.Info("Context cancelled, stopping optimization loop")
-				return
-			default:
-			}
-
-			err := e.optimize(ctx)
-			if err == nil {
-				break
-			}
-
-			logger.Log.Errorf("Optimization error: %v", err)
-
-			select {
-			case <-ctx.Done():
-				logger.Log.Info("Context cancelled during retry delay")
-				return
-			case <-time.After(100 * time.Millisecond):
-			}
-		}
-	}, 100*time.Millisecond)
+	e.executor.Start(ctx)
 }
 
 // optimize performs the optimization logic.
 func (e *Engine) optimize(ctx context.Context) error {
 	// Get all inactive (replicas == 0) VAs
-	inactiveVAs, err := utils.InactiveVariantAutoscalings(ctx, e.client)
+	inactiveVAs, err := utils.InactiveVariantAutoscalingByModel(ctx, e.client)
 	if err != nil {
 		return err
 	}

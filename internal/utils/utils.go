@@ -142,6 +142,8 @@ func UpdateStatusWithOptimisticLocking[T client.Object](
 	backoff wait.Backoff,
 	resourceType string,
 ) error {
+	// TODO: use retry.OnConflict from k8s.io/client-go/util/retry
+
 	return wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 		// Fetch the latest version of the resource
 		err := c.Get(ctx, objKey, obj)

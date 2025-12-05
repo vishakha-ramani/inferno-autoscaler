@@ -20,9 +20,9 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/engines/executor"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 )
@@ -31,51 +31,39 @@ import (
 // The actual logic for the model engine should be implemented here.
 
 type Engine struct {
-	client client.Client
+	client   client.Client
+	executor executor.Executor
+
 	// Add fields as necessary for the engine's state and configuration.
 }
 
 // NewEngine creates a new instance of the model engine.
 func NewEngine(client client.Client) *Engine {
-	return &Engine{
+	engine := Engine{
 		client: client,
-		// Initialize fields as necessary.
 	}
+
+	engine.executor = executor.NewPollingExecutor(executor.PollingConfig{
+		Config: executor.Config{
+			OptimizeFunc: engine.optimize,
+		},
+		Interval:     30 * time.Second,
+		RetryBackoff: 100 * time.Millisecond,
+	})
+
+	return &engine
 }
 
 // StartOptimizeLoop starts the optimization loop for the model engine.
 // It runs until the context is cancelled.
 func (e *Engine) StartOptimizeLoop(ctx context.Context) {
-	wait.UntilWithContext(ctx, func(ctx context.Context) {
-		for { // Infinite retry loop in case of optimization errors.
-			select {
-			case <-ctx.Done():
-				logger.Log.Info("Context cancelled, stopping optimization loop")
-				return
-			default:
-			}
-
-			err := e.optimize(ctx)
-			if err == nil {
-				break
-			}
-
-			logger.Log.Errorf("Optimization error: %v", err)
-
-			select {
-			case <-ctx.Done():
-				logger.Log.Info("Context cancelled during retry delay")
-				return
-			case <-time.After(100 * time.Millisecond):
-			}
-		}
-	}, 30*time.Minute)
+	e.executor.Start(ctx)
 }
 
 // optimize performs the optimization logic.
 func (e *Engine) optimize(ctx context.Context) error {
 	// Get all active VAs
-	activeVAs, err := utils.ActiveVariantAutoscalings(ctx, e.client)
+	activeVAs, err := utils.ActiveVariantAutoscalingByModel(ctx, e.client)
 	if err != nil {
 		return err
 	}

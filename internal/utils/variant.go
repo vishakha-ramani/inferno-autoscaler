@@ -29,24 +29,56 @@ import (
 // VariantFilter is a function that determines if a VA should be included.
 type VariantFilter func(deploy *appsv1.Deployment) bool
 
+// ActiveVariantAutoscalingByModel retrieves all VariantAutoscaling resources that are ready for optimization
+// and have at least one target replica.
+// Returns the shallow-copied VAs (not safe for mutation) grouped by ModelID.
+func ActiveVariantAutoscalingByModel(ctx context.Context, client client.Client) (map[string][]wvav1alpha1.VariantAutoscaling, error) {
+	vas, err := ActiveVariantAutoscaling(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	return GroupVariantAutoscalingByModel(vas), nil
+}
+
+// InactiveVariantAutoscalingByModel retrieves all VariantAutoscaling resources that are ready for optimization
+// and have no target replicas.
+// Returns the shallow-copied VAs (not safe for mutation) grouped by ModelID.
+func InactiveVariantAutoscalingByModel(ctx context.Context, client client.Client) (map[string][]wvav1alpha1.VariantAutoscaling, error) {
+	vas, err := InactiveVariantAutoscaling(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	return GroupVariantAutoscalingByModel(vas), nil
+}
+
+// GroupVariantAutoscalingByModel groups VariantAutoscalings by model ID
+func GroupVariantAutoscalingByModel(
+	vas []wvav1alpha1.VariantAutoscaling,
+) map[string][]wvav1alpha1.VariantAutoscaling {
+	groups := make(map[string][]wvav1alpha1.VariantAutoscaling)
+	for _, va := range vas {
+		modelID := va.Spec.ModelID
+		groups[modelID] = append(groups[modelID], va)
+	}
+	return groups
+}
+
 // ActiveVariantAutoscalings retrieves all VariantAutoscaling resources that are ready for optimization
 // and have at least one target replica.
-func ActiveVariantAutoscalings(ctx context.Context, client client.Client) ([]wvav1alpha1.VariantAutoscaling, error) {
+// Returns a slice of deep-copied VariantAutoscaling objects.
+func ActiveVariantAutoscaling(ctx context.Context, client client.Client) ([]wvav1alpha1.VariantAutoscaling, error) {
 	return filterVariantsByDeployment(ctx, client, isActive, "active")
 }
 
-// InactiveVariantAutoscalings retrieves all VariantAutoscaling resources that are ready for optimization
+// InactiveVariantAutoscaling retrieves all VariantAutoscaling resources that are ready for optimization
 // and have no target replicas.
-func InactiveVariantAutoscalings(ctx context.Context, client client.Client) ([]wvav1alpha1.VariantAutoscaling, error) {
+// Returns a slice of deep-copied VariantAutoscaling objects.
+func InactiveVariantAutoscaling(ctx context.Context, client client.Client) ([]wvav1alpha1.VariantAutoscaling, error) {
 	return filterVariantsByDeployment(ctx, client, isInactive, "inactive")
 }
 
 // filterVariantsByDeployment is a generic function to filter VAs based on deployment state.
-func filterVariantsByDeployment(ctx context.Context,
-	client client.Client,
-	filter VariantFilter,
-	filterName string) ([]wvav1alpha1.VariantAutoscaling, error) {
-
+func filterVariantsByDeployment(ctx context.Context, client client.Client, filter VariantFilter, filterName string) ([]wvav1alpha1.VariantAutoscaling, error) {
 	readyVAs, err := readyVariantAutoscalings(ctx, client)
 	if err != nil {
 		return nil, err
@@ -55,6 +87,8 @@ func filterVariantsByDeployment(ctx context.Context,
 	filteredVAs := make([]wvav1alpha1.VariantAutoscaling, 0, len(readyVAs))
 
 	for _, va := range readyVAs {
+
+		// Check if the context is done
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -82,10 +116,12 @@ func filterVariantsByDeployment(ctx context.Context,
 	logger.Log.Debugw("Found filtered VariantAutoscaling resources",
 		"filterType", filterName,
 		"count", len(filteredVAs))
+
 	return filteredVAs, nil
 }
 
-// readyVariantAutoscalings retrieves all VariantAutoscaling resources that are ready for optimization.
+// readyVariantAutoscalings retrieves all VariantAutoscaling resources that are ready for optimization
+// (condition TargetResolved is true).
 func readyVariantAutoscalings(ctx context.Context, client client.Client) ([]wvav1alpha1.VariantAutoscaling, error) {
 	// List all VariantAutoscaling resources
 	var variantAutoscalingList wvav1alpha1.VariantAutoscalingList
@@ -103,7 +139,7 @@ func readyVariantAutoscalings(ctx context.Context, client client.Client) ([]wvav
 		}
 
 		if wvav1alpha1.IsConditionTrue(&va, wvav1alpha1.TypeTargetResolved) { // TODO: add a Ready condition
-			readyVAs = append(readyVAs, va)
+			readyVAs = append(readyVAs, va) // Shallow copy
 		}
 	}
 

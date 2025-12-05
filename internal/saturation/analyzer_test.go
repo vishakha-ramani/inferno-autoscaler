@@ -339,7 +339,7 @@ func TestCalculatesaturationTargets_ScaleUpCheapest(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleUpReason: "KV spare Saturation low",
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
@@ -376,7 +376,7 @@ func TestCalculatesaturationTargets_ScaleDownMostExpensive(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: true,
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v3-medium", Cost: 15, ReplicaCount: 2},
@@ -413,7 +413,7 @@ func TestCalculatesaturationTargets_PreserveDesired(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleUpReason: "KV spare Saturation low",
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1-expensive", Cost: 20, ReplicaCount: 2},
 			{VariantName: "v2-cheap", Cost: 5, ReplicaCount: 2},
 		},
@@ -446,7 +446,7 @@ func TestArbitrateWithModelBased_SaturationVeto(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleDownSafe: false,
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -494,7 +494,7 @@ func TestArbitrateWithModelBased_SafetyBlock(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: false, // Unsafe to scale down
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -535,7 +535,7 @@ func TestArbitrateWithModelBased_FollowModelBased(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: false,
 		ScaleDownSafe: true, // Safe to scale down
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -583,7 +583,7 @@ func TestArbitrateWithModelBased_SaturationDriven(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleUpReason: "KV spare low",
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}
@@ -633,7 +633,7 @@ func TestCalculatesaturationTargets_AllVariantsPreserved(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true, // Saturation wants scale-up
 		ScaleUpReason: "KV spare Saturation low",
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 5, ReplicaCount: 2},
 			{VariantName: "v2", Cost: 10, ReplicaCount: 3},
 		},
@@ -663,7 +663,7 @@ func TestCalculatesaturationTargets_EqualCosts(t *testing.T) {
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v-zebra", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically last
 			{VariantName: "v-alpha", Cost: 10, ReplicaCount: 2},  // Same cost, alphabetically first
 			{VariantName: "v-middle", Cost: 10, ReplicaCount: 2}, // Same cost, middle
@@ -714,7 +714,7 @@ func TestCalculatesaturationTargets_ScaleDownBelowMinimum(t *testing.T) {
 		ModelID:       "test-model",
 		Namespace:     "test-ns",
 		ScaleDownSafe: true, // Saturation allows scale-down
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 20, ReplicaCount: 1}, // Only 1 replica
 			{VariantName: "v2", Cost: 10, ReplicaCount: 2},
 		},
@@ -745,7 +745,7 @@ func TestArbitrateWithModelBased_BothAgree(t *testing.T) {
 		Namespace:     "test-ns",
 		ShouldScaleUp: true,
 		ScaleDownSafe: false,
-		VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+		VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 			{VariantName: "v1", Cost: 10, ReplicaCount: 3},
 		},
 	}

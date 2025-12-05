@@ -36,11 +36,11 @@ type ModelSaturationAnalysis struct {
 	ScaleDownSafe   bool // Indicates if scale-down simulation passed
 
 	// Detailed variant breakdown
-	VariantAnalyses []VariantsaturationAnalysis
+	VariantAnalyses []VariantSaturationAnalysis
 }
 
-// VariantsaturationAnalysis holds saturation analysis for a single variant
-type VariantsaturationAnalysis struct {
+// VariantSaturationAnalysis holds saturation analysis for a single variant
+type VariantSaturationAnalysis struct {
 	VariantName         string
 	AcceleratorName     string
 	Cost                float64 // Cost per replica for this variant

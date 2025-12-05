@@ -40,7 +40,7 @@ func (a *Analyzer) AnalyzeModelSaturation(
 			ShouldScaleUp:   false,
 			ShouldScaleDown: false,
 			ScaleDownSafe:   false,
-			VariantAnalyses: []interfaces.VariantsaturationAnalysis{},
+			VariantAnalyses: []interfaces.VariantSaturationAnalysis{},
 		}, nil
 	}
 
@@ -75,7 +75,7 @@ func (a *Analyzer) AnalyzeModelSaturation(
 	var maxKvUsage float64
 	var maxQueueLen int
 
-	variantAnalyses := make([]interfaces.VariantsaturationAnalysis, 0, len(variantMap))
+	variantAnalyses := make([]interfaces.VariantSaturationAnalysis, 0, len(variantMap))
 
 	for variantName, metrics := range variantMap {
 		variantAnalysis := a.analyzeVariant(variantName, metrics, config)
@@ -131,9 +131,9 @@ func (a *Analyzer) analyzeVariant(
 	variantName string,
 	metrics []interfaces.ReplicaMetrics,
 	config interfaces.SaturationScalingConfig,
-) interfaces.VariantsaturationAnalysis {
+) interfaces.VariantSaturationAnalysis {
 
-	analysis := interfaces.VariantsaturationAnalysis{
+	analysis := interfaces.VariantSaturationAnalysis{
 		VariantName:       variantName,
 		ReplicaCount:      len(metrics),
 		SaturatedReplicas: []string{},
@@ -280,7 +280,7 @@ func (a *Analyzer) isScaleDownSafe(
 	return false, isSafe
 }
 
-// CalculatesaturationTargets determines target replicas per variant based on saturation analysis.
+// CalculateSaturationTargets determines target replicas per variant based on saturation analysis.
 // Step 1: Pure saturation-based target calculation
 // Uses replica count from Saturation metrics (ready replicas) to avoid excessive scale-up.
 // Rules:
@@ -288,7 +288,7 @@ func (a *Analyzer) isScaleDownSafe(
 // - Else if Saturation needs scale-up: cheapest variant gets readyReplicas+1
 // - Else if Saturation allows scale-down: most expensive variant gets readyReplicas-1
 // - Else: target = readyReplicas (replicas with metrics)
-func (a *Analyzer) CalculatesaturationTargets(
+func (a *Analyzer) CalculateSaturationTargets(
 	saturationAnalysis *interfaces.ModelSaturationAnalysis,
 	variantStates []interfaces.VariantReplicaState,
 ) map[string]int {
@@ -332,7 +332,7 @@ func (a *Analyzer) CalculatesaturationTargets(
 	// Determine Saturation action
 	if saturationAnalysis.ShouldScaleUp {
 		// Find cheapest variant that doesn't have preserved desired
-		var cheapestNonPreserved *interfaces.VariantsaturationAnalysis
+		var cheapestNonPreserved *interfaces.VariantSaturationAnalysis
 		for i := range saturationAnalysis.VariantAnalyses {
 			va := &saturationAnalysis.VariantAnalyses[i]
 			if preservedVariants[va.VariantName] {
@@ -356,7 +356,7 @@ func (a *Analyzer) CalculatesaturationTargets(
 
 	} else if saturationAnalysis.ScaleDownSafe {
 		// Find most expensive variant that doesn't have preserved desired
-		var mostExpensiveNonPreserved *interfaces.VariantsaturationAnalysis
+		var mostExpensiveNonPreserved *interfaces.VariantSaturationAnalysis
 		for i := range saturationAnalysis.VariantAnalyses {
 			va := &saturationAnalysis.VariantAnalyses[i]
 			if preservedVariants[va.VariantName] {
@@ -406,7 +406,7 @@ func (a *Analyzer) ArbitrateWithModelBased(
 	decisions := make([]interfaces.VariantDecision, 0, len(variantStates))
 
 	// Build variant analysis map
-	variantAnalysisMap := make(map[string]*interfaces.VariantsaturationAnalysis)
+	variantAnalysisMap := make(map[string]*interfaces.VariantSaturationAnalysis)
 	if saturationAnalysis != nil {
 		for i := range saturationAnalysis.VariantAnalyses {
 			va := &saturationAnalysis.VariantAnalyses[i]
@@ -423,14 +423,14 @@ func (a *Analyzer) ArbitrateWithModelBased(
 	// Arbitrate for each variant
 	for _, state := range variantStates {
 		va := variantAnalysisMap[state.VariantName]
-		SaturationTarget := saturationTargets[state.VariantName]
+		saturationTarget := saturationTargets[state.VariantName]
 		modelBasedTarget := modelBasedTargets[state.VariantName]
 
 		decision := a.arbitrateVariant(
 			saturationAnalysis,
 			va,
 			state,
-			SaturationTarget,
+			saturationTarget,
 			modelBasedTarget,
 		)
 
@@ -443,7 +443,7 @@ func (a *Analyzer) ArbitrateWithModelBased(
 // arbitrateVariant applies hybrid decision matrix for a single variant
 func (a *Analyzer) arbitrateVariant(
 	modelAnalysis *interfaces.ModelSaturationAnalysis,
-	variantAnalysis *interfaces.VariantsaturationAnalysis,
+	variantAnalysis *interfaces.VariantSaturationAnalysis,
 	state interfaces.VariantReplicaState,
 	SaturationTarget int,
 	modelBasedTarget int,
@@ -468,13 +468,13 @@ func (a *Analyzer) arbitrateVariant(
 	}
 
 	// Determine actions
-	var SaturationAction interfaces.SaturationAction
+	var saturationAction interfaces.SaturationAction
 	if SaturationTarget > state.CurrentReplicas {
-		SaturationAction = interfaces.ActionScaleUp
+		saturationAction = interfaces.ActionScaleUp
 	} else if SaturationTarget < state.CurrentReplicas {
-		SaturationAction = interfaces.ActionScaleDown
+		saturationAction = interfaces.ActionScaleDown
 	} else {
-		SaturationAction = interfaces.ActionNoChange
+		saturationAction = interfaces.ActionNoChange
 	}
 
 	var modelBasedAction interfaces.SaturationAction
@@ -488,7 +488,7 @@ func (a *Analyzer) arbitrateVariant(
 
 	// Apply hybrid decision matrix
 	switch {
-	case SaturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionScaleDown:
+	case saturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionScaleDown:
 		// Saturation veto: model-based wants to scale down but Saturation needs more
 		decision.Action = interfaces.ActionNoChange
 		decision.TargetReplicas = state.CurrentReplicas
@@ -508,7 +508,7 @@ func (a *Analyzer) arbitrateVariant(
 		decision.SaturationBased = true
 		decision.ModelBasedDecision = true
 
-	case SaturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionNoChange:
+	case saturationAction == interfaces.ActionScaleUp && modelBasedAction == interfaces.ActionNoChange:
 		// Saturation-driven scale-up (model-based doesn't object)
 		decision.Action = interfaces.ActionScaleUp
 		decision.TargetReplicas = SaturationTarget

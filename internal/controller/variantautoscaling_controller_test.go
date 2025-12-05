@@ -906,7 +906,7 @@ data:
 		})
 	})
 
-	Context("convertsaturationTargetsToDecisions", func() {
+	Context("convertSaturationTargetsToDecisions", func() {
 		BeforeEach(func() {
 			logger.Log = zap.NewNop().Sugar()
 		})
@@ -922,7 +922,7 @@ data:
 			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "test-model",
 				Namespace: "test-ns",
-				VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "variant-a", AcceleratorName: "A100", Cost: 10.0},
 					{VariantName: "variant-b", AcceleratorName: "A100", Cost: 10.0},
 					{VariantName: "variant-c", AcceleratorName: "A100", Cost: 10.0},
@@ -936,7 +936,7 @@ data:
 			}
 
 			By("Converting saturation targets to decisions")
-			decisions := convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying all variants are included in decisions")
 			Expect(len(decisions)).To(Equal(3), "All 3 variants should have decisions including ActionNoChange")
@@ -978,7 +978,7 @@ data:
 			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "stable-model",
 				Namespace: "prod-ns",
-				VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "stable-variant", AcceleratorName: "H100", Cost: 20.0},
 				},
 			}
@@ -988,7 +988,7 @@ data:
 			}
 
 			By("Converting to decisions")
-			decisions := convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying decision fields")
 			Expect(len(decisions)).To(Equal(1))
@@ -1017,7 +1017,7 @@ data:
 			saturationAnalysis := &interfaces.ModelSaturationAnalysis{
 				ModelID:   "test-model",
 				Namespace: "test-ns",
-				VariantAnalyses: []interfaces.VariantsaturationAnalysis{
+				VariantAnalyses: []interfaces.VariantSaturationAnalysis{
 					{VariantName: "overprovisioned", AcceleratorName: "A100", Cost: 10.0},
 				},
 			}
@@ -1027,7 +1027,7 @@ data:
 			}
 
 			By("Converting to decisions")
-			decisions := convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+			decisions := convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 
 			By("Verifying scale down decision")
 			Expect(len(decisions)).To(Equal(1))

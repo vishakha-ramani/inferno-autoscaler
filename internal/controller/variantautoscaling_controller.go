@@ -263,7 +263,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				errorCount++
 				// Fall back to saturation-only for this model
 				if saturationAnalysis != nil {
-					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+					finalDecisions = convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
 					// saturation also failed - activate safety net
 					logger.Log.Warnf("Config read failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
@@ -279,7 +279,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				errorCount++
 				// Fall back to saturation-only for this model
 				if saturationAnalysis != nil {
-					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+					finalDecisions = convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
 					// saturation also failed - activate safety net
 					logger.Log.Warnf("Config read failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
@@ -298,7 +298,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				logger.Log.Errorf("Failed to prepare variant autoscalings: %v", err)
 				errorCount++
 				if saturationAnalysis != nil {
-					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+					finalDecisions = convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
 					// saturation also failed - activate safety net
 					logger.Log.Warnf("Variant preparation failed and Saturation unavailable, activating safety net: modelID=%s", modelID)
@@ -331,7 +331,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				logger.Log.Errorf("Model-based optimization failed: %v", err)
 				errorCount++
 				if saturationAnalysis != nil {
-					finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+					finalDecisions = convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				} else {
 					// Both Saturation and model-based failed - activate safety net
 					logger.Log.Warnf("Both Saturation and model-based failed, activating safety net: modelID=%s", modelID)
@@ -359,7 +359,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if enableSaturationAnalyzer && !enableModelOptimizer {
 			// saturation-only MODE
 			if saturationAnalysis != nil {
-				finalDecisions = convertsaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
+				finalDecisions = convertSaturationTargetsToDecisions(saturationTargets, saturationAnalysis, variantStates)
 				logger.Log.Infof("saturation-only decisions made for model: %s - decision count: %d",
 					modelID,
 					len(finalDecisions))
@@ -545,9 +545,9 @@ func (r *VariantAutoscalingReconciler) buildVariantStates(
 	return states, nil
 }
 
-// convertsaturationTargetsToDecisions converts saturation-only targets to VariantDecisions.
+// convertSaturationTargetsToDecisions converts saturation-only targets to VariantDecisions.
 // Used when model-based optimizer is disabled (saturation-only mode).
-func convertsaturationTargetsToDecisions(
+func convertSaturationTargetsToDecisions(
 	saturationTargets map[string]int,
 	saturationAnalysis *interfaces.ModelSaturationAnalysis,
 	variantStates []interfaces.VariantReplicaState,
@@ -555,7 +555,7 @@ func convertsaturationTargetsToDecisions(
 	decisions := make([]interfaces.VariantDecision, 0, len(saturationTargets))
 
 	// Build variant analysis map for quick lookup
-	vaMap := make(map[string]*interfaces.VariantsaturationAnalysis)
+	vaMap := make(map[string]*interfaces.VariantSaturationAnalysis)
 	for i := range saturationAnalysis.VariantAnalyses {
 		va := &saturationAnalysis.VariantAnalyses[i]
 		vaMap[va.VariantName] = va

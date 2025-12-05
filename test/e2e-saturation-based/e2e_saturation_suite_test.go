@@ -54,7 +54,7 @@ const (
 	gpuTypes             = "mix"
 )
 
-// TestsaturationE2E runs the end-to-end (e2e) test suite for saturation-based (saturation-based) mode.
+// TestSaturationE2E runs the end-to-end (e2e) test suite for saturation-based (saturation-based) mode.
 // This suite validates reactive saturation-based scaling behavior using KV cache and queue metrics.
 func TestSaturationE2E(t *testing.T) {
 	RegisterFailHandler(Fail)

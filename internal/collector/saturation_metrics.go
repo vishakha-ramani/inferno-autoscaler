@@ -514,8 +514,7 @@ func (cmc *SaturationMetricsCollector) getExistingPods(
 	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
 	query := fmt.Sprintf(`kube_pod_info{namespace="%s"%s}`, escapePrometheusLabelValue(namespace), podQueryFilter)
 
-	// TODO: use QueryPrometheusWithBackoff to retry with backoff (per PR #341)
-	result, warnings, err := cmc.promAPI.Query(ctx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(ctx, cmc.promAPI, query)
 	if err != nil {
 		logger.Log.Errorf("Failed to query Prometheus for pod existence: namespace=%s, error=%v", namespace, err)
 		// On error, assume all candidate pods exist to prevent false negatives

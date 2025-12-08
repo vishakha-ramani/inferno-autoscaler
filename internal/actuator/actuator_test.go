@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -117,7 +118,7 @@ var _ = Describe("Actuator", func() {
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: resourceName,
 					},
@@ -148,7 +149,7 @@ var _ = Describe("Actuator", func() {
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: "non-existent",
 					},
@@ -208,7 +209,7 @@ var _ = Describe("Actuator", func() {
 					},
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: contextResourceName,
 					},
@@ -357,7 +358,7 @@ var _ = Describe("Actuator", func() {
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: contextResourceName,
 					},
@@ -448,7 +449,7 @@ var _ = Describe("Actuator", func() {
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: "incomplete-va",
 					},
@@ -536,7 +537,7 @@ var _ = Describe("Actuator", func() {
 					Namespace: namespace,
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 						Kind: "Deployment",
 						Name: contextResourceName,
 					},

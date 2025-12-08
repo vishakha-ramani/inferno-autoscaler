@@ -72,25 +72,6 @@ _Appears in:_
 | `load` _[LoadProfile](#loadprofile)_ | Load describes the workload characteristics for the current allocation. |  |  |
 
 
-#### CrossVersionObjectReference
-
-
-
-CrossVersionObjectReference contains enough information to let you identify the target resource.
-This is the same structure as used in HorizontalPodAutoscaler.
-
-
-
-_Appears in:_
-- [VariantAutoscalingSpec](#variantautoscalingspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `apiVersion` _string_ | APIVersion is the API version of the target resource. |  | MinLength: 1 <br /> |
-| `kind` _string_ | Kind is the kind of the target resource. Currently only "Deployment" is supported. |  | Enum: [Deployment] <br />Required: \{\} <br /> |
-| `name` _string_ | Name is the name of the target resource. |  | MinLength: 1 <br />Required: \{\} <br /> |
-
-
 #### LoadProfile
 
 
@@ -219,7 +200,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `scaleTargetRef` _[CrossVersionObjectReference](#crossversionobjectreference)_ | ScaleTargetRef references the target resource (Deployment) to scale.<br />This follows the same pattern as HorizontalPodAutoscaler. |  | Required: \{\} <br /> |
+| `scaleTargetRef` _[CrossVersionObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#crossversionobjectreference-v1-autoscaling)_ | ScaleTargetRef references the scalable resource to manage.<br />This follows the same pattern as HorizontalPodAutoscaler. |  | Required: \{\} <br /> |
 | `modelID` _string_ | ModelID specifies the unique identifier of the model to be autoscaled. |  | MinLength: 1 <br />Required: \{\} <br /> |
 | `modelProfile` _[ModelProfile](#modelprofile)_ | ModelProfile provides resource and performance characteristics for the model variant. |  | Optional: \{\} <br /> |
 | `variantCost` _string_ | VariantCost specifies the cost per replica for this variant (used in saturation analysis). | 10.0 | Optional: \{\} <br />Pattern: `^\d+(\.\d+)?$` <br /> |

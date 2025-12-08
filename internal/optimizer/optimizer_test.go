@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -188,7 +189,7 @@ var _ = Describe("Optimizer", Ordered, func() {
 						},
 					},
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
-						ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+						ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
 							Kind: "Deployment",
 							Name: fmt.Sprintf("test-variantautoscaling-%d", i),
 						},

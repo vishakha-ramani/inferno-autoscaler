@@ -718,19 +718,19 @@ func (r *VariantAutoscalingReconciler) collectMetricsForSaturationMode(
 			continue
 		}
 
-		// Get Deployment
+		// Get Deployment using ScaleTargetRef
 		var deploy appsv1.Deployment
-		err = utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
+		err = utils.GetDeploymentWithBackoff(ctx, r.Client, va.GetScaleTargetName(), va.Namespace, &deploy)
 		if err != nil {
-			logger.Log.Debugf("Could not get deployment for VA, skipping: variant=%s, error=%v", va.Name, err)
+			logger.Log.Debugf("Could not get deployment for VA, skipping: variant=%s, deployment=%s, error=%v", va.Name, va.GetScaleTargetName(), err)
 			continue // Skip VAs without deployments
 		}
 
-		// Fetch latest VA from API server
+		// Fetch latest VA from API server (use VA name, not deployment name - they are now decoupled)
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, deploy.Name, deploy.Namespace, &updateVA)
+		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, va.Name, va.Namespace, &updateVA)
 		if err != nil {
-			logger.Log.Debugf("Unable to get VA for deployment: deployment=%s, error=%v", deploy.Name, err)
+			logger.Log.Debugf("Unable to get VA: variant=%s, error=%v", va.Name, err)
 			continue
 		}
 
@@ -1001,17 +1001,19 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 			continue
 		}
 
+		// Get Deployment using ScaleTargetRef
 		var deploy appsv1.Deployment
-		err = utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
+		err = utils.GetDeploymentWithBackoff(ctx, r.Client, va.GetScaleTargetName(), va.Namespace, &deploy)
 		if err != nil {
-			logger.Log.Errorf("failed to get Deployment after retries: variantAutoscaling-name=%s, error=%v", va.Name, err)
+			logger.Log.Errorf("failed to get Deployment after retries: variantAutoscaling-name=%s, deployment=%s, error=%v", va.Name, va.GetScaleTargetName(), err)
 			continue
 		}
 
+		// Fetch latest VA from API server (use VA name, not deployment name - they are now decoupled)
 		var updateVA llmdVariantAutoscalingV1alpha1.VariantAutoscaling
-		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, deploy.Name, deploy.Namespace, &updateVA)
+		err = utils.GetVariantAutoscalingWithBackoff(ctx, r.Client, va.Name, va.Namespace, &updateVA)
 		if err != nil {
-			logger.Log.Errorf("unable to get variantAutoscaling for deployment: deployment-name=%s, namespace=%s, error=%v", deploy.Name, deploy.Namespace, err)
+			logger.Log.Errorf("unable to get variantAutoscaling: variantAutoscaling-name=%s, namespace=%s, error=%v", va.Name, va.Namespace, err)
 			continue
 		}
 

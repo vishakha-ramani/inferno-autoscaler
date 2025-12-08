@@ -11,7 +11,8 @@ metadata:
     inference.optimization/acceleratorName: {{ .Values.va.accelerator }}
 # This is essentially static input to the optimizer
 spec:
-  # ScaleTargetRef references the target Deployment to scale (similar to HPA)
+  # ScaleTargetRef references the target resource to scale (similar to HPA)
+  # TODO: Support templating for scaleTargetRef to enable managing groups of deployments
   scaleTargetRef:
     kind: Deployment
     name: {{ .Values.llmd.deploymentName | default (printf "%s-decode" .Values.llmd.modelName) }}

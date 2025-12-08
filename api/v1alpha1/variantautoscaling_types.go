@@ -1,15 +1,16 @@
 package v1alpha1
 
 import (
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // VariantAutoscalingSpec defines the desired state for autoscaling a model variant.
 type VariantAutoscalingSpec struct {
-	// ScaleTargetRef references the target resource (Deployment) to scale.
+	// ScaleTargetRef references the scalable resource to manage.
 	// This follows the same pattern as HorizontalPodAutoscaler.
 	// +kubebuilder:validation:Required
-	ScaleTargetRef CrossVersionObjectReference `json:"scaleTargetRef"`
+	ScaleTargetRef autoscalingv1.CrossVersionObjectReference `json:"scaleTargetRef"`
 
 	// ModelID specifies the unique identifier of the model to be autoscaled.
 	// +kubebuilder:validation:MinLength=1
@@ -25,25 +26,6 @@ type VariantAutoscalingSpec struct {
 	// +kubebuilder:validation:Pattern=`^\d+(\.\d+)?$`
 	// +kubebuilder:default="10.0"
 	VariantCost string `json:"variantCost,omitempty"`
-}
-
-// CrossVersionObjectReference contains enough information to let you identify the target resource.
-// This is the same structure as used in HorizontalPodAutoscaler.
-type CrossVersionObjectReference struct {
-	// APIVersion is the API version of the target resource.
-	// +kubebuilder:validation:MinLength=1
-	// +optional
-	APIVersion string `json:"apiVersion,omitempty"`
-
-	// Kind is the kind of the target resource. Currently only "Deployment" is supported.
-	// +kubebuilder:validation:Enum=Deployment
-	// +kubebuilder:validation:Required
-	Kind string `json:"kind"`
-
-	// Name is the name of the target resource.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
 }
 
 // ModelProfile provides resource and performance characteristics for the model variant.
@@ -243,14 +225,12 @@ const (
 	ReasonSkippedProcessing = "SkippedProcessing"
 )
 
-// GetScaleTargetName returns the name of the scale target (Deployment).
-// This is a convenience method for accessing the target deployment name.
+// GetScaleTargetName returns the name of the scale target resource.
 func (va *VariantAutoscaling) GetScaleTargetName() string {
 	return va.Spec.ScaleTargetRef.Name
 }
 
-// GetScaleTargetKind returns the kind of the scale target.
-// Currently only "Deployment" is supported.
+// GetScaleTargetKind returns the kind of the scale target resource.
 func (va *VariantAutoscaling) GetScaleTargetKind() string {
 	return va.Spec.ScaleTargetRef.Kind
 }

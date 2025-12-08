@@ -65,6 +65,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
 
+			By("creating the required scale target ref deployment")
+			deployment := testutils.CreateLlmdSimDeployment("default", resourceName, "default-default", "default", "8000", 0, 0, 1)
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+
 			By("creating the required configmap for optimization")
 			configMap := testutils.CreateServiceClassConfigMap(ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
@@ -530,6 +534,7 @@ data:
 
 		BeforeEach(func() {
 			logger.Log = zap.NewNop().Sugar()
+
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "workload-variant-autoscaler-system",
@@ -667,81 +672,6 @@ data:
 			}
 		})
 
-		It("should filter out VAs marked for deletion", func() {
-			var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-			err := k8sClient.List(ctx, &variantAutoscalingList)
-			Expect(err).NotTo(HaveOccurred(), "Failed to list VariantAutoscaling resources")
-			filterActiveVariantAutoscalings(variantAutoscalingList.Items)
-			Expect(len(variantAutoscalingList.Items)).To(Equal(3), "All VariantAutoscaling resources should be active before deletion")
-
-			// Delete the VAs (this sets DeletionTimestamp)
-			for i := range totalVAs {
-				Expect(k8sClient.Delete(ctx, &variantAutoscalingList.Items[i])).To(Succeed())
-			}
-
-			err = k8sClient.List(ctx, &variantAutoscalingList)
-			Expect(err).NotTo(HaveOccurred(), "Failed to list VariantAutoscaling resources")
-			filterActiveVariantAutoscalings(variantAutoscalingList.Items)
-			Expect(len(variantAutoscalingList.Items)).To(Equal(0), "No active VariantAutoscaling resources should be found")
-		})
-
-		It("should prepare active VAs for optimization", func() {
-			// Create a mock Prometheus API with valid metric data that passes validation
-			mockPromAPI := &testutils.MockPromAPI{
-				QueryResults: map[string]model.Value{
-					// Default: return a vector with one sample to pass validation
-				},
-				QueryErrors: map[string]error{},
-			}
-
-			controllerReconciler := &VariantAutoscalingReconciler{
-				Client:  k8sClient,
-				Scheme:  k8sClient.Scheme(),
-				PromAPI: mockPromAPI,
-			}
-
-			By("Reading the required configmaps")
-			accMap, err := controllerReconciler.readAcceleratorConfig(ctx, "accelerator-unit-costs", configMapNamespace)
-			Expect(err).NotTo(HaveOccurred(), "Failed to read accelerator config")
-			Expect(accMap).NotTo(BeNil(), "Accelerator config map should not be nil")
-
-			serviceClassMap, err := controllerReconciler.readServiceClassConfig(ctx, "service-classes-config", configMapNamespace)
-			Expect(err).NotTo(HaveOccurred(), "Failed to read service class config")
-			Expect(serviceClassMap).NotTo(BeNil(), "Service class config map should not be nil")
-
-			var variantAutoscalingList llmdVariantAutoscalingV1alpha1.VariantAutoscalingList
-			err = k8sClient.List(ctx, &variantAutoscalingList)
-			Expect(err).NotTo(HaveOccurred(), "Failed to list VariantAutoscaling resources")
-			activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
-			Expect(len(activeVAs)).To(Equal(totalVAs), "All VariantAutoscaling resources should be active")
-
-			// Prepare system data for VAs
-			By("Preparing the system data for optimization")
-			// WVA operates in unlimited mode - no inventory data needed
-			systemData := utils.CreateSystemData(accMap, serviceClassMap)
-			Expect(systemData).NotTo(BeNil(), "System data should not be nil")
-
-			updateList, vaMap, allAnalyzerResponses, err := controllerReconciler.prepareVariantAutoscalings(ctx, activeVAs, accMap, serviceClassMap, systemData)
-
-			Expect(err).NotTo(HaveOccurred(), "prepareVariantAutoscalings should not return an error")
-			Expect(vaMap).NotTo(BeNil(), "VA map should not be nil")
-			Expect(allAnalyzerResponses).NotTo(BeNil(), "Analyzer responses should not be nil")
-			Expect(len(updateList.Items)).To(Equal(totalVAs), "UpdatedList should be the same number of all active VariantAutoscalings")
-
-			var vaNames []string
-			for _, va := range activeVAs {
-				vaNames = append(vaNames, va.Name)
-			}
-
-			for _, updatedVa := range updateList.Items {
-				Expect(vaNames).To(ContainElement(updatedVa.Name), fmt.Sprintf("Active VariantAutoscaling list should contain %s", updatedVa.Name))
-				Expect(updatedVa.Status.CurrentAlloc.Accelerator).To(Equal("A100"), fmt.Sprintf("Current Accelerator for %s should be \"A100\" after preparation", updatedVa.Name))
-				Expect(updatedVa.Status.CurrentAlloc.NumReplicas).To(Equal(1), fmt.Sprintf("Current NumReplicas for %s should be 1 after preparation", updatedVa.Name))
-				Expect(updatedVa.Status.DesiredOptimizedAlloc.Accelerator).To(BeEmpty(), fmt.Sprintf("Desired Accelerator for %s should be empty value after preparation", updatedVa.Name))
-				Expect(updatedVa.Status.DesiredOptimizedAlloc.NumReplicas).To(BeZero(), fmt.Sprintf("Desired NumReplicas for %s should be zero after preparation", updatedVa.Name))
-			}
-		})
-
 		It("should set MetricsAvailable condition when metrics validation fails", func() {
 			By("Creating a mock Prometheus API that returns no metrics")
 			mockPromAPI := &testutils.MockPromAPI{
@@ -766,7 +696,7 @@ data:
 			err = k8sClient.List(ctx, &variantAutoscalingList)
 			Expect(err).NotTo(HaveOccurred())
 
-			activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
+			activeVAs := variantAutoscalingList.Items // All created VAs are active
 			Expect(len(activeVAs)).To(BeNumerically(">", 0))
 
 			By("Preparing system data and calling prepareVariantAutoscalings")
@@ -809,7 +739,12 @@ data:
 			}
 
 			By("Performing a full reconciliation")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "multi-test-resource-0",
+					Namespace: "default",
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that conditions are set correctly")

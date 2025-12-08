@@ -12,6 +12,7 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/interfaces"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/logger"
+	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -188,7 +189,7 @@ func (cmc *SaturationMetricsCollector) queryKvCacheMetrics(
 	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
-	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(queryCtx, cmc.promAPI, query)
 	if err != nil {
 		return nil, fmt.Errorf("prometheus query failed: %w", err)
 	}
@@ -244,7 +245,7 @@ func (cmc *SaturationMetricsCollector) queryQueueMetrics(
 	queryCtx, cancel := contextWithRespectedDeadline(ctx, 5*time.Second)
 	defer cancel()
 
-	result, warnings, err := cmc.promAPI.Query(queryCtx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(queryCtx, cmc.promAPI, query)
 	if err != nil {
 		return nil, fmt.Errorf("prometheus query failed: %w", err)
 	}
@@ -513,8 +514,7 @@ func (cmc *SaturationMetricsCollector) getExistingPods(
 	// Note: this may still be subject to staleness due to scrape intervals - the observed lag is typically ~30s.
 	query := fmt.Sprintf(`kube_pod_info{namespace="%s"%s}`, escapePrometheusLabelValue(namespace), podQueryFilter)
 
-	// TODO: use QueryPrometheusWithBackoff to retry with backoff (per PR #341)
-	result, warnings, err := cmc.promAPI.Query(ctx, query, time.Now())
+	result, warnings, err := utils.QueryPrometheusWithBackoff(ctx, cmc.promAPI, query)
 	if err != nil {
 		logger.Log.Errorf("Failed to query Prometheus for pod existence: namespace=%s, error=%v", namespace, err)
 		// On error, assume all candidate pods exist to prevent false negatives

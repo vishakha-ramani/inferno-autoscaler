@@ -1,11 +1,17 @@
 package v1alpha1
 
 import (
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // VariantAutoscalingSpec defines the desired state for autoscaling a model variant.
 type VariantAutoscalingSpec struct {
+	// ScaleTargetRef references the scalable resource to manage.
+	// This follows the same pattern as HorizontalPodAutoscaler.
+	// +kubebuilder:validation:Required
+	ScaleTargetRef autoscalingv1.CrossVersionObjectReference `json:"scaleTargetRef"`
+
 	// ModelID specifies the unique identifier of the model to be autoscaled.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Required
@@ -150,6 +156,7 @@ type ActuationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=va
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=".spec.scaleTargetRef.name"
 // +kubebuilder:printcolumn:name="Model",type=string,JSONPath=".spec.modelID"
 // +kubebuilder:printcolumn:name="Accelerator",type=string,JSONPath=".status.currentAlloc.accelerator"
 // +kubebuilder:printcolumn:name="CurrentReplicas",type=integer,JSONPath=".status.currentAlloc.numReplicas"
@@ -219,3 +226,13 @@ const (
 	// ReasonSkippedProcessing indicates VA was skipped during processing
 	ReasonSkippedProcessing = "SkippedProcessing"
 )
+
+// GetScaleTargetName returns the name of the scale target resource.
+func (va *VariantAutoscaling) GetScaleTargetName() string {
+	return va.Spec.ScaleTargetRef.Name
+}
+
+// GetScaleTargetKind returns the kind of the scale target resource.
+func (va *VariantAutoscaling) GetScaleTargetKind() string {
+	return va.Spec.ScaleTargetRef.Kind
+}

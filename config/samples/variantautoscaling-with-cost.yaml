@@ -21,6 +21,11 @@ metadata:
     variant: premium
     accelerator: h100
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-70b-premium-h100
+
   # Model identifier (OpenAI API compatible)
   modelID: "meta/llama-3.1-70b"
 
@@ -59,6 +64,11 @@ metadata:
     variant: standard
     accelerator: a100
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-70b-standard-a100
+
   # Model identifier (same model as premium variant)
   modelID: "meta/llama-3.1-70b"
 
@@ -98,6 +108,11 @@ metadata:
     variant: budget
     accelerator: t4
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-8b-budget-t4
+
   modelID: "meta/llama-3.1-8b"
 
   # Budget tier: Very low cost for cost-sensitive workloads
@@ -128,6 +143,11 @@ metadata:
     tenant: gold
     model: llama-8b
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-8b-tenant-gold
+
   modelID: "meta/llama-3.1-8b"
 
   # Gold tenant: Premium pricing for priority service
@@ -156,6 +176,11 @@ metadata:
     tenant: silver
     model: llama-8b
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-8b-tenant-silver
+
   modelID: "meta/llama-3.1-8b"
 
   # Silver tenant: Standard pricing
@@ -183,6 +208,11 @@ metadata:
   name: llama-8b-default-cost
   namespace: llm-inference
 spec:
+  # Reference to the target Deployment to scale (follows HPA pattern)
+  scaleTargetRef:
+    kind: Deployment
+    name: llama-8b-default-cost
+
   modelID: "meta/llama-3.1-8b"
 
   # variantCost omitted - will default to 10.0

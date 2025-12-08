@@ -27,6 +27,7 @@ import (
 	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -89,6 +90,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					},
 					// TODO(user): Specify other spec details if needed.
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+						ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+							Kind: "Deployment",
+							Name: resourceName,
+						},
 						// Example spec fields, adjust as necessary
 						ModelID: "default-default",
 						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
@@ -426,6 +431,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: configResourceName,
+					},
 					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -455,6 +464,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: "invalid-model-id",
+					},
 					ModelID: "", // Empty ModelID
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -484,6 +497,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: "empty-accelerators",
+					},
 					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -599,6 +616,10 @@ data:
 						},
 					},
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+						ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+							Kind: "Deployment",
+							Name: name,
+						},
 						ModelID: modelID,
 						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 							Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{

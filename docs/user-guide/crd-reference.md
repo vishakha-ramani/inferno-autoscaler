@@ -72,8 +72,6 @@ _Appears in:_
 | `load` _[LoadProfile](#loadprofile)_ | Load describes the workload characteristics for the current allocation. |  |  |
 
 
-
-
 #### LoadProfile
 
 
@@ -202,9 +200,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `scaleTargetRef` _[CrossVersionObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#crossversionobjectreference-v1-autoscaling)_ | ScaleTargetRef references the scalable resource to manage.<br />This follows the same pattern as HorizontalPodAutoscaler. |  | Required: \{\} <br /> |
 | `modelID` _string_ | ModelID specifies the unique identifier of the model to be autoscaled. |  | MinLength: 1 <br />Required: \{\} <br /> |
 | `modelProfile` _[ModelProfile](#modelprofile)_ | ModelProfile provides resource and performance characteristics for the model variant. |  | Optional: \{\} <br /> |
-| `variantCost` _string_ | VariantCost specifies the cost per replica for this variant (used in capacity analysis). | 10.0 | Optional: \{\} <br />Pattern: `^\d+(\.\d+)?$` <br /> |
+| `variantCost` _string_ | VariantCost specifies the cost per replica for this variant (used in saturation analysis). | 10.0 | Optional: \{\} <br />Pattern: `^\d+(\.\d+)?$` <br /> |
 
 
 #### VariantAutoscalingStatus

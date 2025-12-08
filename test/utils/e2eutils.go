@@ -42,6 +42,7 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -960,6 +961,10 @@ func CreateVariantAutoscalingResource(namespace, resourceName, modelId, acc stri
 			},
 		},
 		Spec: v1alpha1.VariantAutoscalingSpec{
+			ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+				Kind: "Deployment",
+				Name: resourceName, // Use resourceName as the deployment name
+			},
 			ModelID: modelId,
 			ModelProfile: v1alpha1.ModelProfile{
 				Accelerators: []v1alpha1.AcceleratorProfile{

@@ -515,10 +515,10 @@ func (r *VariantAutoscalingReconciler) buildVariantStates(
 	states := make([]interfaces.VariantReplicaState, 0, len(vas))
 
 	for _, va := range vas {
-		// Get current replicas from deployment
+		// Get current replicas from deployment using ScaleTargetRef
 		var deploy appsv1.Deployment
-		if err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy); err != nil {
-			logger.Log.Warnf("Failed to get deployment for VA, using status: name=%s, error=%v", va.Name, err)
+		if err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.GetScaleTargetName(), va.Namespace, &deploy); err != nil {
+			logger.Log.Warnf("Failed to get deployment for VA, using status: name=%s, deployment=%s, error=%v", va.Name, va.GetScaleTargetName(), err)
 			// Fallback to status if deployment fetch fails
 			states = append(states, interfaces.VariantReplicaState{
 				VariantName:     va.Name,
@@ -634,11 +634,11 @@ func (r *VariantAutoscalingReconciler) runSaturationAnalysis(
 		}
 		variantCosts[va.Name] = cost
 
-		// Get the deployment for this VA
+		// Get the deployment for this VA using ScaleTargetRef
 		var deploy appsv1.Deployment
-		err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.Name, va.Namespace, &deploy)
+		err := utils.GetDeploymentWithBackoff(ctx, r.Client, va.GetScaleTargetName(), va.Namespace, &deploy)
 		if err != nil {
-			logger.Log.Debugf("Could not get deployment for VA: variant=%s, error=%v", va.Name, err)
+			logger.Log.Debugf("Could not get deployment for VA: variant=%s, deployment=%s, error=%v", va.Name, va.GetScaleTargetName(), err)
 			continue
 		}
 		deployments[va.Name] = &deploy

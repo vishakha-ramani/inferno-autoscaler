@@ -85,6 +85,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					},
 					// TODO(user): Specify other spec details if needed.
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+						ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+							Kind: "Deployment",
+							Name: resourceName,
+						},
 						// Example spec fields, adjust as necessary
 						ModelID: "default-default",
 						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
@@ -422,6 +426,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: configResourceName,
+					},
 					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -451,6 +459,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: "invalid-model-id",
+					},
 					ModelID: "", // Empty ModelID
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -480,6 +492,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 					Namespace: "default",
 				},
 				Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+					ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+						Kind: "Deployment",
+						Name: "empty-accelerators",
+					},
 					ModelID: "default-default",
 					ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 						Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{
@@ -594,6 +610,10 @@ data:
 						},
 					},
 					Spec: llmdVariantAutoscalingV1alpha1.VariantAutoscalingSpec{
+						ScaleTargetRef: llmdVariantAutoscalingV1alpha1.CrossVersionObjectReference{
+							Kind: "Deployment",
+							Name: name,
+						},
 						ModelID: modelID,
 						ModelProfile: llmdVariantAutoscalingV1alpha1.ModelProfile{
 							Accelerators: []llmdVariantAutoscalingV1alpha1.AcceleratorProfile{

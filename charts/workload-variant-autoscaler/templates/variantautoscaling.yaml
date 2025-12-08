@@ -11,6 +11,10 @@ metadata:
     inference.optimization/acceleratorName: {{ .Values.va.accelerator }}
 # This is essentially static input to the optimizer
 spec:
+  # ScaleTargetRef references the target Deployment to scale (similar to HPA)
+  scaleTargetRef:
+    kind: Deployment
+    name: {{ .Values.llmd.deploymentName | default (printf "%s-decode" .Values.llmd.modelName) }}
   # OpenAI API compatible name of the model
   modelID: {{ .Values.llmd.modelID | quote }}
   {{- if .Values.wva.experimentalHybridOptimization }}

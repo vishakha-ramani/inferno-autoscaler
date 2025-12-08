@@ -374,7 +374,7 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 
 			if tunerEnabled {
-				logger.Log.Debug("Experimental model tuner is enabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=true) tuning model performance parameters for active VAs")
+				logger.Log.Debug("Experimental model tuner is enabled globally: tuning model performance parameters for active VAs")
 
 				// Check if auto-guess initial state is enabled globally
 				autoGuessInitStateEnabled, err := r.isAutoGuessInitialStateEnabled(ctx)
@@ -385,15 +385,6 @@ func (r *VariantAutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.R
 				// Tune queueing model parameters for all servers using the system data and all active VAs
 				if err := tuner.TuneModelPerfParams(updateList.Items, systemData, autoGuessInitStateEnabled); err != nil {
 					logger.Log.Warn(err, "failed to tune system data")
-				}
-			} else {
-				logger.Log.Debug("Model tuner is disabled globally (EXPERIMENTAL_MODEL_TUNER_ENABLED=false), using spec parameters for all VAs")
-				// Populate TunerPerfData with spec parameters for all VAs
-				for i := range updateList.Items {
-					va := &updateList.Items[i]
-					if err := tuner.SetFallbackTunedParamsInVAStatus(va); err != nil {
-						logger.Log.Warnf("Failed to set fallback tuned parameters for variant %s/%s: %v", va.Name, va.Namespace, err)
-					}
 				}
 			}
 

@@ -1,8 +1,8 @@
 package tuner
 
 import (
+	"errors"
 	"fmt"
-	"maps"
 	"strconv"
 	"time"
 
@@ -14,6 +14,9 @@ import (
 	"gonum.org/v1/gonum/mat"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// ErrorInsufficientMetrics indicates that tuning was skipped due to insufficient metrics (e.g., no traffic).
+var ErrorInsufficientMetrics = errors.New("insufficient metrics for tuning")
 
 // build config data from defaults, init state and slos
 func BuildTunerConfig(
@@ -515,132 +518,17 @@ func updateVAStatusWithTunedParams(
 	return nil
 }
 
-// SetFallbackTunedParamsInVAStatus sets parameters in VA status with the following priority:
-// 1. Keep existing parameters if they exist and are valid
-// 2. Use initial parameters from spec if available
-// 3. Set zero parameters as fallback
-func SetFallbackTunedParamsInVAStatus(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
-	// Priority 1: If VA status already has valid params, keep them
-	if va.Status.TunerPerfData != nil &&
-		hasValidParams(va.Status.TunerPerfData.PerfParms.DecodeParms, va.Status.TunerPerfData.PerfParms.PrefillParms) {
-		logger.Log.Debugf("Keeping existing parameters in status for variant %s/%s: alpha=%s, beta=%s, gamma=%s, delta=%s",
-			va.Name,
-			va.Namespace,
-			va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"],
-			va.Status.TunerPerfData.PerfParms.DecodeParms["beta"],
-			va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"],
-			va.Status.TunerPerfData.PerfParms.PrefillParms["delta"])
-		return nil
-	}
-
-	// Priority 2: Try to use initial parameters from spec
-	logger.Log.Debugf("No valid parameters found in status for variant %s/%s, attempting to use spec parameters",
-		va.Name, va.Namespace)
-
-	return setParamsFromSpec(va)
-}
-
-// setParamsFromSpec sets parameters from the VA spec's ModelProfile
-// Falls back to zero parameters if spec is invalid or incomplete
-func setParamsFromSpec(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) error {
-	// Initialize TunerPerfData if nil
+// ensureTunerPerfDataInitialized ensures TunerPerfData and its parameter maps are initialized.
+func ensureTunerPerfDataInitialized(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
 	if va.Status.TunerPerfData == nil {
 		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
 	}
-
-	// Initialize maps if nil
 	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
 		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
 	}
 	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
 		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
 	}
-
-	// Validate ModelProfile exists
-	if len(va.Spec.ModelProfile.Accelerators) == 0 {
-		logger.Log.Warnf("No accelerator profiles found in ModelProfile for variant %s/%s, setting default zero parameters",
-			va.Name, va.Namespace)
-		setZeroParams(va)
-		return fmt.Errorf("no accelerator profiles found in spec")
-	}
-
-	// Temporary maps to collect params from spec
-	specDecodeParms := make(map[string]string)
-	specPrefillParms := make(map[string]string)
-
-	// Getting accelerator name from VA labels
-	accName := va.Labels["inference.optimization/acceleratorName"]
-
-	// Copy initial params from spec
-	for _, accProfile := range va.Spec.ModelProfile.Accelerators {
-		if accProfile.Acc != accName {
-			continue
-		}
-
-		// Copy decode and prefill params from corresponding ModelProfile spec to temporary maps
-		maps.Copy(specDecodeParms, accProfile.PerfParms.DecodeParms)
-		maps.Copy(specPrefillParms, accProfile.PerfParms.PrefillParms)
-	}
-
-	// Validate that spec params are valid
-	if !hasValidParams(specDecodeParms, specPrefillParms) {
-		logger.Log.Warnf("Invalid or incomplete parameters in ModelProfile for variant %s/%s, setting default zero parameters",
-			va.Name, va.Namespace)
-		setZeroParams(va)
-		return fmt.Errorf("invalid or incomplete parameters in spec")
-	}
-
-	// Get param values for comparison and logging
-	alpha := specDecodeParms["alpha"]
-	beta := specDecodeParms["beta"]
-	gamma := specPrefillParms["gamma"]
-	delta := specPrefillParms["delta"]
-
-	// Check if current status params already match what we're about to set
-	currentAlpha := va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"]
-	currentBeta := va.Status.TunerPerfData.PerfParms.DecodeParms["beta"]
-	currentGamma := va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"]
-	currentDelta := va.Status.TunerPerfData.PerfParms.PrefillParms["delta"]
-
-	if currentAlpha == alpha && currentBeta == beta && currentGamma == gamma && currentDelta == delta {
-		logger.Log.Debugf("Spec parameters already set in status for variant %s/%s, skipping update", va.Name, va.Namespace)
-		return nil
-	}
-
-	// Parameters are different from Spec, update status
-	va.Status.TunerPerfData.PerfParms.DecodeParms = specDecodeParms
-	va.Status.TunerPerfData.PerfParms.PrefillParms = specPrefillParms
-
-	logger.Log.Debugf("Set initial parameters for variant %s/%s from spec: alpha=%s, beta=%s, gamma=%s, delta=%s",
-		va.Name,
-		va.Namespace,
-		alpha, beta, gamma, delta)
-
-	return nil
-}
-
-// setZeroParams sets all tuned performance parameters to "0" when params from spec cannot be retrieved
-func setZeroParams(va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling) {
-	// Initialize TunerPerfData if nil
-	if va.Status.TunerPerfData == nil {
-		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
-	}
-
-	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
-		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
-	}
-	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
-		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
-	}
-
-	va.Status.TunerPerfData.PerfParms.DecodeParms["alpha"] = "0"
-	va.Status.TunerPerfData.PerfParms.DecodeParms["beta"] = "0"
-	va.Status.TunerPerfData.PerfParms.PrefillParms["gamma"] = "0"
-	va.Status.TunerPerfData.PerfParms.PrefillParms["delta"] = "0"
-
-	logger.Log.Debugf("Set default zero parameters for variant %s/%s",
-		va.Name,
-		va.Namespace)
 }
 
 // tunedParamsMatch checks if the new tuned results match existing status
@@ -775,7 +663,8 @@ func updateSystemDataWithState(
 	return fmt.Errorf("model %q with accelerator %q not found in system data", modelName, accName)
 }
 
-// updateVAStatusWithState updates VA status with the given state parameters
+// updateVAStatusWithState updates VA status with the given state parameters.
+// This is used when ActivateModelTuner=false but we need to populate status for potential future tuning.
 func updateVAStatusWithState(
 	va *llmdVariantAutoscalingV1alpha1.VariantAutoscaling,
 	model, accelerator string,
@@ -785,18 +674,7 @@ func updateVAStatusWithState(
 		return fmt.Errorf("invalid state length: expected 4, got %d", len(state))
 	}
 
-	// Initialize TunerPerfData if nil
-	if va.Status.TunerPerfData == nil {
-		va.Status.TunerPerfData = &llmdVariantAutoscalingV1alpha1.TunerPerfData{}
-	}
-
-	// Initialize maps if nil
-	if va.Status.TunerPerfData.PerfParms.DecodeParms == nil {
-		va.Status.TunerPerfData.PerfParms.DecodeParms = make(map[string]string)
-	}
-	if va.Status.TunerPerfData.PerfParms.PrefillParms == nil {
-		va.Status.TunerPerfData.PerfParms.PrefillParms = make(map[string]string)
-	}
+	ensureTunerPerfDataInitialized(va)
 
 	// Update parameters
 	va.Status.TunerPerfData.Model = model

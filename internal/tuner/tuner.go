@@ -1,6 +1,7 @@
 package tuner
 
 import (
+	"errors"
 	"fmt"
 
 	llmdVariantAutoscalingV1alpha1 "github.com/llm-d-incubation/workload-variant-autoscaler/api/v1alpha1"
@@ -122,10 +123,17 @@ func runTuningWithFallback(
 	// Attempt to tune the server
 	tunedResults, err := tuneServer(va, systemData, server, autoGuessInitialState)
 
-	// Handle failure - complete tuner failure
+	// Handle failure
 	if err != nil {
-		logger.Log.Warnf("Tuner failed completely for variant %s/%s: %v. Using fallback parameters.",
-			va.Name, va.Namespace, err)
+		// Check if failure is due to insufficient metrics for tuning
+		if errors.Is(err, ErrorInsufficientMetrics) {
+			logger.Log.Debugf("Skipping tuning for variant %s/%s due to insufficient load. Using fallback parameters.",
+				va.Name, va.Namespace)
+		} else {
+			// Actual tuner failure
+			logger.Log.Warnf("Tuner failed completely for variant %s/%s: %v. Using fallback parameters.",
+				va.Name, va.Namespace, err)
+		}
 		return setFallbackParamsInSystemData(va, systemData, server, autoGuessInitialState)
 	}
 
@@ -185,18 +193,22 @@ func tuneServer(
 	// Create tuner for this server
 	tuner, err := createTuner(va, systemData, server, autoGuessInitialState)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get/create tuner: %w", err)
+		// Check if failure is due to insufficient metrics for tuning
+		if errors.Is(err, ErrorInsufficientMetrics) {
+			logger.Log.Debugf("Skipping tuning for variant %s/%s due to insufficient load. Using fallback parameters.",
+				va.Name, va.Namespace)
+		} else {
+			// Actual tuner failure
+			logger.Log.Warnf("Tuner failed completely for variant %s/%s: %v. Using fallback parameters.",
+				va.Name, va.Namespace, err)
+		}
+		return nil, err
 	}
 
 	// Convert server's CurrentAlloc to Environment
 	env, err := convertAllocToEnvironment(server.CurrentAlloc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert allocation to environment: %w", err)
-	}
-
-	// Validate environment has meaningful data
-	if !env.Valid() {
-		return nil, fmt.Errorf("invalid environment for server %s", server.Name)
 	}
 
 	// Update environment with latest metrics
@@ -294,6 +306,11 @@ func createTuner(
 	env, err := convertAllocToEnvironment(server.CurrentAlloc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert allocation to environment: %w", err)
+	}
+
+	if !env.Valid() {
+		// Invalid environment is typically due to no traffic observed
+		return nil, ErrorInsufficientMetrics
 	}
 
 	// create tuner

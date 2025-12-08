@@ -35,6 +35,8 @@ type Engine struct {
 	executor executor.Executor
 
 	// Add fields as necessary for the engine's state and configuration.
+	// refer to this interface to add fields for optimizer and model analyzer
+	// https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/main/internal/interfaces/interfaces.go
 }
 
 // NewEngine creates a new instance of the model engine.

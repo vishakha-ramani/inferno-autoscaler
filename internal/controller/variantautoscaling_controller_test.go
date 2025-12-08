@@ -81,6 +81,10 @@ var _ = Describe("VariantAutoscalings Controller", func() {
 			}
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, ns))).NotTo(HaveOccurred())
 
+			By("creating the required scale target ref deployment")
+			deployment := testutils.CreateLlmdSimDeployment("default", resourceName, "default-default", "default", "8000", 0, 0, 1)
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+
 			By("creating the required configmap for optimization")
 			configMap := testutils.CreateServiceClassConfigMap(ns.Name)
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
@@ -517,6 +521,7 @@ data:
 
 		BeforeEach(func() {
 			logger.Log = zap.NewNop().Sugar()
+
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "workload-variant-autoscaler-system",
@@ -747,7 +752,7 @@ data:
 			err = k8sClient.List(ctx, &variantAutoscalingList)
 			Expect(err).NotTo(HaveOccurred())
 
-			activeVAs := filterActiveVariantAutoscalings(variantAutoscalingList.Items)
+			activeVAs := variantAutoscalingList.Items // All created VAs are active
 			Expect(len(activeVAs)).To(BeNumerically(">", 0))
 
 			By("Preparing system data and calling prepareVariantAutoscalings")
@@ -787,7 +792,12 @@ data:
 			controllerReconciler.PromAPI = mockPromAPI
 
 			By("Performing a full reconciliation")
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{})
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "multi-test-resource-0",
+					Namespace: "default",
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that conditions are set correctly")

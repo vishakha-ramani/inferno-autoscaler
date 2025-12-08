@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/constants"
@@ -136,14 +137,47 @@ func CreateVariantAutoscalingConfigMap(cmName, controllerNamespace string) *core
 
 // MockPromAPI is a mock implementation of promv1.API for testing
 type MockPromAPI struct {
-	QueryResults map[string]model.Value
-	QueryErrors  map[string]error
+	QueryResults    map[string]model.Value
+	QueryErrors     map[string]error
+	QueryCallCounts map[string]int // Track number of calls per query for retry testing
+	QueryFailCounts map[string]int // Number of times to fail before succeeding (for retry testing)
+	mu              sync.RWMutex
 }
 
 func (m *MockPromAPI) Query(ctx context.Context, query string, ts time.Time, opts ...promv1.Option) (model.Value, promv1.Warnings, error) {
+	// Initialize call count if not exists
+	if m.QueryCallCounts == nil {
+		m.QueryCallCounts = make(map[string]int)
+	}
+
+	m.mu.Lock()
+	m.QueryCallCounts[query]++
+	callCount := m.QueryCallCounts[query]
+
+	// Check if this query should fail a certain number of times before succeeding
+	var shouldFail bool
+	var failCount int
+	if m.QueryFailCounts != nil {
+		if fc, exists := m.QueryFailCounts[query]; exists {
+			failCount = fc
+			if callCount <= failCount {
+				shouldFail = true
+			}
+		}
+	}
+
+	m.mu.Unlock()
+
+	if shouldFail {
+		return nil, nil, fmt.Errorf("transient error (attempt %d/%d)", callCount, failCount+1)
+	}
+
+	// Check for permanent errors
 	if err, exists := m.QueryErrors[query]; exists {
 		return nil, nil, err
 	}
+
+	// Return successful result
 	if val, exists := m.QueryResults[query]; exists {
 		return val, nil, nil
 	}

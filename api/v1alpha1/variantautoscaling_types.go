@@ -224,6 +224,8 @@ func init() {
 
 // Condition Types for VariantAutoscaling
 const (
+	// TypeTargetResolved indicates whether the target model variant has been resolved successfully
+	TypeTargetResolved = "TargetResolved"
 	// TypeMetricsAvailable indicates whether vLLM metrics are available from Prometheus
 	TypeMetricsAvailable = "MetricsAvailable"
 	// TypeOptimizationReady indicates whether the optimization engine can run successfully

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1123,8 +1124,8 @@ data:
 			Expect(err).NotTo(HaveOccurred(), "TuneModelPerfParams should handle mixed tuner settings")
 		})
 	})
-  
-  	Context("ServiceMonitor Watch", func() {
+
+	Context("ServiceMonitor Watch", func() {
 		var (
 			controllerReconciler *VariantAutoscalingReconciler
 			fakeRecorder         *record.FakeRecorder
@@ -1450,5 +1451,3 @@ kvCacheThreshold: 0.90`,
 		})
 	})
 })
-
-

@@ -31,7 +31,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,8 +45,8 @@ import (
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/metrics"
 	analyzer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/modelanalyzer"
 	variantAutoscalingOptimizer "github.com/llm-d-incubation/workload-variant-autoscaler/internal/optimizer"
-	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/saturation"
+	tuner "github.com/llm-d-incubation/workload-variant-autoscaler/internal/tuner"
 	"github.com/llm-d-incubation/workload-variant-autoscaler/internal/utils"
 	infernoConfig "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/config"
 	inferno "github.com/llm-d-incubation/workload-variant-autoscaler/pkg/core"
@@ -863,7 +862,7 @@ func (r *VariantAutoscalingReconciler) applySaturationDecisions(
 		updateVa.Status.Actuation.Applied = false
 
 		// Handle TunerPerfData based on mode
-		if !decision.CapacityOnly {
+		if !decision.SaturationOnly {
 			// Model-based optimization: update TunerPerfData
 			updateVa.Status.TunerPerfData = va.Status.TunerPerfData
 		}
@@ -1097,7 +1096,7 @@ func (r *VariantAutoscalingReconciler) prepareVariantAutoscalings(
 
 		currentAllocation, err := collector.AddMetricsToOptStatus(ctx, &updateVA, deploy, acceleratorCostValFloat, r.PromAPI)
 		if err != nil {
-			logger.Log.Errorf("unable to fetch metrics, skipping this variantAutoscaling loop: error=%v", err)
+			logger.Log.Errorf("unable to fetch metrics, skipping this variantAutoscaling loop: variant=%s, error=%v", updateVA.Name, err)
 			// Don't update status here - will be updated in next reconcile when metrics are available
 			continue
 		}
@@ -1162,58 +1161,14 @@ func (r *VariantAutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error 
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmdVariantAutoscalingV1alpha1.VariantAutoscaling{}).
-		// Watch the specific ConfigMap to trigger reconcile for all VAs
+		// Watch the specific ConfigMap to trigger global reconcile
 		Watches(
 			&corev1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 				if obj.GetName() == configMapName || obj.GetName() == saturationConfigMapName && obj.GetNamespace() == configMapNamespace {
 					return []reconcile.Request{{}}
 				}
-
-				var requests []reconcile.Request
-				for _, va := range vaList.Items {
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      va.Name,
-							Namespace: va.Namespace,
-						},
-					})
-				}
-				logger.Log.Debugf("ConfigMap watch enqueueing requests: count=%d", len(requests))
-				return requests
-			}),
-			// Only reconcile when the target ConfigMap's Data actually changes
-			builder.WithPredicates(predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					return e.Object.GetName() == configMapName && e.Object.GetNamespace() == configMapNamespace
-				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Only reconcile if it's our ConfigMap and the Data changed
-					if e.ObjectNew.GetName() != configMapName || e.ObjectNew.GetNamespace() != configMapNamespace {
-						return false
-					}
-					oldCM, okOld := e.ObjectOld.(*corev1.ConfigMap)
-					newCM, okNew := e.ObjectNew.(*corev1.ConfigMap)
-					if !okOld || !okNew {
-						return false
-					}
-					// Compare Data maps - reconcile only if Data changed
-					if len(oldCM.Data) != len(newCM.Data) {
-						return true
-					}
-					for k, v := range newCM.Data {
-						if oldCM.Data[k] != v {
-							return true
-						}
-					}
-					return false
-				},
-				DeleteFunc: func(e event.DeleteEvent) bool {
-					return false
-				},
-				GenericFunc: func(e event.GenericEvent) bool {
-					return false
-				},
+				return nil
 			}),
 			// Predicate to filter only the target configmap
 			builder.WithPredicates(ConfigMapPredicate()),

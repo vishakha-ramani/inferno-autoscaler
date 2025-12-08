@@ -17,6 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.scaleTargetRef.name
+      name: Target
+      type: string
     - jsonPath: .spec.modelID
       name: Model
       type: string
@@ -133,6 +136,25 @@ spec:
                 required:
                 - accelerators
                 type: object
+              scaleTargetRef:
+                description: |-
+                  ScaleTargetRef references the scalable resource to manage.
+                  This follows the same pattern as HorizontalPodAutoscaler.
+                properties:
+                  apiVersion:
+                    description: apiVersion is the API version of the referent
+                    type: string
+                  kind:
+                    description: 'kind is the kind of the referent; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'name is the name of the referent; More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+                x-kubernetes-map-type: atomic
               variantCost:
                 default: "10.0"
                 description: VariantCost specifies the cost per replica for this variant
@@ -141,6 +163,7 @@ spec:
                 type: string
             required:
             - modelID
+            - scaleTargetRef
             type: object
           status:
             description: Status represents the current status of autoscaling for the

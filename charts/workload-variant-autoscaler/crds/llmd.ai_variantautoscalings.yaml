@@ -17,6 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.scaleTargetRef.name
+      name: Target
+      type: string
     - jsonPath: .spec.modelID
       name: Model
       type: string
@@ -133,14 +136,38 @@ spec:
                 required:
                 - accelerators
                 type: object
+              scaleTargetRef:
+                description: |-
+                  ScaleTargetRef references the target resource (Deployment) to scale.
+                  This follows the same pattern as HorizontalPodAutoscaler.
+                properties:
+                  apiVersion:
+                    description: APIVersion is the API version of the target resource.
+                    minLength: 1
+                    type: string
+                  kind:
+                    description: Kind is the kind of the target resource. Currently
+                      only "Deployment" is supported.
+                    enum:
+                    - Deployment
+                    type: string
+                  name:
+                    description: Name is the name of the target resource.
+                    minLength: 1
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
               variantCost:
                 default: "10.0"
                 description: VariantCost specifies the cost per replica for this variant
-                  (used in capacity analysis).
+                  (used in saturation analysis).
                 pattern: ^\d+(\.\d+)?$
                 type: string
             required:
             - modelID
+            - scaleTargetRef
             type: object
           status:
             description: Status represents the current status of autoscaling for the

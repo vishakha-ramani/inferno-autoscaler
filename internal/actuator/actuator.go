@@ -28,9 +28,10 @@ func NewActuator(k8sClient client.Client) *Actuator {
 // GetCurrentDeploymentReplicas gets the real current replica count from the actual Deployment
 func (a *Actuator) GetCurrentDeploymentReplicas(ctx context.Context, va *llmdOptv1alpha1.VariantAutoscaling) (int32, error) {
 	var deploy appsv1.Deployment
-	err := utils.GetDeploymentWithBackoff(ctx, a.Client, va.Name, va.Namespace, &deploy)
+	// Use ScaleTargetRef to get the deployment name
+	err := utils.GetDeploymentWithBackoff(ctx, a.Client, va.GetScaleTargetName(), va.Namespace, &deploy)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get Deployment %s/%s: %w", va.Namespace, va.Name, err)
+		return 0, fmt.Errorf("failed to get Deployment %s/%s: %w", va.Namespace, va.GetScaleTargetName(), err)
 	}
 
 	// Prefer status replicas (actual current state)
